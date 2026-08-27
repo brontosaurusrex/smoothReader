@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob: data:"
+    >
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Smooth Reader</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main id="app">
+      <button id="drop-zone" type="button" aria-label="Drop an EPUB here or choose a file">
+        <span>DROP THE EBOOK</span>
+        <small>EPUB</small>
+      </button>
+
+      <section id="reader" aria-label="Ebook reader" hidden>
+        <div id="viewer"></div>
+      </section>
+
+      <div id="drag-cover" aria-hidden="true" hidden>
+        <span>DROP THE EBOOK</span>
+      </div>
+
+      <div id="status" role="status" aria-live="polite" hidden></div>
+      <input id="file-input" type="file" accept=".epub,application/epub+zip" hidden>
+    </main>
+
+    <script src="vendor/jszip.min.js"></script>
+    <script src="vendor/jszip-global.js"></script>
+    <script src="vendor/epub.min.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>
