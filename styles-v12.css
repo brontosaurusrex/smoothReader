@@ -38,6 +38,18 @@
   --reader-font: "Crimson Pro", Georgia, serif;
 }
 
+:root[data-font="alegreya"] {
+  --reader-font: "Alegreya", Georgia, serif;
+}
+
+:root[data-font="eb-garamond"] {
+  --reader-font: "EB Garamond", Georgia, serif;
+}
+
+:root[data-font="merriweather"] {
+  --reader-font: "Merriweather", Georgia, serif;
+}
+
 :root[data-palette="geany"] {
   --background: #333d4d;
   --text: #b7c7c2;
@@ -102,6 +114,58 @@
   --hover: #ded6c7;
   --cover: rgb(232 225 211 / 94%);
   --scrollbar: #998f7f;
+}
+
+:root[data-palette="nord"] {
+  --background: #2e3440;
+  --text: #d8dee9;
+  --muted: #8192aa;
+  --line: #4c566a;
+  --heading: #eceff4;
+  --link: #88c0d0;
+  --panel: #3b4252;
+  --hover: #353c4a;
+  --cover: rgb(46 52 64 / 94%);
+  --scrollbar: #607089;
+}
+
+:root[data-palette="solarized"] {
+  --background: #002b36;
+  --text: #93a1a1;
+  --muted: #657b83;
+  --line: #164550;
+  --heading: #eee8d5;
+  --link: #2aa198;
+  --panel: #073642;
+  --hover: #05333e;
+  --cover: rgb(0 43 54 / 94%);
+  --scrollbar: #47727a;
+}
+
+:root[data-palette="gruvbox"] {
+  --background: #282828;
+  --text: #ebdbb2;
+  --muted: #a89984;
+  --line: #504945;
+  --heading: #fbf1c7;
+  --link: #83a598;
+  --panel: #3c3836;
+  --hover: #32302f;
+  --cover: rgb(40 40 40 / 94%);
+  --scrollbar: #665c54;
+}
+
+:root[data-palette="plum"] {
+  --background: #211924;
+  --text: #dacdda;
+  --muted: #907c91;
+  --line: #4b3b50;
+  --heading: #f0e5ef;
+  --link: #bda4c8;
+  --panel: #302435;
+  --hover: #2a202e;
+  --cover: rgb(33 25 36 / 94%);
+  --scrollbar: #66536c;
 }
 
 * {
@@ -189,12 +253,13 @@ body.is-dragging #drop-zone::before {
   position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem 1.75rem;
+  gap: 0.72rem 2rem;
   width: min(42rem, calc(100vw - 6rem));
   margin-top: 1.2rem;
   color: var(--muted);
   font-size: 0.72rem;
   letter-spacing: 0.015em;
+  line-height: 1.6;
   text-align: left;
 }
 
@@ -216,7 +281,7 @@ body.is-dragging #drop-zone::before {
 @media (max-width: 620px) {
   #start-hotkeys {
     grid-template-columns: 1fr;
-    gap: 0.42rem;
+    gap: 0.62rem;
     width: min(24rem, calc(100vw - 5rem));
   }
 }

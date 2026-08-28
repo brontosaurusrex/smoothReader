@@ -24,7 +24,11 @@ const PALETTES = [
   { id: "midnight", name: "MIDNIGHT" },
   { id: "sepia", name: "SEPIA" },
   { id: "forest", name: "FOREST" },
-  { id: "paper", name: "PAPER" }
+  { id: "paper", name: "PAPER" },
+  { id: "nord", name: "NORD" },
+  { id: "solarized", name: "SOLARIZED DARK" },
+  { id: "gruvbox", name: "GRUVBOX" },
+  { id: "plum", name: "PLUM" }
 ];
 const FONTS = [
   { id: "system-sans", name: "SYSTEM SANS" },
@@ -33,7 +37,10 @@ const FONTS = [
   { id: "source-serif", name: "SOURCE SERIF 4" },
   { id: "lora", name: "LORA" },
   { id: "atkinson", name: "ATKINSON HYPERLEGIBLE" },
-  { id: "crimson-pro", name: "CRIMSON PRO" }
+  { id: "crimson-pro", name: "CRIMSON PRO" },
+  { id: "alegreya", name: "ALEGREYA" },
+  { id: "eb-garamond", name: "EB GARAMOND" },
+  { id: "merriweather", name: "MERRIWEATHER" }
 ];
 
 let book = null;
@@ -391,10 +398,11 @@ const stopRightDrag = (event) => {
   if (event?.pointerId !== undefined && event.pointerId !== rightDrag.pointerId) return;
 
   const pointerId = rightDrag.pointerId;
+  const captureTarget = rightDrag.captureTarget;
   rightDrag = null;
 
   try {
-    viewer.releasePointerCapture?.(pointerId);
+    captureTarget?.releasePointerCapture?.(pointerId);
   } catch {
     // Capture can already be gone after leaving the window.
   }
@@ -414,12 +422,16 @@ const handleRightDragStart = (event) => {
   if (event.button !== 2 || reader.hidden) return;
 
   event.preventDefault();
+  const captureTarget = event.target?.setPointerCapture
+    ? event.target
+    : viewer;
   rightDrag = {
     pointerId: event.pointerId,
-    lastY: event.clientY
+    lastY: event.clientY,
+    captureTarget
   };
   pendingRightDragScroll = 0;
-  viewer.setPointerCapture?.(event.pointerId);
+  captureTarget.setPointerCapture?.(event.pointerId);
   document.body.classList.add("is-right-dragging");
 };
 
@@ -644,10 +656,10 @@ const handleReaderKeyDown = (event) => {
     event.shiftKey &&
     !event.ctrlKey &&
     !event.metaKey &&
-    /^[1-7]$/.test(event.key)
+    /^[0-9]$/.test(event.key)
   ) {
     event.preventDefault();
-    applyFont(Number(event.key) - 1);
+    applyFont(event.key === "0" ? 9 : Number(event.key) - 1);
     return;
   }
 
@@ -656,10 +668,10 @@ const handleReaderKeyDown = (event) => {
     !event.shiftKey &&
     !event.ctrlKey &&
     !event.metaKey &&
-    /^[1-6]$/.test(event.key)
+    /^[0-9]$/.test(event.key)
   ) {
     event.preventDefault();
-    applyPalette(Number(event.key) - 1);
+    applyPalette(event.key === "0" ? 9 : Number(event.key) - 1);
   }
 };
 
@@ -709,12 +721,14 @@ const installDropTarget = (target) => {
 installDropTarget(window);
 
 viewer.addEventListener("click", handleBookLink);
-viewer.addEventListener("pointerdown", handleRightDragStart);
-viewer.addEventListener("pointermove", handleRightDragMove);
-viewer.addEventListener("pointerup", stopRightDrag);
-viewer.addEventListener("pointercancel", stopRightDrag);
-viewer.addEventListener("lostpointercapture", stopRightDrag);
-viewer.addEventListener("contextmenu", (event) => event.preventDefault());
+window.addEventListener("pointerdown", handleRightDragStart);
+window.addEventListener("pointermove", handleRightDragMove);
+window.addEventListener("pointerup", stopRightDrag);
+window.addEventListener("pointercancel", stopRightDrag);
+window.addEventListener("lostpointercapture", stopRightDrag);
+window.addEventListener("contextmenu", (event) => {
+  if (!reader.hidden) event.preventDefault();
+});
 window.addEventListener("keydown", handleReaderKeyDown, true);
 window.addEventListener("scroll", schedulePositionSave, { passive: true });
 window.addEventListener("blur", () => stopRightDrag());

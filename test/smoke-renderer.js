@@ -236,21 +236,24 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v11.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v12.js");
 vm.runInContext(fs.readFileSync(rendererPath, "utf8"), context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v11.css"), "utf8");
-assert.match(indexSource, /styles-v11\.css/);
-assert.match(indexSource, /renderer-v11\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v12.css"), "utf8");
+assert.match(indexSource, /styles-v12\.css/);
+assert.match(indexSource, /renderer-v12\.js/);
 assert.match(indexSource, /id="last-book"/);
 assert.match(indexSource, /id="start-hotkeys"/);
-assert.match(indexSource, /Alt\+Shift\+1…7/);
+assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
+assert.match(indexSource, /Middle-click/);
+assert.match(indexSource, /Right-drag/);
 assert.match(indexSource, /fonts\.googleapis\.com/);
 assert.match(indexSource, /fonts\.gstatic\.com/);
 assert.match(stylesSource, /"Noto Serif"/);
+assert.match(stylesSource, /"EB Garamond"/);
 assert.doesNotMatch(stylesSource, /html,\s*body[^}]*overflow:\s*hidden/s);
 assert.match(stylesSource, /overflow:\s*visible\s*!important/);
 assert.match(stylesSource, /#333d4d/i);
@@ -291,14 +294,16 @@ const drop = () => windowListeners.get("drop")({
   assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).fileName, "test.epub");
 
   assert.equal(elements["#viewer"].listeners.has("wheel"), false);
-  assert.equal(elements["#viewer"].listeners.has("pointerdown"), true);
+  assert.equal(elements["#viewer"].listeners.has("pointerdown"), false);
+  assert.equal(windowListeners.has("pointerdown"), true);
   assert.equal(windowListeners.has("keydown"), true);
 
   let rightDragPrevented = false;
-  elements["#viewer"].listeners.get("pointerdown")({
+  windowListeners.get("pointerdown")({
     button: 2,
     pointerId: 9,
     clientY: 300,
+    target: elements["#viewer"],
     preventDefault() {
       rightDragPrevented = true;
     }
@@ -306,7 +311,7 @@ const drop = () => windowListeners.get("drop")({
   assert.equal(rightDragPrevented, true);
   assert.equal(elements["#viewer"].capturedPointer, 9);
 
-  elements["#viewer"].listeners.get("pointermove")({
+  windowListeners.get("pointermove")({
     pointerId: 9,
     buttons: 2,
     clientY: 280,
@@ -316,7 +321,7 @@ const drop = () => windowListeners.get("drop")({
   assert.equal(scrollByCalls.at(-1).top, 27);
   assert.equal(scrollByCalls.at(-1).behavior, "auto");
 
-  elements["#viewer"].listeners.get("pointerup")({
+  windowListeners.get("pointerup")({
     pointerId: 9,
     button: 2,
     preventDefault() {}
@@ -421,6 +426,12 @@ const drop = () => windowListeners.get("drop")({
 
   assert.equal(pressKey("7", { altKey: true, shiftKey: true }), true);
   assert.equal(context.document.documentElement.dataset.font, "crimson-pro");
+
+  assert.equal(pressKey("0", { altKey: true, shiftKey: true }), true);
+  assert.equal(context.document.documentElement.dataset.font, "merriweather");
+
+  assert.equal(pressKey("0", { altKey: true }), true);
+  assert.equal(context.document.documentElement.dataset.palette, "plum");
 
   assert.equal(pressKey("r"), true);
   await wait(80);
