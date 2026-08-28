@@ -175,7 +175,15 @@ const context = vm.createContext({
   document: {
     title: "Smooth Reader",
     fonts: { ready: Promise.resolve() },
-    documentElement: { scrollHeight: 3000, dataset: {} },
+    documentElement: {
+      scrollHeight: 3000,
+      dataset: {},
+      style: {
+        setProperty(name, value) {
+          this[name] = value;
+        }
+      }
+    },
     body: {
       classList: {
         add() {},
@@ -236,24 +244,26 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v12.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v13.js");
 vm.runInContext(fs.readFileSync(rendererPath, "utf8"), context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v12.css"), "utf8");
-assert.match(indexSource, /styles-v12\.css/);
-assert.match(indexSource, /renderer-v12\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v13.css"), "utf8");
+assert.match(indexSource, /styles-v13\.css/);
+assert.match(indexSource, /renderer-v13\.js/);
 assert.match(indexSource, /id="last-book"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
 assert.match(indexSource, /Middle-click/);
 assert.match(indexSource, /Right-drag/);
+assert.match(indexSource, /Alt\+Shift\+M/);
 assert.match(indexSource, /fonts\.googleapis\.com/);
 assert.match(indexSource, /fonts\.gstatic\.com/);
 assert.match(stylesSource, /"Noto Serif"/);
 assert.match(stylesSource, /"EB Garamond"/);
+assert.match(stylesSource, /"Cascadia Mono"/);
 assert.doesNotMatch(stylesSource, /html,\s*body[^}]*overflow:\s*hidden/s);
 assert.match(stylesSource, /overflow:\s*visible\s*!important/);
 assert.match(stylesSource, /#333d4d/i);
@@ -318,7 +328,7 @@ const drop = () => windowListeners.get("drop")({
     preventDefault() {}
   });
   await wait(10);
-  assert.equal(scrollByCalls.at(-1).top, 27);
+  assert.equal(scrollByCalls.at(-1).top, -27);
   assert.equal(scrollByCalls.at(-1).behavior, "auto");
 
   windowListeners.get("pointerup")({
@@ -432,6 +442,26 @@ const drop = () => windowListeners.get("drop")({
 
   assert.equal(pressKey("0", { altKey: true }), true);
   assert.equal(context.document.documentElement.dataset.palette, "plum");
+
+  assert.equal(pressKey("M", { altKey: true, shiftKey: true }), true);
+  assert.equal(context.document.documentElement.dataset.font, "system-mono");
+
+  assert.equal(
+    context.document.documentElement.style["--reader-tracking"],
+    "0.01em"
+  );
+  assert.equal(pressKey("+", { shiftKey: true }), true);
+  assert.equal(context.document.documentElement.style["--reader-tracking"], "0.02em");
+  assert.equal(stored.get("smooth-reader:tracking"), "0.02");
+
+  assert.equal(pressKey("-"), true);
+  assert.equal(context.document.documentElement.style["--reader-tracking"], "0.01em");
+
+  assert.equal(pressKey("-"), true);
+  assert.equal(context.document.documentElement.style["--reader-tracking"], "0.00em");
+
+  assert.equal(pressKey("0"), true);
+  assert.equal(context.document.documentElement.style["--reader-tracking"], "0.01em");
 
   assert.equal(pressKey("r"), true);
   await wait(80);

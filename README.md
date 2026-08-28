@@ -33,15 +33,18 @@ opened book. Press `R` to reopen its cached copy without selecting it again.
 - `O`: open another EPUB with the system file selector
 - `R`: reopen the last book from the browser's local cache
 - Mouse wheel, trackpad, and middle-click autoscroll: native browser behavior
-- Hold the right mouse button and move anywhere on the reading page: grab-scroll;
-  release to stop
+- Hold the right mouse button and move anywhere on the reading page: scroll in
+  the direction of the mouse movement; release to stop
 - `Home` / `End`: beginning / end of the book
 - `Page Up` / `Page Down`: smooth movement by roughly one screen
 - `Ctrl` + mouse wheel or `Ctrl` + `+` / `-`: native browser zoom
+- `+` / `-`: increase / decrease letter spacing
+- `0`: reset letter spacing to the comfortable default
 - `P` / `Shift+P`: next / previous color palette
 - `Alt+1` through `Alt+9`, or `Alt+0`: select a palette directly
 - `F` / `Shift+F`: next / previous reading font
 - `Alt+Shift+1` through `Alt+Shift+9`, or `Alt+Shift+0`: select a font directly
+- `Alt+Shift+M`: select System Mono directly
 
 Palette order: Charcoal, Geany, Midnight, Sepia, Forest, Paper, Nord, Solarized
 Dark, Gruvbox, Plum. Geany is based on the supplied screenshot's `#333d4d`
@@ -49,9 +52,10 @@ background and muted teal-green accents. The palette choice is remembered, and
 there is no persistent settings GUI.
 
 Font order: System Sans, Noto Serif, Literata, Source Serif 4, Lora, Atkinson
-Hyperlegible, Crimson Pro, Alegreya, EB Garamond, Merriweather. The nine named
-families are loaded through the Google Fonts CSS API; the selected font is
-remembered.
+Hyperlegible, Crimson Pro, Alegreya, EB Garamond, Merriweather, System Mono. The
+nine named web families are loaded through the Google Fonts CSS API; System Mono
+uses the best locally installed monospace font. Font and letter-spacing choices
+are remembered.
 
 ## Current scope
 
@@ -66,7 +70,7 @@ remembered.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v12.js` and `styles-v12.css`) so a
+The app files carry versioned names (`renderer-v13.js` and `styles-v13.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 
 EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and

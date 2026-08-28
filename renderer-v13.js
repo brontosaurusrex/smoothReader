@@ -11,6 +11,7 @@ const lastBookLabel = document.querySelector("#last-book");
 const POSITION_PREFIX = "smooth-reader:position:";
 const PALETTE_KEY = "smooth-reader:palette";
 const FONT_KEY = "smooth-reader:font";
+const TRACKING_KEY = "smooth-reader:tracking";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
 const LAST_BOOK_DB = "smooth-reader-library";
 const LAST_BOOK_STORE = "books";
@@ -18,6 +19,10 @@ const LAST_BOOK_RECORD = "last-opened";
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
 const RIGHT_DRAG_SPEED = 1.35;
+const DEFAULT_TRACKING_EM = 0.01;
+const TRACKING_STEP_EM = 0.01;
+const MIN_TRACKING_EM = -0.03;
+const MAX_TRACKING_EM = 0.12;
 const PALETTES = [
   { id: "charcoal", name: "CHARCOAL" },
   { id: "geany", name: "GEANY" },
@@ -40,7 +45,8 @@ const FONTS = [
   { id: "crimson-pro", name: "CRIMSON PRO" },
   { id: "alegreya", name: "ALEGREYA" },
   { id: "eb-garamond", name: "EB GARAMOND" },
-  { id: "merriweather", name: "MERRIWEATHER" }
+  { id: "merriweather", name: "MERRIWEATHER" },
+  { id: "system-mono", name: "SYSTEM MONO" }
 ];
 
 let book = null;
@@ -62,6 +68,10 @@ let fontIndex = Math.max(
   0,
   FONTS.findIndex((font) => font.id === localStorage.getItem(FONT_KEY))
 );
+const savedTracking = Number.parseFloat(localStorage.getItem(TRACKING_KEY));
+let trackingEm = Number.isFinite(savedTracking)
+  ? Math.max(MIN_TRACKING_EM, Math.min(MAX_TRACKING_EM, savedTracking))
+  : DEFAULT_TRACKING_EM;
 
 const showStatus = (message, hideAfter = 0) => {
   window.clearTimeout(statusTimer);
@@ -194,8 +204,27 @@ const applyFont = (nextIndex, announce = true) => {
   }
 };
 
+const applyTracking = (nextTracking, announce = true) => {
+  const clamped = Math.max(
+    MIN_TRACKING_EM,
+    Math.min(MAX_TRACKING_EM, nextTracking)
+  );
+  trackingEm = Math.round(clamped * 100) / 100;
+  document.documentElement.style.setProperty(
+    "--reader-tracking",
+    `${trackingEm.toFixed(2)}em`
+  );
+  localStorage.setItem(TRACKING_KEY, String(trackingEm));
+
+  if (announce) {
+    const sign = trackingEm > 0 ? "+" : "";
+    showStatus(`LETTER SPACING · ${sign}${trackingEm.toFixed(2)}em`, 900);
+  }
+};
+
 applyPalette(paletteIndex, false);
 applyFont(fontIndex, false);
+applyTracking(trackingEm, false);
 
 const setReadingMode = (isReading) => {
   dropZone.hidden = isReading;
@@ -445,7 +474,7 @@ const handleRightDragMove = (event) => {
   event.preventDefault();
   const deltaY = event.clientY - rightDrag.lastY;
   rightDrag.lastY = event.clientY;
-  queueRightDragScroll(-deltaY * RIGHT_DRAG_SPEED);
+  queueRightDragScroll(deltaY * RIGHT_DRAG_SPEED);
 };
 
 const waitForImages = async () => {
@@ -612,6 +641,28 @@ const handleReaderKeyDown = (event) => {
     return;
   }
 
+  if (
+    noCommandModifier &&
+    !event.repeat &&
+    (event.key === "+" || event.key === "=")
+  ) {
+    event.preventDefault();
+    applyTracking(trackingEm + TRACKING_STEP_EM);
+    return;
+  }
+
+  if (noCommandModifier && !event.repeat && event.key === "-") {
+    event.preventDefault();
+    applyTracking(trackingEm - TRACKING_STEP_EM);
+    return;
+  }
+
+  if (noCommandModifier && !event.shiftKey && !event.repeat && event.key === "0") {
+    event.preventDefault();
+    applyTracking(DEFAULT_TRACKING_EM);
+    return;
+  }
+
   if (noCommandModifier && key === "home") {
     event.preventDefault();
     window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
@@ -648,6 +699,18 @@ const handleReaderKeyDown = (event) => {
   if (noCommandModifier && key === "f" && !event.repeat) {
     event.preventDefault();
     applyFont(fontIndex + (event.shiftKey ? -1 : 1));
+    return;
+  }
+
+  if (
+    event.altKey &&
+    event.shiftKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    key === "m"
+  ) {
+    event.preventDefault();
+    applyFont(FONTS.findIndex((font) => font.id === "system-mono"));
     return;
   }
 
