@@ -14,8 +14,12 @@ const DEFAULT_FONT_SIZE = 20;
 const MIN_FONT_SIZE = 14;
 const MAX_FONT_SIZE = 38;
 const FONT_SIZE_STEP = 2;
-const LOCKED_SCROLL_SPEED = 2.2;
-const DRAG_SCROLL_SPEED = 1.6;
+const LOCKED_SCROLL_SPEED = 2.05;
+const SCROLL_RESPONSE = 0.18;
+const SCROLL_STOP_THRESHOLD = 0.08;
+const MAX_QUEUED_SCROLL = 1400;
+const MAX_SCROLL_STEP = 180;
+const WHEEL_LINE_PIXELS = 20;
 
 let book = null;
 let rendition = null;
@@ -26,7 +30,9 @@ let loadGeneration = 0;
 let dragDepth = 0;
 let statusTimer = null;
 let fontSize = Number(localStorage.getItem(FONT_SIZE_KEY)) || DEFAULT_FONT_SIZE;
-let rightDrag = null;
+let queuedScroll = 0;
+let scrollFrame = null;
+let previousFrameTime = 0;
 
 fontSize = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, fontSize));
 
@@ -90,7 +96,13 @@ const destroyCurrentBook = () => {
   window.clearTimeout(saveTimer);
   savePositionNow();
   lastLocation = null;
-  rightDrag = null;
+  queuedScroll = 0;
+  previousFrameTime = 0;
+
+  if (scrollFrame !== null) {
+    window.cancelAnimationFrame(scrollFrame);
+    scrollFrame = null;
+  }
 
   if (document.pointerLockElement === viewer) {
     document.exitPointerLock();
@@ -119,9 +131,11 @@ const applyReadingTheme = () => {
       "max-width": "48rem !important",
       "margin": "0 auto !important",
       "padding": "2.5rem clamp(1.4rem, 6vw, 4rem) !important",
-      "font-family": "Georgia, 'Times New Roman', serif !important",
+      "font-family": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important",
       "font-size": "20px !important",
-      "line-height": "1.7 !important",
+      "font-weight": "400 !important",
+      "letter-spacing": "0.008em !important",
+      "line-height": "1.72 !important",
       "overflow-x": "hidden !important"
     },
     "p": {
@@ -143,6 +157,55 @@ const applyReadingTheme = () => {
 const scrollReaderBy = (pixels) => {
   if (!rendition?.manager || !Number.isFinite(pixels)) return;
   rendition.manager.scrollBy(0, pixels, false);
+};
+
+const runSmoothScrollFrame = (timestamp) => {
+  scrollFrame = null;
+
+  if (!rendition || Math.abs(queuedScroll) <= SCROLL_STOP_THRESHOLD) {
+    if (rendition && queuedScroll !== 0) scrollReaderBy(queuedScroll);
+    queuedScroll = 0;
+    previousFrameTime = 0;
+    return;
+  }
+
+  const elapsed = previousFrameTime
+    ? Math.min(50, Math.max(1, timestamp - previousFrameTime))
+    : 1000 / 60;
+  previousFrameTime = timestamp;
+
+  const refreshAdjustedBlend = 1 - Math.pow(
+    1 - SCROLL_RESPONSE,
+    elapsed / (1000 / 60)
+  );
+  const step = Math.max(
+    -MAX_SCROLL_STEP,
+    Math.min(MAX_SCROLL_STEP, queuedScroll * refreshAdjustedBlend)
+  );
+
+  scrollReaderBy(step);
+  queuedScroll -= step;
+  scrollFrame = window.requestAnimationFrame(runSmoothScrollFrame);
+};
+
+const queueSmoothScroll = (pixels) => {
+  if (!rendition || !Number.isFinite(pixels) || pixels === 0) return;
+
+  // Direction changes respond immediately instead of consuming momentum
+  // queued in the old direction first.
+  if (queuedScroll !== 0 && Math.sign(pixels) !== Math.sign(queuedScroll)) {
+    queuedScroll = 0;
+    previousFrameTime = 0;
+  }
+
+  queuedScroll = Math.max(
+    -MAX_QUEUED_SCROLL,
+    Math.min(MAX_QUEUED_SCROLL, queuedScroll + pixels)
+  );
+
+  if (scrollFrame === null) {
+    scrollFrame = window.requestAnimationFrame(runSmoothScrollFrame);
+  }
 };
 
 const setFontSize = (nextSize, announce = true) => {
@@ -171,22 +234,10 @@ const toggleMouseLock = () => {
 
   const request = viewer.requestPointerLock();
   if (request?.catch) {
-    request.catch(() => showStatus("Mouse lock was blocked.", 1400));
+    request.catch(() => {
+      showStatus("Mouse lock was blocked.", 1400);
+    });
   }
-};
-
-const stopRightDrag = (event) => {
-  if (!rightDrag) return;
-
-  try {
-    rightDrag.target?.releasePointerCapture?.(rightDrag.pointerId);
-  } catch {
-    // The pointer may already have been released by the browser.
-  }
-
-  rightDrag.document?.documentElement?.style?.removeProperty("cursor");
-  rightDrag = null;
-  event?.preventDefault?.();
 };
 
 const handleReaderPointerDown = (event) => {
@@ -195,34 +246,7 @@ const handleReaderPointerDown = (event) => {
   if (event.button === 0) {
     event.preventDefault();
     toggleMouseLock();
-    return;
   }
-
-  if (event.button === 2) {
-    event.preventDefault();
-    event.stopPropagation?.();
-    rightDrag = {
-      pointerId: event.pointerId,
-      lastY: event.clientY,
-      target: event.target,
-      document: event.target?.ownerDocument || document
-    };
-    event.target?.setPointerCapture?.(event.pointerId);
-    rightDrag.document?.documentElement?.style?.setProperty("cursor", "grabbing");
-  }
-};
-
-const handleReaderPointerMove = (event) => {
-  if (!rightDrag || event.pointerId !== rightDrag.pointerId) return;
-  if (event.buttons !== undefined && (event.buttons & 2) === 0) {
-    stopRightDrag(event);
-    return;
-  }
-
-  event.preventDefault();
-  const deltaY = event.clientY - rightDrag.lastY;
-  rightDrag.lastY = event.clientY;
-  scrollReaderBy(-deltaY * DRAG_SCROLL_SPEED);
 };
 
 const handleReaderClick = (event) => {
@@ -232,9 +256,39 @@ const handleReaderClick = (event) => {
 };
 
 const handleReaderWheel = (event) => {
-  if (!event.ctrlKey && !event.metaKey) return;
   event.preventDefault();
-  adjustFontSize(event.deltaY < 0 ? 1 : -1);
+
+  if (event.ctrlKey || event.metaKey) {
+    adjustFontSize(event.deltaY < 0 ? 1 : -1);
+    return;
+  }
+
+  const unit = event.deltaMode === 1
+    ? WHEEL_LINE_PIXELS
+    : event.deltaMode === 2
+      ? window.innerHeight * 0.85
+      : 1;
+  queueSmoothScroll(event.deltaY * unit);
+};
+
+const jumpToBeginning = async () => {
+  if (!rendition || !book) return;
+
+  queuedScroll = 0;
+  previousFrameTime = 0;
+  if (scrollFrame !== null) {
+    window.cancelAnimationFrame(scrollFrame);
+    scrollFrame = null;
+  }
+
+  try {
+    const firstSection = book.spine?.first?.();
+    await rendition.display(firstSection?.href || undefined);
+    showStatus("START OF BOOK", 800);
+  } catch (error) {
+    console.error(error);
+    showStatus("Could not jump to the start.", 1200);
+  }
 };
 
 const handleReaderKeyDown = (event) => {
@@ -244,6 +298,12 @@ const handleReaderKeyDown = (event) => {
   if (modifier && key === "o") {
     event.preventDefault();
     fileInput.click();
+    return;
+  }
+
+  if (!modifier && key === "home") {
+    event.preventDefault();
+    jumpToBeginning();
     return;
   }
 
@@ -263,13 +323,9 @@ const handleReaderKeyDown = (event) => {
 
 const installReaderInputTarget = (target) => {
   target.addEventListener("pointerdown", handleReaderPointerDown, true);
-  target.addEventListener("pointermove", handleReaderPointerMove, true);
-  target.addEventListener("pointerup", stopRightDrag, true);
-  target.addEventListener("pointercancel", stopRightDrag, true);
   target.addEventListener("click", handleReaderClick, true);
   target.addEventListener("wheel", handleReaderWheel, { passive: false });
   target.addEventListener("keydown", handleReaderKeyDown, true);
-  target.addEventListener("contextmenu", (event) => event.preventDefault(), true);
 };
 
 const openBook = async (file) => {
@@ -329,7 +385,7 @@ const openBook = async (file) => {
     }
 
     if (generation !== loadGeneration) return;
-    showStatus("LEFT CLICK: MOUSE SCROLL · RIGHT DRAG: GRAB · CTRL ±: TEXT", 2600);
+    showStatus("LEFT CLICK: MOUSE SCROLL · HOME: START · CTRL ±: TEXT", 2600);
 
     const metadata = await book.loaded.metadata;
     document.title = metadata?.title
@@ -403,13 +459,13 @@ window.addEventListener("keydown", handleReaderKeyDown);
 
 document.addEventListener("mousemove", (event) => {
   if (document.pointerLockElement === viewer) {
-    scrollReaderBy(event.movementY * LOCKED_SCROLL_SPEED);
+    queueSmoothScroll(event.movementY * LOCKED_SCROLL_SPEED);
   }
 });
 
 document.addEventListener("pointerlockchange", () => {
   if (document.pointerLockElement === viewer) {
-    showStatus("MOUSE SCROLL · LEFT CLICK TO RELEASE");
+    showStatus("MOUSE SCROLL · LEFT CLICK OR ESC TO RELEASE");
   } else if (rendition) {
     showStatus("MOUSE RELEASED", 700);
   }

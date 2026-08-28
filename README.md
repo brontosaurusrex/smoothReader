@@ -25,19 +25,20 @@ Click the drop surface or press `Ctrl+O` to choose a file.
 
 ## Reading controls
 
-- Mouse wheel: normal scrolling
+- Mouse wheel / trackpad: animation-frame-smoothed scrolling
 - `Ctrl` + mouse wheel: change text size
 - `Ctrl` + `+` / `-`: change text size
 - `Ctrl` + `0`: reset text size
 - Left click: lock the pointer; vertical mouse movement scrolls
 - Left click again or `Esc`: release the pointer
-- Hold the right mouse button and drag: grab-scroll the page
+- `Home`: jump directly to the beginning of the book
 
 ## Current scope
 
 - EPUB only
 - no bookshelf, chapter list, settings, notes, or accounts
-- continuous Chromium-native scrolling
+- continuous scrolling with refresh-rate-independent input smoothing
+- immediate direction reversal, so upward mouse movement is never fighting old downward momentum
 - position identified by the EPUB contents, so renaming the file does not lose it
 - all reading data remains on the computer
 

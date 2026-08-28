@@ -42,13 +42,28 @@ const stored = new Map();
 const displayArguments = [];
 const themeOverrides = [];
 const scrollCalls = [];
+const readingThemes = [];
 let renderOptions = null;
+let animationTime = 0;
+let nextAnimationFrame = 1;
+const animationFrames = new Map();
+
+const flushAnimationFrames = (limit = 180) => {
+  for (let frame = 0; frame < limit && animationFrames.size; frame += 1) {
+    animationTime += 1000 / 60;
+    const callbacks = [...animationFrames.values()];
+    animationFrames.clear();
+    callbacks.forEach((callback) => callback(animationTime));
+  }
+};
 
 const makeRendition = () => {
   const listeners = new Map();
   return {
     themes: {
-      default() {},
+      default(theme) {
+        readingThemes.push(theme);
+      },
       override(...arguments_) {
         themeOverrides.push(arguments_);
       }
@@ -120,8 +135,17 @@ const context = vm.createContext({
     }
   },
   window: {
+    innerHeight: 800,
     setTimeout,
     clearTimeout,
+    requestAnimationFrame(callback) {
+      const id = nextAnimationFrame++;
+      animationFrames.set(id, callback);
+      return id;
+    },
+    cancelAnimationFrame(id) {
+      animationFrames.delete(id);
+    },
     addEventListener(name, callback) {
       windowListeners.set(name, callback);
     }
@@ -129,6 +153,11 @@ const context = vm.createContext({
   ePub() {
     return {
       ready: Promise.resolve(),
+      spine: {
+        first() {
+          return { href: "chapter-one.xhtml" };
+        }
+      },
       loaded: {
         metadata: Promise.resolve({ title: "Test Book" })
       },
@@ -174,6 +203,7 @@ const drop = () => windowListeners.get("drop")({
   assert.equal(renderOptions.flow, "scrolled-continuous");
   assert.equal(context.document.title, "Test Book — Smooth Reader");
   assert.equal(stored.size, 1);
+  assert.match(readingThemes.at(-1).body["font-family"], /system-ui/);
 
   const storedPosition = JSON.parse([...stored.values()][0]);
   assert.equal(storedPosition.cfi, "epubcfi(/6/2!/4/1:0)");
@@ -205,8 +235,22 @@ const drop = () => windowListeners.get("drop")({
   });
   assert.equal(context.document.pointerLockElement, elements["#viewer"]);
 
+  const beforeLockedScroll = scrollCalls.length;
   documentListeners.get("mousemove")({ movementY: 10 });
-  assert.deepEqual(scrollCalls.at(-1), [0, 22, false]);
+  flushAnimationFrames();
+  const lockedDistance = scrollCalls
+    .slice(beforeLockedScroll)
+    .reduce((sum, call) => sum + call[1], 0);
+  assert.ok(Math.abs(lockedDistance - 20.5) < 0.01);
+
+  const beforeReversal = scrollCalls.length;
+  documentListeners.get("mousemove")({ movementY: 100 });
+  documentListeners.get("mousemove")({ movementY: -10 });
+  flushAnimationFrames();
+  const reversedDistance = scrollCalls
+    .slice(beforeReversal)
+    .reduce((sum, call) => sum + call[1], 0);
+  assert.ok(Math.abs(reversedDistance + 20.5) < 0.01);
 
   elements["#viewer"].listeners.get("pointerdown")({
     button: 0,
@@ -217,21 +261,41 @@ const drop = () => windowListeners.get("drop")({
   });
   assert.equal(context.document.pointerLockElement, null);
 
+  let rightClickPrevented = false;
   elements["#viewer"].listeners.get("pointerdown")({
     button: 2,
     pointerId: 2,
     clientY: 100,
     target: pointerTarget,
-    preventDefault() {},
-    stopPropagation() {}
+    preventDefault() {
+      rightClickPrevented = true;
+    }
   });
-  elements["#viewer"].listeners.get("pointermove")({
-    pointerId: 2,
-    buttons: 2,
-    clientY: 90,
+  assert.equal(rightClickPrevented, false);
+  assert.equal(context.document.pointerLockElement, null);
+
+  windowListeners.get("keydown")({
+    ctrlKey: false,
+    metaKey: false,
+    key: "Home",
     preventDefault() {}
   });
-  assert.deepEqual(scrollCalls.at(-1), [0, 16, false]);
+  await wait(0);
+  assert.equal(displayArguments.at(-1), "chapter-one.xhtml");
+
+  const beforeWheel = scrollCalls.length;
+  elements["#viewer"].listeners.get("wheel")({
+    ctrlKey: false,
+    metaKey: false,
+    deltaMode: 0,
+    deltaY: 120,
+    preventDefault() {}
+  });
+  flushAnimationFrames();
+  const wheelDistance = scrollCalls
+    .slice(beforeWheel)
+    .reduce((sum, call) => sum + call[1], 0);
+  assert.ok(Math.abs(wheelDistance - 120) < 0.01);
 
   console.log("renderer smoke test passed");
 })().catch((error) => {
