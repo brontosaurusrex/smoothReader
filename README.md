@@ -22,10 +22,17 @@ Or simply use `make run`. There is no installation, npm command, Electron
 runtime, or build step. The folder itself is the finished web app.
 
 Click the drop surface to choose a file.
+All keyboard shortcuts are listed unobtrusively on that initial screen.
+
+The initial drop screen shows the title and filename of the last successfully
+opened book. Press `R` to reopen its cached copy without selecting it again.
 
 ## Reading controls
 
+- `O`: open another EPUB with the system file selector
+- `R`: reopen the last book from the browser's local cache
 - Mouse wheel, trackpad, and middle-click autoscroll: native browser behavior
+- Hold the right mouse button and move: grab-scroll; release to stop
 - `Home` / `End`: beginning / end of the book
 - `Page Up` / `Page Down`: smooth movement by roughly one screen
 - `Ctrl` + mouse wheel or `Ctrl` + `+` / `-`: native browser zoom
@@ -47,7 +54,7 @@ Fonts CSS API; the selected font is remembered.
 - EPUB only
 - no bookshelf, chapter list, settings, notes, or accounts
 - the complete EPUB spine is placed into one DOM document
-- no pointer lock, mouse gestures, wheel interception, or custom scrolling code
+- no pointer lock or wheel interception; right-button drag is the only mouse gesture
 - links inside the EPUB scroll to their matching chapter or fragment
 - position identified by the EPUB contents, so renaming the file does not lose it
 - all reading data remains on the computer
@@ -55,11 +62,13 @@ Fonts CSS API; the selected font is remembered.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v8.js` and `styles-v8.css`) so a
+The app files carry versioned names (`renderer-v11.js` and `styles-v11.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 
 EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and
 font files are requested externally; the EPUB itself never leaves the browser.
+The last opened EPUB can be cached in IndexedDB on this browser so `R` can reopen
+it; clearing site data removes that cached copy and saved reading positions.
 
 ## Verify the source
 

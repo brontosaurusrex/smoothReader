@@ -18,6 +18,7 @@ const makeElement = () => {
     dataset: {},
     children: [],
     listeners,
+    capturedPointer: null,
     addEventListener(name, callback) {
       listeners.set(name, callback);
     },
@@ -34,7 +35,15 @@ const makeElement = () => {
     scrollIntoView(options) {
       this.lastScrollIntoView = options;
     },
-    click() {}
+    click() {
+      this.clickCount = (this.clickCount || 0) + 1;
+    },
+    setPointerCapture(pointerId) {
+      this.capturedPointer = pointerId;
+    },
+    releasePointerCapture(pointerId) {
+      if (this.capturedPointer === pointerId) this.capturedPointer = null;
+    }
   };
 };
 
@@ -44,15 +53,29 @@ const elements = {
   "#viewer": makeElement(),
   "#drag-cover": makeElement(),
   "#status": makeElement(),
-  "#file-input": makeElement()
+  "#file-input": makeElement(),
+  "#last-book": makeElement()
 };
 
 elements["#reader"].hidden = true;
 elements["#drag-cover"].hidden = true;
 elements["#status"].hidden = true;
+elements["#last-book"].hidden = true;
 
 const windowListeners = new Map();
 const stored = new Map();
+stored.set("smooth-reader:last-book", JSON.stringify({
+  fileName: "previous.epub",
+  title: "Previous Book"
+}));
+const indexedRecords = new Map([
+  ["last-opened", {
+    fileName: "previous.epub",
+    title: "Previous Book",
+    bytes: new Uint8Array([9, 8, 7]).buffer
+  }]
+]);
+let databaseCreated = false;
 const scrollCalls = [];
 const scrollByCalls = [];
 const renderedSections = [];
@@ -69,6 +92,51 @@ const makeSection = (index) => ({
     unloadedSections += 1;
   }
 });
+
+const indexedDB = {
+  open() {
+    const request = {};
+    setTimeout(() => {
+      const database = {
+        objectStoreNames: {
+          contains() {
+            return databaseCreated;
+          }
+        },
+        createObjectStore() {
+          databaseCreated = true;
+        },
+        transaction() {
+          const transaction = {
+            error: null,
+            objectStore() {
+              return {
+                get(key) {
+                  const getRequest = {};
+                  setTimeout(() => {
+                    getRequest.result = indexedRecords.get(key);
+                    getRequest.onsuccess?.();
+                  }, 0);
+                  return getRequest;
+                },
+                put(value, key) {
+                  indexedRecords.set(key, value);
+                  setTimeout(() => transaction.oncomplete?.(), 0);
+                }
+              };
+            }
+          };
+          return transaction;
+        },
+        close() {}
+      };
+      request.result = database;
+      if (!databaseCreated) request.onupgradeneeded?.();
+      request.onsuccess?.();
+    }, 0);
+    return request;
+  }
+};
 
 const context = vm.createContext({
   console,
@@ -125,12 +193,16 @@ const context = vm.createContext({
     }
   },
   window: {
+    indexedDB,
     innerHeight: 800,
     scrollY: 0,
     setTimeout,
     clearTimeout,
     requestAnimationFrame(callback) {
       return setTimeout(() => callback(Date.now()), 0);
+    },
+    cancelAnimationFrame(id) {
+      clearTimeout(id);
     },
     scrollTo(first, second) {
       const y = typeof first === "object" ? first.top : second;
@@ -164,19 +236,22 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v8.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v11.js");
 vm.runInContext(fs.readFileSync(rendererPath, "utf8"), context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v8.css"), "utf8");
-assert.match(indexSource, /styles-v8\.css/);
-assert.match(indexSource, /renderer-v8\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v11.css"), "utf8");
+assert.match(indexSource, /styles-v11\.css/);
+assert.match(indexSource, /renderer-v11\.js/);
+assert.match(indexSource, /id="last-book"/);
+assert.match(indexSource, /id="start-hotkeys"/);
+assert.match(indexSource, /Alt\+Shift\+1…7/);
 assert.match(indexSource, /fonts\.googleapis\.com/);
 assert.match(indexSource, /fonts\.gstatic\.com/);
 assert.match(stylesSource, /"Noto Serif"/);
-assert.doesNotMatch(stylesSource, /overflow:\s*hidden/);
+assert.doesNotMatch(stylesSource, /html,\s*body[^}]*overflow:\s*hidden/s);
 assert.match(stylesSource, /overflow:\s*visible\s*!important/);
 assert.match(stylesSource, /#333d4d/i);
 
@@ -193,6 +268,13 @@ const drop = () => windowListeners.get("drop")({
 });
 
 (async () => {
+  await wait(20);
+  assert.equal(elements["#last-book"].hidden, false);
+  assert.equal(
+    elements["#last-book"].textContent,
+    "LAST: Previous Book — previous.epub · R TO REOPEN"
+  );
+
   drop();
   await wait(80);
 
@@ -202,10 +284,44 @@ const drop = () => windowListeners.get("drop")({
   assert.deepEqual(renderedSections, [1, 2]);
   assert.equal(unloadedSections, 2);
   assert.equal(context.document.title, "Test Book — Smooth Reader");
+  assert.equal(
+    elements["#last-book"].textContent,
+    "LAST: Test Book — test.epub · R TO REOPEN"
+  );
+  assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).fileName, "test.epub");
 
   assert.equal(elements["#viewer"].listeners.has("wheel"), false);
-  assert.equal(elements["#viewer"].listeners.has("pointerdown"), false);
+  assert.equal(elements["#viewer"].listeners.has("pointerdown"), true);
   assert.equal(windowListeners.has("keydown"), true);
+
+  let rightDragPrevented = false;
+  elements["#viewer"].listeners.get("pointerdown")({
+    button: 2,
+    pointerId: 9,
+    clientY: 300,
+    preventDefault() {
+      rightDragPrevented = true;
+    }
+  });
+  assert.equal(rightDragPrevented, true);
+  assert.equal(elements["#viewer"].capturedPointer, 9);
+
+  elements["#viewer"].listeners.get("pointermove")({
+    pointerId: 9,
+    buttons: 2,
+    clientY: 280,
+    preventDefault() {}
+  });
+  await wait(10);
+  assert.equal(scrollByCalls.at(-1).top, 27);
+  assert.equal(scrollByCalls.at(-1).behavior, "auto");
+
+  elements["#viewer"].listeners.get("pointerup")({
+    pointerId: 9,
+    button: 2,
+    preventDefault() {}
+  });
+  assert.equal(elements["#viewer"].capturedPointer, null);
 
   const sourceChapter = elements["#viewer"].children[0];
   const targetChapter = elements["#viewer"].children[1];
@@ -268,6 +384,9 @@ const drop = () => windowListeners.get("drop")({
   };
 
   context.window.scrollY = 900;
+  assert.equal(pressKey("o"), true);
+  assert.equal(elements["#file-input"].clickCount, 1);
+
   assert.equal(pressKey("Home"), true);
   assert.equal(scrollCalls.at(-1), 0);
 
@@ -302,6 +421,11 @@ const drop = () => windowListeners.get("drop")({
 
   assert.equal(pressKey("7", { altKey: true, shiftKey: true }), true);
   assert.equal(context.document.documentElement.dataset.font, "crimson-pro");
+
+  assert.equal(pressKey("r"), true);
+  await wait(80);
+  assert.equal(elements["#viewer"].children.length, 2);
+  assert.deepEqual(renderedSections, [1, 2, 1, 2, 1, 2]);
 
   console.log("renderer DOM smoke test passed");
 })().catch((error) => {

@@ -6,12 +6,18 @@ const viewer = document.querySelector("#viewer");
 const dragCover = document.querySelector("#drag-cover");
 const status = document.querySelector("#status");
 const fileInput = document.querySelector("#file-input");
+const lastBookLabel = document.querySelector("#last-book");
 
 const POSITION_PREFIX = "smooth-reader:position:";
 const PALETTE_KEY = "smooth-reader:palette";
 const FONT_KEY = "smooth-reader:font";
+const LAST_BOOK_KEY = "smooth-reader:last-book";
+const LAST_BOOK_DB = "smooth-reader-library";
+const LAST_BOOK_STORE = "books";
+const LAST_BOOK_RECORD = "last-opened";
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
+const RIGHT_DRAG_SPEED = 1.35;
 const PALETTES = [
   { id: "charcoal", name: "CHARCOAL" },
   { id: "geany", name: "GEANY" },
@@ -36,6 +42,10 @@ let saveTimer = null;
 let statusTimer = null;
 let loadGeneration = 0;
 let dragDepth = 0;
+let rightDrag = null;
+let rightDragFrame = null;
+let pendingRightDragScroll = 0;
+let lastBookCanReopen = false;
 const chapterLookup = new Map();
 let paletteIndex = Math.max(
   0,
@@ -61,6 +71,99 @@ const clearStatus = () => {
   status.hidden = true;
   status.textContent = "";
 };
+
+const loadLastBookInfo = () => {
+  try {
+    return JSON.parse(localStorage.getItem(LAST_BOOK_KEY) || "null");
+  } catch {
+    return null;
+  }
+};
+
+const updateLastBookLabel = (record, canReopen = false) => {
+  if (!record?.fileName) {
+    lastBookLabel.hidden = true;
+    lastBookLabel.textContent = "";
+    return;
+  }
+
+  const title = record.title && record.title !== record.fileName
+    ? `${record.title} — `
+    : "";
+  const reopenHint = canReopen ? " · R TO REOPEN" : "";
+  lastBookLabel.textContent = `LAST: ${title}${record.fileName}${reopenHint}`;
+  lastBookLabel.hidden = false;
+};
+
+const openLastBookDatabase = () => new Promise((resolve, reject) => {
+  if (!window.indexedDB) {
+    resolve(null);
+    return;
+  }
+
+  const request = window.indexedDB.open(LAST_BOOK_DB, 1);
+  request.onupgradeneeded = () => {
+    if (!request.result.objectStoreNames.contains(LAST_BOOK_STORE)) {
+      request.result.createObjectStore(LAST_BOOK_STORE);
+    }
+  };
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error);
+});
+
+const readCachedLastBook = async () => {
+  const database = await openLastBookDatabase();
+  if (!database) return null;
+
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = database
+        .transaction(LAST_BOOK_STORE, "readonly")
+        .objectStore(LAST_BOOK_STORE)
+        .get(LAST_BOOK_RECORD);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    database.close();
+  }
+};
+
+const writeCachedLastBook = async (record) => {
+  const database = await openLastBookDatabase();
+  if (!database) return false;
+
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(LAST_BOOK_STORE, "readwrite");
+      transaction.objectStore(LAST_BOOK_STORE).put(record, LAST_BOOK_RECORD);
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+    return true;
+  } finally {
+    database.close();
+  }
+};
+
+const initializeLastBook = async () => {
+  const info = loadLastBookInfo();
+  updateLastBookLabel(info, false);
+  if (!info) return;
+
+  try {
+    const cached = await readCachedLastBook();
+    lastBookCanReopen = Boolean(
+      cached?.fileName === info.fileName && cached?.bytes
+    );
+    updateLastBookLabel(info, lastBookCanReopen);
+  } catch (error) {
+    console.warn("Could not inspect the cached EPUB.", error);
+  }
+};
+
+initializeLastBook();
 
 const applyPalette = (nextIndex, announce = true) => {
   paletteIndex = (nextIndex + PALETTES.length) % PALETTES.length;
@@ -133,6 +236,7 @@ const hashBook = async (arrayBuffer) => {
 const destroyCurrentBook = () => {
   window.clearTimeout(saveTimer);
   savePositionNow();
+  stopRightDrag();
 
   if (book) {
     book.destroy();
@@ -265,6 +369,73 @@ const handleBookLink = (event) => {
   });
 };
 
+const flushRightDragScroll = () => {
+  rightDragFrame = null;
+  const pixels = pendingRightDragScroll;
+  pendingRightDragScroll = 0;
+
+  if (pixels !== 0) {
+    window.scrollBy({ top: pixels, left: 0, behavior: "auto" });
+  }
+};
+
+const queueRightDragScroll = (pixels) => {
+  pendingRightDragScroll += pixels;
+  if (rightDragFrame === null) {
+    rightDragFrame = window.requestAnimationFrame(flushRightDragScroll);
+  }
+};
+
+const stopRightDrag = (event) => {
+  if (!rightDrag) return;
+  if (event?.pointerId !== undefined && event.pointerId !== rightDrag.pointerId) return;
+
+  const pointerId = rightDrag.pointerId;
+  rightDrag = null;
+
+  try {
+    viewer.releasePointerCapture?.(pointerId);
+  } catch {
+    // Capture can already be gone after leaving the window.
+  }
+
+  document.body.classList.remove("is-right-dragging");
+
+  if (rightDragFrame !== null) {
+    window.cancelAnimationFrame(rightDragFrame);
+    rightDragFrame = null;
+    flushRightDragScroll();
+  }
+
+  event?.preventDefault?.();
+};
+
+const handleRightDragStart = (event) => {
+  if (event.button !== 2 || reader.hidden) return;
+
+  event.preventDefault();
+  rightDrag = {
+    pointerId: event.pointerId,
+    lastY: event.clientY
+  };
+  pendingRightDragScroll = 0;
+  viewer.setPointerCapture?.(event.pointerId);
+  document.body.classList.add("is-right-dragging");
+};
+
+const handleRightDragMove = (event) => {
+  if (!rightDrag || event.pointerId !== rightDrag.pointerId) return;
+  if (event.buttons !== undefined && (event.buttons & 2) === 0) {
+    stopRightDrag(event);
+    return;
+  }
+
+  event.preventDefault();
+  const deltaY = event.clientY - rightDrag.lastY;
+  rightDrag.lastY = event.clientY;
+  queueRightDragScroll(-deltaY * RIGHT_DRAG_SPEED);
+};
+
 const waitForImages = async () => {
   const pending = [...viewer.querySelectorAll("img")]
     .filter((image) => !image.complete)
@@ -346,6 +517,24 @@ const openBook = async (file) => {
     );
 
     const metadata = await book.loaded.metadata;
+    const lastBookInfo = {
+      fileName: file.name,
+      title: metadata?.title || "",
+      openedAt: Date.now()
+    };
+    localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(lastBookInfo));
+
+    try {
+      lastBookCanReopen = await writeCachedLastBook({
+        ...lastBookInfo,
+        bytes
+      });
+    } catch (error) {
+      lastBookCanReopen = false;
+      console.warn("Could not cache the EPUB for reopening.", error);
+    }
+    updateLastBookLabel(lastBookInfo, lastBookCanReopen);
+
     document.title = metadata?.title
       ? `${metadata.title} — Smooth Reader`
       : "Smooth Reader";
@@ -380,6 +569,36 @@ const handleReaderKeyDown = (event) => {
 
   const key = event.key.toLowerCase();
   const noCommandModifier = !event.ctrlKey && !event.metaKey && !event.altKey;
+
+  if (noCommandModifier && !event.shiftKey && key === "o") {
+    event.preventDefault();
+    fileInput.click();
+    return;
+  }
+
+  if (noCommandModifier && !event.shiftKey && key === "r") {
+    event.preventDefault();
+    if (!lastBookCanReopen) {
+      showStatus("LAST BOOK IS NOT CACHED · DROP IT AGAIN", 1800);
+      return;
+    }
+
+    readCachedLastBook()
+      .then((cached) => {
+        if (!cached?.fileName || !cached?.bytes) throw new Error("Cached EPUB is missing.");
+        return openBook({
+          name: cached.fileName,
+          arrayBuffer: async () => cached.bytes.slice(0)
+        });
+      })
+      .catch((error) => {
+        console.error(error);
+        lastBookCanReopen = false;
+        updateLastBookLabel(loadLastBookInfo(), false);
+        showStatus("CACHED BOOK COULD NOT BE REOPENED · DROP IT AGAIN", 2200);
+      });
+    return;
+  }
 
   if (noCommandModifier && key === "home") {
     event.preventDefault();
@@ -490,6 +709,13 @@ const installDropTarget = (target) => {
 installDropTarget(window);
 
 viewer.addEventListener("click", handleBookLink);
+viewer.addEventListener("pointerdown", handleRightDragStart);
+viewer.addEventListener("pointermove", handleRightDragMove);
+viewer.addEventListener("pointerup", stopRightDrag);
+viewer.addEventListener("pointercancel", stopRightDrag);
+viewer.addEventListener("lostpointercapture", stopRightDrag);
+viewer.addEventListener("contextmenu", (event) => event.preventDefault());
 window.addEventListener("keydown", handleReaderKeyDown, true);
 window.addEventListener("scroll", schedulePositionSave, { passive: true });
+window.addEventListener("blur", () => stopRightDrag());
 window.addEventListener("beforeunload", savePositionNow);
