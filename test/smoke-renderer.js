@@ -164,15 +164,18 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v7.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v8.js");
 vm.runInContext(fs.readFileSync(rendererPath, "utf8"), context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v7.css"), "utf8");
-assert.match(indexSource, /styles-v7\.css/);
-assert.match(indexSource, /renderer-v7\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v8.css"), "utf8");
+assert.match(indexSource, /styles-v8\.css/);
+assert.match(indexSource, /renderer-v8\.js/);
+assert.match(indexSource, /fonts\.googleapis\.com/);
+assert.match(indexSource, /fonts\.gstatic\.com/);
+assert.match(stylesSource, /"Noto Serif"/);
 assert.doesNotMatch(stylesSource, /overflow:\s*hidden/);
 assert.match(stylesSource, /overflow:\s*visible\s*!important/);
 assert.match(stylesSource, /#333d4d/i);
@@ -288,6 +291,17 @@ const drop = () => windowListeners.get("drop")({
 
   assert.equal(pressKey("6", { altKey: true }), true);
   assert.equal(context.document.documentElement.dataset.palette, "paper");
+
+  assert.equal(context.document.documentElement.dataset.font, "system-sans");
+  assert.equal(pressKey("f"), true);
+  assert.equal(context.document.documentElement.dataset.font, "noto-serif");
+  assert.equal(stored.get("smooth-reader:font"), "noto-serif");
+
+  assert.equal(pressKey("F", { shiftKey: true }), true);
+  assert.equal(context.document.documentElement.dataset.font, "system-sans");
+
+  assert.equal(pressKey("7", { altKey: true, shiftKey: true }), true);
+  assert.equal(context.document.documentElement.dataset.font, "crimson-pro");
 
   console.log("renderer DOM smoke test passed");
 })().catch((error) => {

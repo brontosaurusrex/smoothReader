@@ -31,10 +31,16 @@ Click the drop surface to choose a file.
 - `Ctrl` + mouse wheel or `Ctrl` + `+` / `-`: native browser zoom
 - `P` / `Shift+P`: next / previous color palette
 - `Alt+1` through `Alt+6`: select a palette directly
+- `F` / `Shift+F`: next / previous reading font
+- `Alt+Shift+1` through `Alt+Shift+7`: select a font directly
 
 Palette order: Charcoal, Geany, Midnight, Sepia, Forest, Paper. Geany is based
 on the supplied screenshot's `#333d4d` background and muted teal-green accents.
 The palette choice is remembered, and there is no persistent settings GUI.
+
+Font order: System Sans, Noto Serif, Literata, Source Serif 4, Lora, Atkinson
+Hyperlegible, Crimson Pro. The six named families are loaded through the Google
+Fonts CSS API; the selected font is remembered.
 
 ## Current scope
 
@@ -49,11 +55,11 @@ The palette choice is remembered, and there is no persistent settings GUI.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v7.js` and `styles-v7.css`) so a
+The app files carry versioned names (`renderer-v8.js` and `styles-v8.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 
-EPUB.js and JSZip are included directly in `vendor/`; the page makes no network
-requests and the EPUB never leaves the browser.
+EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and
+font files are requested externally; the EPUB itself never leaves the browser.
 
 ## Verify the source
 

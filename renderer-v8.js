@@ -9,6 +9,7 @@ const fileInput = document.querySelector("#file-input");
 
 const POSITION_PREFIX = "smooth-reader:position:";
 const PALETTE_KEY = "smooth-reader:palette";
+const FONT_KEY = "smooth-reader:font";
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
 const PALETTES = [
@@ -18,6 +19,15 @@ const PALETTES = [
   { id: "sepia", name: "SEPIA" },
   { id: "forest", name: "FOREST" },
   { id: "paper", name: "PAPER" }
+];
+const FONTS = [
+  { id: "system-sans", name: "SYSTEM SANS" },
+  { id: "noto-serif", name: "NOTO SERIF" },
+  { id: "literata", name: "LITERATA" },
+  { id: "source-serif", name: "SOURCE SERIF 4" },
+  { id: "lora", name: "LORA" },
+  { id: "atkinson", name: "ATKINSON HYPERLEGIBLE" },
+  { id: "crimson-pro", name: "CRIMSON PRO" }
 ];
 
 let book = null;
@@ -30,6 +40,10 @@ const chapterLookup = new Map();
 let paletteIndex = Math.max(
   0,
   PALETTES.findIndex((palette) => palette.id === localStorage.getItem(PALETTE_KEY))
+);
+let fontIndex = Math.max(
+  0,
+  FONTS.findIndex((font) => font.id === localStorage.getItem(FONT_KEY))
 );
 
 const showStatus = (message, hideAfter = 0) => {
@@ -59,7 +73,19 @@ const applyPalette = (nextIndex, announce = true) => {
   }
 };
 
+const applyFont = (nextIndex, announce = true) => {
+  fontIndex = (nextIndex + FONTS.length) % FONTS.length;
+  const font = FONTS[fontIndex];
+  document.documentElement.dataset.font = font.id;
+  localStorage.setItem(FONT_KEY, font.id);
+
+  if (announce) {
+    showStatus(`FONT ${fontIndex + 1}/${FONTS.length} · ${font.name}`, 900);
+  }
+};
+
 applyPalette(paletteIndex, false);
+applyFont(fontIndex, false);
 
 const setReadingMode = (isReading) => {
   dropZone.hidden = isReading;
@@ -388,8 +414,27 @@ const handleReaderKeyDown = (event) => {
     return;
   }
 
+  if (noCommandModifier && key === "f" && !event.repeat) {
+    event.preventDefault();
+    applyFont(fontIndex + (event.shiftKey ? -1 : 1));
+    return;
+  }
+
   if (
     event.altKey &&
+    event.shiftKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    /^[1-7]$/.test(event.key)
+  ) {
+    event.preventDefault();
+    applyFont(Number(event.key) - 1);
+    return;
+  }
+
+  if (
+    event.altKey &&
+    !event.shiftKey &&
     !event.ctrlKey &&
     !event.metaKey &&
     /^[1-6]$/.test(event.key)
