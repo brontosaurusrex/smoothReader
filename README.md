@@ -1,5 +1,5 @@
 ![slopware warning](https://brontosaurusrex.github.io/media/slopware02.svg)  
-This software is AI generated.
+This software and documentation are AI generated.
 
 
 # Smooth Reader — web edition
