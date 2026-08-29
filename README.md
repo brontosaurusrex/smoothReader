@@ -1,3 +1,6 @@
+![slopware warning](https://brontosaurusrex.github.io/media/slopware02.svg)
+
+
 # Smooth Reader — web edition
 
 A dependency-free local webpage that loads an EPUB's entire reading order into
