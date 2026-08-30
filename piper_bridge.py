@@ -209,7 +209,7 @@ class SmoothReaderHandler(SimpleHTTPRequestHandler):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=9000)
+    parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
         "--voice-dir",
         type=Path,
