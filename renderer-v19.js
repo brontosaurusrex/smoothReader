@@ -39,6 +39,10 @@ const settingsTrackingReset = document.querySelector("#settings-tracking-reset")
 const settingsTrackingUp = document.querySelector("#settings-tracking-up");
 const settingsWidth = document.querySelector("#settings-width");
 const settingsWidthValue = document.querySelector("#settings-width-value");
+const settingsSpeechVoice = document.querySelector("#settings-speech-voice");
+const settingsSpeechStart = document.querySelector("#settings-speech-start");
+const settingsSpeechStop = document.querySelector("#settings-speech-stop");
+const settingsSpeechStatus = document.querySelector("#settings-speech-status");
 const settingsHome = document.querySelector("#settings-home");
 const settingsPageUp = document.querySelector("#settings-page-up");
 const settingsPageDown = document.querySelector("#settings-page-down");
@@ -78,6 +82,8 @@ const DEFAULT_LINE_HEIGHT = 1.72;
 const MIN_LINE_HEIGHT = 1.2;
 const MAX_LINE_HEIGHT = 2.2;
 const LINE_HEIGHT_STEP = 0.04;
+const SPEECH_CHUNK_LENGTH = 550;
+const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
   { id: "charcoal", name: "CHARCOAL" },
   { id: "geany", name: "GEANY" },
@@ -116,6 +122,11 @@ let pendingRightDragScroll = 0;
 let lastBookCanReopen = false;
 let recentBookInfo = [];
 let cachedRecentBooks = [];
+let pendingLayoutAnchor = null;
+let layoutChangeGeneration = 0;
+let speechGeneration = 0;
+let speechIsActive = false;
+let speechActiveElement = null;
 const chapterLookup = new Map();
 let paletteIndex = Math.max(
   0,
@@ -303,6 +314,84 @@ populateSelect(settingsPaletteSelect, PALETTES);
 populateSelect(startFontSelect, FONTS);
 populateSelect(settingsFontSelect, FONTS);
 
+const getAnchorViewportTop = (anchor) => {
+  if (!anchor) return null;
+
+  if (anchor.element) {
+    return anchor.element.getBoundingClientRect?.().top ?? null;
+  }
+
+  if (!anchor.node || !document.createRange) return null;
+  try {
+    const range = document.createRange();
+    if (anchor.node.nodeType === 3) {
+      const length = anchor.node.textContent?.length || 0;
+      const start = Math.max(0, Math.min(anchor.offset, Math.max(0, length - 1)));
+      range.setStart(anchor.node, start);
+      range.setEnd(anchor.node, Math.min(length, start + 1));
+    } else {
+      const childCount = anchor.node.childNodes?.length || 0;
+      range.setStart(anchor.node, Math.max(0, Math.min(anchor.offset, childCount)));
+      range.collapse(true);
+    }
+    return range.getBoundingClientRect().top;
+  } catch {
+    return null;
+  }
+};
+
+const captureLayoutAnchor = () => {
+  if (reader.hidden || viewer.children.length === 0) return null;
+
+  const x = window.innerWidth / 2;
+  const y = Math.max(64, Math.min(window.innerHeight - 64, window.innerHeight * 0.32));
+  const caret = document.caretPositionFromPoint?.(x, y);
+  const legacyCaret = caret ? null : document.caretRangeFromPoint?.(x, y);
+  const node = caret?.offsetNode || legacyCaret?.startContainer;
+  const offset = caret?.offset ?? legacyCaret?.startOffset ?? 0;
+
+  if (node) {
+    const anchor = { node, offset };
+    const viewportTop = getAnchorViewportTop(anchor);
+    if (Number.isFinite(viewportTop)) return { ...anchor, viewportTop };
+  }
+
+  const element = document.elementFromPoint?.(x, y)?.closest?.(SPEECH_BLOCK_SELECTOR);
+  if (element?.closest?.("#viewer")) {
+    return { element, viewportTop: element.getBoundingClientRect().top };
+  }
+  return null;
+};
+
+const beginLayoutChange = () => {
+  if (!pendingLayoutAnchor) pendingLayoutAnchor = captureLayoutAnchor();
+  return pendingLayoutAnchor;
+};
+
+const scheduleLayoutAnchorRestore = (anchor) => {
+  if (!anchor) return;
+  const generation = ++layoutChangeGeneration;
+  void viewer.offsetWidth;
+
+  Promise.resolve(document.fonts?.ready)
+    .catch(() => {})
+    .then(() => new Promise((resolve) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+    }))
+    .then(() => {
+      if (generation !== layoutChangeGeneration || reader.hidden) return;
+      pendingLayoutAnchor = null;
+      const currentTop = getAnchorViewportTop(anchor);
+      if (!Number.isFinite(currentTop)) return;
+      const correction = currentTop - anchor.viewportTop;
+      if (Math.abs(correction) > 0.5) {
+        window.scrollBy({ top: correction, left: 0, behavior: "auto" });
+      }
+      updateReadingProgress();
+      schedulePositionSave();
+    });
+};
+
 const syncSettingsControls = () => {
   const paletteId = PALETTES[paletteIndex].id;
   const fontId = FONTS[fontIndex].id;
@@ -343,11 +432,13 @@ const applyPalette = (nextIndex, announce = true) => {
 };
 
 const applyFont = (nextIndex, announce = true) => {
+  const anchor = beginLayoutChange();
   fontIndex = (nextIndex + FONTS.length) % FONTS.length;
   const font = FONTS[fontIndex];
   document.documentElement.dataset.font = font.id;
   localStorage.setItem(FONT_KEY, font.id);
   syncSettingsControls();
+  scheduleLayoutAnchorRestore(anchor);
 
   if (announce) {
     showStatus(`FONT ${fontIndex + 1}/${FONTS.length} · ${font.name}`, 900);
@@ -355,6 +446,7 @@ const applyFont = (nextIndex, announce = true) => {
 };
 
 const applyTracking = (nextTracking, announce = true) => {
+  const anchor = beginLayoutChange();
   const clamped = Math.max(
     MIN_TRACKING_EM,
     Math.min(MAX_TRACKING_EM, nextTracking)
@@ -366,6 +458,7 @@ const applyTracking = (nextTracking, announce = true) => {
   );
   localStorage.setItem(TRACKING_KEY, String(trackingEm));
   syncSettingsControls();
+  scheduleLayoutAnchorRestore(anchor);
 
   if (announce) {
     const sign = trackingEm > 0 ? "+" : "";
@@ -374,10 +467,12 @@ const applyTracking = (nextTracking, announce = true) => {
 };
 
 const applyWidth = (nextWidth, announce = true) => {
+  const anchor = beginLayoutChange();
   widthCh = Math.round(Math.max(MIN_WIDTH_CH, Math.min(MAX_WIDTH_CH, nextWidth)));
   document.documentElement.style.setProperty("--reader-width", `${widthCh}ch`);
   localStorage.setItem(WIDTH_KEY, String(widthCh));
   syncSettingsControls();
+  scheduleLayoutAnchorRestore(anchor);
 
   if (announce) {
     showStatus(`TEXT WIDTH · APPROX. ${widthCh} CHARACTERS`, 900);
@@ -385,17 +480,20 @@ const applyWidth = (nextWidth, announce = true) => {
 };
 
 const applyFontSize = (nextSize, announce = true) => {
+  const anchor = beginLayoutChange();
   fontSizePx = Math.round(
     Math.max(MIN_FONT_SIZE_PX, Math.min(MAX_FONT_SIZE_PX, nextSize))
   );
   document.documentElement.style.setProperty("--reader-font-size", `${fontSizePx}px`);
   localStorage.setItem(FONT_SIZE_KEY, String(fontSizePx));
   syncSettingsControls();
+  scheduleLayoutAnchorRestore(anchor);
 
   if (announce) showStatus(`FONT SIZE · ${fontSizePx}px`, 900);
 };
 
 const applyLineHeight = (nextLineHeight, announce = true) => {
+  const anchor = beginLayoutChange();
   lineHeight = Math.round(
     Math.max(MIN_LINE_HEIGHT, Math.min(MAX_LINE_HEIGHT, nextLineHeight)) * 100
   ) / 100;
@@ -405,6 +503,7 @@ const applyLineHeight = (nextLineHeight, announce = true) => {
   );
   localStorage.setItem(LINE_HEIGHT_KEY, String(lineHeight));
   syncSettingsControls();
+  scheduleLayoutAnchorRestore(anchor);
 
   if (announce) showStatus(`LINE HEIGHT · ${lineHeight.toFixed(2)}`, 900);
 };
@@ -483,6 +582,9 @@ const destroyCurrentBook = () => {
   window.clearTimeout(saveTimer);
   savePositionNow();
   stopRightDrag();
+  layoutChangeGeneration += 1;
+  pendingLayoutAnchor = null;
+  if (speechIsActive) stopSpeech();
 
   if (book) {
     book.destroy();
@@ -729,6 +831,198 @@ const restorePosition = async (savedPosition) => {
   });
 };
 
+const normalizeSpeechText = (text) => String(text || "")
+  .replace(/\bDr\./g, "Doctor")
+  .replace(/\bMr\./g, "Mister")
+  .replace(/\bMs\./g, "Miss")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const splitSpeechText = (text, maximumLength = SPEECH_CHUNK_LENGTH) => {
+  const normalized = normalizeSpeechText(text);
+  if (!normalized) return [];
+
+  const sentences = normalized.match(/[^.!?…]+(?:[.!?…]+["'’”)]*|$)/g) || [normalized];
+  const chunks = [];
+  let chunk = "";
+
+  const pushPiece = (piece) => {
+    let remainder = piece.trim();
+    while (remainder.length > maximumLength) {
+      let splitAt = remainder.lastIndexOf(" ", maximumLength);
+      if (splitAt < maximumLength * 0.55) splitAt = maximumLength;
+      chunks.push(remainder.slice(0, splitAt).trim());
+      remainder = remainder.slice(splitAt).trim();
+    }
+    return remainder;
+  };
+
+  sentences.forEach((sentence) => {
+    const cleanSentence = sentence.trim();
+    if (!cleanSentence) return;
+    if (chunk && `${chunk} ${cleanSentence}`.length > maximumLength) {
+      chunks.push(chunk);
+      chunk = "";
+    }
+    if (cleanSentence.length > maximumLength) {
+      if (chunk) chunks.push(chunk);
+      chunk = pushPiece(cleanSentence);
+    } else {
+      chunk = chunk ? `${chunk} ${cleanSentence}` : cleanSentence;
+    }
+  });
+
+  if (chunk) chunks.push(chunk);
+  return chunks;
+};
+
+const setSpeechActiveElement = (element) => {
+  speechActiveElement?.classList?.remove("speech-active");
+  speechActiveElement = element || null;
+  speechActiveElement?.classList?.add("speech-active");
+
+  const rect = speechActiveElement?.getBoundingClientRect?.();
+  if (rect && (rect.top < 60 || rect.bottom > window.innerHeight - 40)) {
+    speechActiveElement.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+};
+
+const updateSpeechVoices = (voices) => {
+  const selected = settingsSpeechVoice.value;
+  settingsSpeechVoice.replaceChildren();
+  const randomOption = document.createElement("option");
+  randomOption.value = "";
+  randomOption.textContent = "RANDOM VOICE";
+  settingsSpeechVoice.appendChild(randomOption);
+
+  voices.forEach((voice) => {
+    const option = document.createElement("option");
+    option.value = voice;
+    option.textContent = voice.replace(/\.onnx$/i, "").toUpperCase();
+    settingsSpeechVoice.appendChild(option);
+  });
+  settingsSpeechVoice.value = voices.includes(selected) ? selected : "";
+};
+
+const requestPiper = async (path, options = {}) => {
+  if (typeof window.fetch !== "function") {
+    throw new Error("Local Piper bridge is not available.");
+  }
+  const response = await window.fetch(path, options);
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch {
+    // A static host returns HTML/404 here; report the bridge instructions below.
+  }
+  if (!response.ok || payload.ok === false) {
+    throw new Error(payload.error || "Run piper_bridge.py and open its local URL.");
+  }
+  return payload;
+};
+
+const inspectPiperBridge = async () => {
+  const bridge = await requestPiper("/api/piper/status");
+  if (!bridge.available) throw new Error(bridge.error || "Piper or mpv was not found.");
+  updateSpeechVoices(bridge.voices || []);
+  settingsSpeechStatus.textContent = `${bridge.voices.length} local voice${bridge.voices.length === 1 ? "" : "s"} ready.`;
+  return bridge;
+};
+
+const speechBlocksFromViewport = () => {
+  const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)]
+    .filter((element) => normalizeSpeechText(element.textContent));
+  if (blocks.length === 0) return [];
+
+  const x = window.innerWidth / 2;
+  const y = Math.max(64, Math.min(window.innerHeight - 64, window.innerHeight * 0.32));
+  const pointedBlock = document.elementFromPoint?.(x, y)?.closest?.(SPEECH_BLOCK_SELECTOR);
+  let startIndex = pointedBlock ? blocks.indexOf(pointedBlock) : -1;
+  if (startIndex < 0) {
+    startIndex = blocks.findIndex((element) => element.getBoundingClientRect().bottom > 60);
+  }
+  return blocks.slice(Math.max(0, startIndex));
+};
+
+const stopSpeech = () => {
+  const wasActive = speechIsActive;
+  speechGeneration += 1;
+  speechIsActive = false;
+  settingsSpeechStart.disabled = false;
+  settingsSpeechStop.disabled = true;
+  setSpeechActiveElement(null);
+
+  if (wasActive && typeof window.fetch === "function") {
+    window.fetch("/api/piper/stop", { method: "POST", keepalive: true }).catch(() => {});
+    settingsSpeechStatus.textContent = "Stopped.";
+    showStatus("PIPER · STOPPED", 900);
+  }
+};
+
+const startSpeech = async () => {
+  if (reader.hidden || viewer.children.length === 0 || speechIsActive) return;
+  const generation = ++speechGeneration;
+  speechIsActive = true;
+  settingsSpeechStart.disabled = true;
+  settingsSpeechStop.disabled = false;
+  settingsSpeechStatus.textContent = "Connecting to local Piper…";
+
+  try {
+    await inspectPiperBridge();
+    if (generation !== speechGeneration) return;
+
+    const selectedText = normalizeSpeechText(window.getSelection?.().toString());
+    const entries = selectedText
+      ? [{ element: null, text: selectedText }]
+      : speechBlocksFromViewport().map((element) => ({
+        element,
+        text: normalizeSpeechText(element.textContent)
+      }));
+    if (entries.length === 0) throw new Error("No readable text was found here.");
+
+    for (const entry of entries) {
+      if (generation !== speechGeneration) return;
+      setSpeechActiveElement(entry.element);
+      const chunks = splitSpeechText(entry.text);
+
+      for (let index = 0; index < chunks.length; index += 1) {
+        if (generation !== speechGeneration) return;
+        const progress = `${index + 1}/${chunks.length}`;
+        settingsSpeechStatus.textContent = `Reading chunk ${progress}…`;
+        showStatus(`PIPER · ${progress}`);
+        const result = await requestPiper("/api/piper/speak", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: chunks[index],
+            voice: settingsSpeechVoice.value || null
+          })
+        });
+        if (result.voice) {
+          settingsSpeechStatus.textContent = `Reading with ${result.voice.replace(/\.onnx$/i, "")}…`;
+        }
+      }
+    }
+
+    if (generation !== speechGeneration) return;
+    speechIsActive = false;
+    settingsSpeechStart.disabled = false;
+    settingsSpeechStop.disabled = true;
+    setSpeechActiveElement(null);
+    settingsSpeechStatus.textContent = "Finished.";
+    showStatus("PIPER · FINISHED", 1000);
+  } catch (error) {
+    if (generation !== speechGeneration) return;
+    speechIsActive = false;
+    settingsSpeechStart.disabled = false;
+    settingsSpeechStop.disabled = true;
+    setSpeechActiveElement(null);
+    const message = error?.message || "Local Piper could not read this text.";
+    settingsSpeechStatus.textContent = message;
+    showStatus(`PIPER · ${message}`, 3200);
+  }
+};
+
 const openBook = async (file) => {
   if (!file?.name?.toLowerCase().endsWith(".epub")) {
     showStatus("Please drop an EPUB file.");
@@ -907,6 +1201,19 @@ const handleReaderKeyDown = (event) => {
     return;
   }
 
+  if (noCommandModifier && !event.shiftKey && !event.repeat && key === "v") {
+    event.preventDefault();
+    if (speechIsActive) stopSpeech();
+    else startSpeech();
+    return;
+  }
+
+  if (noCommandModifier && !event.shiftKey && key === "escape" && speechIsActive) {
+    event.preventDefault();
+    stopSpeech();
+    return;
+  }
+
   if (noCommandModifier && !event.repeat && event.key === "[") {
     event.preventDefault();
     applyFontSize(fontSizePx - FONT_SIZE_STEP_PX);
@@ -1025,6 +1332,8 @@ startOpen.addEventListener("click", () => fileInput.click());
 settingsOpen.addEventListener("click", () => fileInput.click());
 startReopen.addEventListener("click", reopenLastBook);
 settingsReopen.addEventListener("click", reopenLastBook);
+settingsSpeechStart.addEventListener("click", startSpeech);
+settingsSpeechStop.addEventListener("click", stopSpeech);
 
 startPaletteNext.addEventListener("click", () => applyPalette(paletteIndex + 1));
 startFontNext.addEventListener("click", () => applyFont(fontIndex + 1));

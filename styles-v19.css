@@ -261,15 +261,16 @@ body.is-dragging #drop-zone::before {
   position: relative;
   display: grid;
   gap: 0.45rem;
-  width: min(38rem, calc(100vw - 6rem));
+  width: min(50rem, calc(100vw - 6rem));
   margin-top: 1.4rem;
 }
 
 #recent-books > small {
+  padding-inline: 0.4rem;
   color: var(--muted);
   font-size: clamp(0.7rem, 0.62em, 0.82rem);
   letter-spacing: 0.12em;
-  text-align: center;
+  text-align: left;
 }
 
 #recent-book-list {
@@ -287,7 +288,7 @@ body.is-dragging #drop-zone::before {
   font-family: inherit;
   font-size: clamp(0.82rem, 0.74em, 0.96rem);
   letter-spacing: 0.035em;
-  text-align: center;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -398,6 +399,7 @@ body.is-dragging #drop-zone::before {
     padding: 3.5rem 2.5rem;
   }
 
+  #recent-books,
   #start-hotkeys {
     grid-template-columns: 1fr;
     gap: 0.62rem;
@@ -489,6 +491,15 @@ body.is-dragging #drop-zone::before {
   grid-template-columns: repeat(3, 1fr);
 }
 
+.settings-speech {
+  grid-template-columns: 2fr 1fr;
+}
+
+#settings-speech-status {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 #settings-panel button {
   padding: 0.42rem 0.5rem;
   border: 1px solid var(--line);
@@ -563,6 +574,12 @@ body.is-right-dragging * {
 
 #viewer a {
   color: var(--link);
+}
+
+#viewer .speech-active {
+  border-radius: 0.2rem;
+  outline: 0.18rem solid var(--hover);
+  background: var(--hover);
 }
 
 #viewer img,

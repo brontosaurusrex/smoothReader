@@ -95,6 +95,10 @@ const elements = {
   "#settings-tracking-up": makeElement(),
   "#settings-width": makeElement(),
   "#settings-width-value": makeElement(),
+  "#settings-speech-voice": makeElement(),
+  "#settings-speech-start": makeElement(),
+  "#settings-speech-stop": makeElement(),
+  "#settings-speech-status": makeElement(),
   "#settings-home": makeElement(),
   "#settings-page-up": makeElement(),
   "#settings-page-down": makeElement(),
@@ -129,6 +133,12 @@ const scrollCalls = [];
 const scrollByCalls = [];
 const renderedSections = [];
 let unloadedSections = 0;
+let anchorRectCalls = 0;
+const anchorTextNode = {
+  nodeType: 3,
+  textContent: "A stable reading anchor",
+  isConnected: true
+};
 
 const makeSection = (index) => ({
   linear: "yes",
@@ -249,10 +259,26 @@ const context = vm.createContext({
     },
     importNode(node) {
       return { ...node };
+    },
+    caretPositionFromPoint() {
+      if (elements["#reader"].hidden) return null;
+      return { offsetNode: anchorTextNode, offset: 4 };
+    },
+    createRange() {
+      return {
+        setStart() {},
+        setEnd() {},
+        collapse() {},
+        getBoundingClientRect() {
+          anchorRectCalls += 1;
+          return { top: anchorRectCalls === 1 ? 200 : 260 };
+        }
+      };
     }
   },
   window: {
     indexedDB,
+    innerWidth: 1200,
     innerHeight: 800,
     scrollY: 0,
     setTimeout,
@@ -295,15 +321,15 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v18.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v19.js");
 vm.runInContext(fs.readFileSync(rendererPath, "utf8"), context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v18.css"), "utf8");
-assert.match(indexSource, /styles-v18\.css/);
-assert.match(indexSource, /renderer-v18\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v19.css"), "utf8");
+assert.match(indexSource, /styles-v19\.css/);
+assert.match(indexSource, /renderer-v19\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
@@ -317,6 +343,8 @@ assert.match(indexSource, /id="settings-home"[^>]*>HOME</);
 assert.doesNotMatch(indexSource, /id="settings-end"/);
 assert.match(indexSource, /id="settings-font-size"/);
 assert.match(indexSource, /id="settings-line-height"/);
+assert.match(indexSource, /id="settings-speech-start"/);
+assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(indexSource, /fonts\.googleapis\.com/);
 assert.match(indexSource, /fonts\.gstatic\.com/);
 assert.match(stylesSource, /"Noto Serif"/);
@@ -331,6 +359,13 @@ assert.match(stylesSource, /font-size:\s*clamp\(0\.82rem, 0\.72em, 1rem\)/);
 assert.doesNotMatch(stylesSource, /html,\s*body[^}]*overflow:\s*hidden/s);
 assert.match(stylesSource, /overflow:\s*visible\s*!important/);
 assert.match(stylesSource, /#333d4d/i);
+assert.match(stylesSource, /#recent-books[^{]*\{[^}]*width:\s*min\(50rem/s);
+assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*text-align:\s*left/s);
+
+assert.equal(
+  JSON.stringify(vm.runInContext("splitSpeechText('Dr. One. Mr. Two.', 12)", context)),
+  JSON.stringify(["Doctor One.", "Mister Two."])
+);
 
 const file = {
   name: "test.epub",
@@ -506,6 +541,9 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(pressKey("f"), true);
   assert.equal(context.document.documentElement.dataset.font, "noto-serif");
   assert.equal(stored.get("smooth-reader:font"), "noto-serif");
+  await wait(20);
+  assert.equal(scrollByCalls.at(-1).top, 60);
+  assert.equal(scrollByCalls.at(-1).behavior, "auto");
 
   assert.equal(pressKey("F", { shiftKey: true }), true);
   assert.equal(context.document.documentElement.dataset.font, "system-sans");
@@ -572,6 +610,8 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
 
   assert.equal(elements["#recent-book-list"].children[0].listeners.has("click"), true);
   assert.equal(elements["#start-open"].listeners.has("click"), true);
+  assert.equal(elements["#settings-speech-start"].listeners.has("click"), true);
+  assert.equal(elements["#settings-speech-stop"].listeners.has("click"), true);
 
   assert.equal(pressKey("r"), true);
   await wait(80);
