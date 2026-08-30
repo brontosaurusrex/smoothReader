@@ -44,6 +44,8 @@ const settingsSpeechMin = document.querySelector("#settings-speech-min");
 const settingsSpeechMinValue = document.querySelector("#settings-speech-min-value");
 const settingsSpeechMax = document.querySelector("#settings-speech-max");
 const settingsSpeechMaxValue = document.querySelector("#settings-speech-max-value");
+const settingsSpeechPosition = document.querySelector("#settings-speech-position");
+const settingsSpeechPositionValue = document.querySelector("#settings-speech-position-value");
 const settingsSpeechStart = document.querySelector("#settings-speech-start");
 const settingsSpeechPause = document.querySelector("#settings-speech-pause");
 const settingsSpeechStop = document.querySelector("#settings-speech-stop");
@@ -55,6 +57,7 @@ const settingsPageDown = document.querySelector("#settings-page-down");
 const settingsOpen = document.querySelector("#settings-open");
 const settingsReopen = document.querySelector("#settings-reopen");
 const readingProgress = document.querySelector("#reading-progress");
+const speechProgress = document.querySelector("#speech-progress");
 
 const POSITION_PREFIX = "smooth-reader:position:";
 const PALETTE_KEY = "smooth-reader:palette";
@@ -65,6 +68,7 @@ const TRACKING_KEY = "smooth-reader:tracking";
 const WIDTH_KEY = "smooth-reader:text-width";
 const SPEECH_MIN_KEY = "smooth-reader:speech-minimum";
 const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
+const SPEECH_POSITION_KEY = "smooth-reader:speech-position";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
 const RECENT_BOOKS_KEY = "smooth-reader:recent-books";
 const LAST_BOOK_DB = "smooth-reader-library";
@@ -96,6 +100,9 @@ const MIN_SPEECH_MIN_LENGTH = 100;
 const MAX_SPEECH_MIN_LENGTH = 500;
 const MIN_SPEECH_MAX_LENGTH = 300;
 const MAX_SPEECH_MAX_LENGTH = 1200;
+const DEFAULT_SPEECH_POSITION_PERCENT = 15;
+const MIN_SPEECH_POSITION_PERCENT = 5;
+const MAX_SPEECH_POSITION_PERCENT = 50;
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
   { id: "charcoal", name: "CHARCOAL" },
@@ -171,12 +178,19 @@ let lineHeight = Number.isFinite(savedLineHeight)
   : DEFAULT_LINE_HEIGHT;
 const savedSpeechMinimum = Number.parseInt(localStorage.getItem(SPEECH_MIN_KEY), 10);
 const savedSpeechMaximum = Number.parseInt(localStorage.getItem(SPEECH_MAX_KEY), 10);
+const savedSpeechPosition = Number.parseInt(localStorage.getItem(SPEECH_POSITION_KEY), 10);
 let speechMinimumLength = Number.isFinite(savedSpeechMinimum)
   ? Math.max(MIN_SPEECH_MIN_LENGTH, Math.min(MAX_SPEECH_MIN_LENGTH, savedSpeechMinimum))
   : DEFAULT_SPEECH_MIN_LENGTH;
 let speechMaximumLength = Number.isFinite(savedSpeechMaximum)
   ? Math.max(MIN_SPEECH_MAX_LENGTH, Math.min(MAX_SPEECH_MAX_LENGTH, savedSpeechMaximum))
   : DEFAULT_SPEECH_MAX_LENGTH;
+let speechPositionPercent = Number.isFinite(savedSpeechPosition)
+  ? Math.max(
+    MIN_SPEECH_POSITION_PERCENT,
+    Math.min(MAX_SPEECH_POSITION_PERCENT, savedSpeechPosition)
+  )
+  : DEFAULT_SPEECH_POSITION_PERCENT;
 if (speechMinimumLength > speechMaximumLength) {
   speechMinimumLength = Math.min(DEFAULT_SPEECH_MIN_LENGTH, speechMaximumLength);
 }
@@ -890,10 +904,22 @@ const applySpeechBounds = (nextMinimum, nextMaximum, changed = "", announce = fa
   settingsSpeechMax.value = String(maximum);
   settingsSpeechMinValue.textContent = `${minimum} chars`;
   settingsSpeechMaxValue.textContent = `${maximum} chars`;
-  if (announce) showStatus(`PIPER CHUNKS · ${minimum}–${maximum} CHARACTERS`, 1400);
 };
 
 applySpeechBounds(speechMinimumLength, speechMaximumLength);
+
+const applySpeechPosition = (nextPosition, followCurrent = false) => {
+  speechPositionPercent = Math.round(Math.max(
+    MIN_SPEECH_POSITION_PERCENT,
+    Math.min(MAX_SPEECH_POSITION_PERCENT, nextPosition)
+  ));
+  localStorage.setItem(SPEECH_POSITION_KEY, String(speechPositionPercent));
+  settingsSpeechPosition.value = String(speechPositionPercent);
+  settingsSpeechPositionValue.textContent = `${speechPositionPercent}%`;
+  if (followCurrent && speechActiveJob) positionSpeechMarker(true);
+};
+
+applySpeechPosition(speechPositionPercent);
 
 const speechSourceFromEntries = (entries) => {
   let text = "";
@@ -1143,7 +1169,7 @@ const positionSpeechMarker = (followText = false) => {
     speechMarker.style.height = `${Math.max(18, lastRect.bottom - firstRect.top)}px`;
     speechMarker.hidden = false;
 
-    const scrollOffset = firstRect.top - window.innerHeight * 0.28;
+    const scrollOffset = firstRect.top - window.innerHeight * (speechPositionPercent / 100);
     if (followText && Math.abs(scrollOffset) > 1) {
       window.scrollBy({
         top: scrollOffset,
@@ -1159,13 +1185,11 @@ const positionSpeechMarker = (followText = false) => {
   }
 
   const rect = firstElement?.getBoundingClientRect?.();
-  if (
-    followText &&
-    rects.length === 0 &&
-    rect &&
-    (rect.top < 60 || rect.bottom > window.innerHeight - 40)
-  ) {
-    firstElement.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (followText && rects.length === 0 && rect) {
+    const fallbackOffset = rect.top - window.innerHeight * (speechPositionPercent / 100);
+    if (Math.abs(fallbackOffset) > 1) {
+      window.scrollBy({ top: fallbackOffset, left: 0, behavior: "smooth" });
+    }
   }
 };
 
@@ -1258,12 +1282,13 @@ const stopSpeech = () => {
   settingsSpeechPause.disabled = true;
   settingsSpeechPause.textContent = "PAUSE";
   settingsSpeechStop.disabled = true;
+  speechProgress.hidden = true;
+  speechProgress.textContent = "";
   clearSpeechSelection();
 
   if (wasActive && typeof window.fetch === "function") {
     window.fetch("/api/piper/stop", { method: "POST", keepalive: true }).catch(() => {});
     settingsSpeechStatus.textContent = "Stopped.";
-    showStatus("PIPER · STOPPED", 900);
   }
 };
 
@@ -1281,11 +1306,10 @@ const toggleSpeechPause = async () => {
     settingsSpeechStatus.textContent = speechIsPaused
       ? "Playback paused; background generation may continue."
       : "Playback continuing…";
-    showStatus(speechIsPaused ? "PIPER · PAUSED" : "PIPER · CONTINUING", 900);
   } catch (error) {
     const message = error?.message || "Piper pause control failed.";
     settingsSpeechStatus.textContent = message;
-    showStatus(`PIPER · ${message}`, 2200);
+    showStatus(`PIPER ERROR · ${message}`, 2200);
   }
 };
 
@@ -1330,6 +1354,8 @@ const startSpeech = async () => {
     if (entries.length === 0) throw new Error("No readable text was found here.");
     const jobs = buildSpeechJobs(entries);
     if (jobs.length === 0) throw new Error("No readable text was found here.");
+    speechProgress.textContent = `1/${jobs.length}`;
+    speechProgress.hidden = false;
 
     const requestedVoice = settingsSpeechVoice.value || null;
     const prepareJob = (job) => requestPiper("/api/piper/prepare", {
@@ -1345,16 +1371,15 @@ const startSpeech = async () => {
 
     for (let index = 0; index < jobs.length; index += 1) {
       if (generation !== speechGeneration) return;
+      speechProgress.textContent = `${index + 1}/${jobs.length}`;
       const nextPreparation = index + 1 < jobs.length
         ? settlePreparation(jobs[index + 1])
         : null;
-      const progress = `${index + 1}/${jobs.length}`;
       const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
       setSpeechActiveJob(jobs[index]);
       settingsSpeechStatus.textContent = nextPreparation
-        ? `Playing ${progress} with ${voiceName}; generating next…`
-        : `Playing ${progress} with ${voiceName}…`;
-      showStatus(`PIPER · ${progress}${prepared.cached ? " · CACHE" : ""}`);
+        ? `Playing with ${voiceName}; generating next…`
+        : `Playing with ${voiceName}…`;
       settingsSpeechPause.disabled = false;
 
       await requestPiper("/api/piper/play", {
@@ -1381,9 +1406,10 @@ const startSpeech = async () => {
     settingsSpeechPause.disabled = true;
     settingsSpeechPause.textContent = "PAUSE";
     settingsSpeechStop.disabled = true;
+    speechProgress.hidden = true;
+    speechProgress.textContent = "";
     clearSpeechSelection();
     settingsSpeechStatus.textContent = "Finished.";
-    showStatus("PIPER · FINISHED", 1000);
   } catch (error) {
     if (generation !== speechGeneration) return;
     speechIsActive = false;
@@ -1392,10 +1418,12 @@ const startSpeech = async () => {
     settingsSpeechPause.disabled = true;
     settingsSpeechPause.textContent = "PAUSE";
     settingsSpeechStop.disabled = true;
+    speechProgress.hidden = true;
+    speechProgress.textContent = "";
     clearSpeechSelection();
     const message = error?.message || "Local Piper could not read this text.";
     settingsSpeechStatus.textContent = message;
-    showStatus(`PIPER · ${message}`, 3200);
+    showStatus(`PIPER ERROR · ${message}`, 3200);
   }
 };
 
@@ -1723,6 +1751,9 @@ settingsSpeechMax.addEventListener("input", (event) => {
 });
 settingsSpeechMax.addEventListener("change", (event) => {
   applySpeechBounds(speechMinimumLength, Number(event.target.value), "maximum", true);
+});
+settingsSpeechPosition.addEventListener("input", (event) => {
+  applySpeechPosition(Number(event.target.value), true);
 });
 
 startPaletteNext.addEventListener("click", () => applyPalette(paletteIndex + 1));

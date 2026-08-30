@@ -12,7 +12,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;1,400;1,700&amp;family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&amp;family=Crimson+Pro:ital,wght@0,400;0,700;1,400;1,700&amp;family=EB+Garamond:ital,wght@0,400;0,700;1,400;1,700&amp;family=Literata:ital,wght@0,400;0,700;1,400;1,700&amp;family=Lora:ital,wght@0,400;0,700;1,400;1,700&amp;family=Merriweather:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,400;0,700;1,400;1,700&amp;family=Source+Serif+4:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap"
     >
-    <link rel="stylesheet" href="styles-v25.css">
+    <link rel="stylesheet" href="styles-v29.css">
   </head>
   <body>
     <main id="app">
@@ -88,6 +88,7 @@
           <label>Voice<select id="settings-speech-voice"><option value="">RANDOM VOICE</option></select></label>
           <label>Minimum chunk <output id="settings-speech-min-value"></output><input id="settings-speech-min" type="range" min="100" max="500" step="50"></label>
           <label>Maximum chunk <output id="settings-speech-max-value"></output><input id="settings-speech-max" type="range" min="300" max="1200" step="50"></label>
+          <label>Spoken line position <output id="settings-speech-position-value"></output><input id="settings-speech-position" type="range" min="5" max="50" step="1"></label>
           <div class="settings-row settings-speech">
             <button id="settings-speech-start" type="button">READ FROM HERE</button>
             <button id="settings-speech-pause" type="button" disabled>PAUSE</button>
@@ -110,7 +111,10 @@
       </div>
 
       <div id="status" role="status" aria-live="polite" hidden></div>
-      <output id="reading-progress" aria-label="Reading progress" hidden>0%</output>
+      <div id="progress-stack" aria-live="off">
+        <output id="reading-progress" aria-label="Reading progress" hidden>0%</output>
+        <output id="speech-progress" aria-label="Piper chunk progress" hidden></output>
+      </div>
       <div id="speech-marker" aria-hidden="true" hidden></div>
       <input id="file-input" type="file" accept=".epub,application/epub+zip" hidden>
     </main>
@@ -118,6 +122,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v25.js"></script>
+    <script src="renderer-v29.js"></script>
   </body>
 </html>

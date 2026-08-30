@@ -113,6 +113,8 @@ const elements = {
   "#settings-speech-min-value": makeElement(),
   "#settings-speech-max": makeElement(),
   "#settings-speech-max-value": makeElement(),
+  "#settings-speech-position": makeElement(),
+  "#settings-speech-position-value": makeElement(),
   "#settings-speech-start": makeElement(),
   "#settings-speech-pause": makeElement(),
   "#settings-speech-stop": makeElement(),
@@ -122,6 +124,7 @@ const elements = {
   "#settings-page-down": makeElement(),
   "#settings-open": makeElement(),
   "#settings-reopen": makeElement(),
+  "#speech-progress": makeElement(),
   "#reading-progress": makeElement(),
   "#speech-marker": makeElement()
 };
@@ -133,6 +136,7 @@ elements["#recent-books"].hidden = true;
 elements["#settings-menu"].hidden = true;
 elements["#settings-panel"].hidden = true;
 elements["#reading-progress"].hidden = true;
+elements["#speech-progress"].hidden = true;
 elements["#speech-marker"].hidden = true;
 
 const windowListeners = new Map();
@@ -388,16 +392,16 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v25.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v29.js");
 const rendererSource = fs.readFileSync(rendererPath, "utf8");
 vm.runInContext(rendererSource, context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v25.css"), "utf8");
-assert.match(indexSource, /styles-v25\.css/);
-assert.match(indexSource, /renderer-v25\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v29.css"), "utf8");
+assert.match(indexSource, /styles-v29\.css/);
+assert.match(indexSource, /renderer-v29\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
@@ -407,6 +411,8 @@ assert.match(indexSource, /Alt\+Shift\+M/);
 assert.match(indexSource, /id="settings-menu"/);
 assert.match(indexSource, /id="settings-width"/);
 assert.match(indexSource, /id="reading-progress"/);
+assert.match(indexSource, /id="progress-stack"/);
+assert.match(indexSource, /id="speech-progress"/);
 assert.match(indexSource, /id="settings-home"[^>]*>HOME</);
 assert.doesNotMatch(indexSource, /id="settings-end"/);
 assert.match(indexSource, /id="settings-font-size"/);
@@ -414,14 +420,20 @@ assert.match(indexSource, /id="settings-line-height"/);
 assert.match(indexSource, /id="settings-speech-start"/);
 assert.match(indexSource, /id="settings-speech-min"/);
 assert.match(indexSource, /id="settings-speech-max"/);
+assert.match(indexSource, /id="settings-speech-position"[^>]*min="5"[^>]*max="50"/);
 assert.match(indexSource, /id="settings-speech-pause"/);
 assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
 assert.match(rendererSource, /\/api\/piper\/play/);
 assert.match(rendererSource, /nextPreparation/);
+assert.match(rendererSource, /speechProgress\.textContent = `\$\{index \+ 1\}\/\$\{jobs\.length\}`/);
+assert.doesNotMatch(rendererSource, /PIPER · PLAYING|PIPER · [0-9]/);
+assert.equal((rendererSource.match(/showStatus\(`PIPER ERROR/g) || []).length, 2);
 assert.match(rendererSource, /createSpeechRange/);
 assert.match(rendererSource, /addEventListener\("resize", scheduleSpeechMarkerRefresh/);
 assert.match(rendererSource, /ResizeObserver\(scheduleSpeechMarkerRefresh\)/);
+assert.equal((rendererSource.match(/speechPositionPercent \/ 100/g) || []).length, 2);
+assert.doesNotMatch(rendererSource, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
 assert.match(indexSource, /id="speech-marker"/);
 assert.match(stylesSource, /#speech-marker/);
 assert.match(indexSource, /fonts\.googleapis\.com/);
@@ -432,6 +444,7 @@ assert.match(stylesSource, /"Cascadia Mono"/);
 assert.match(stylesSource, /font-family:\s*var\(--reader-font\)/);
 assert.match(stylesSource, /--reader-width:\s*72ch/);
 assert.match(stylesSource, /--reader-font-size:\s*20px/);
+assert.match(stylesSource, /#progress-stack[^{]*\{[^}]*right:\s*1rem[^}]*bottom:\s*0\.8rem/s);
 assert.match(stylesSource, /--reader-line-height:\s*1\.72/);
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*var\(--reader-font-size\)/s);
 assert.match(stylesSource, /font-size:\s*clamp\(0\.82rem, 0\.72em, 1rem\)/);
@@ -544,6 +557,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#start-line-height-value"].textContent, "1.72");
   assert.equal(elements["#settings-speech-min-value"].textContent, "350 chars");
   assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "15%");
 
   drop();
   await wait(80);
@@ -770,6 +784,11 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#settings-speech-max-value"].textContent, "700 chars");
   assert.equal(stored.get("smooth-reader:speech-minimum"), "400");
   assert.equal(stored.get("smooth-reader:speech-maximum"), "700");
+  elements["#settings-speech-position"].listeners.get("input")({
+    target: { value: "22" }
+  });
+  assert.equal(elements["#settings-speech-position-value"].textContent, "22%");
+  assert.equal(stored.get("smooth-reader:speech-position"), "22");
 
   assert.equal(pressKey("r"), true);
   await wait(80);

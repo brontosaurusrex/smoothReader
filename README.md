@@ -125,7 +125,10 @@ begins in the middle of a paragraph or on an indented line. Each new chunk
 smoothly moves its actual first rendered line—not merely its paragraph—to the
 upper reading area, so long paragraphs follow correctly. The marker is
 recalculated after browser zoom, font changes, width changes, and other text
-reflow, and is cleared when reading stops.
+reflow, and is cleared when reading stops. Exact ranges and fallback block
+mapping both place the spoken text at a remembered height in the viewport. The
+hidden menu's `Spoken line position` slider ranges from 5–50% and defaults to
+15% from the top.
 
 The bridge listens only on `127.0.0.1`. By default it looks for `.onnx` and
 `.onnx.json` voice files in `~/piper`, selects among available speakers when a
@@ -134,7 +137,10 @@ WAV files with an embedded format and sample-rate header; the bridge validates
 that header before caching or playback. Cached WAV audio is played through mpv
 with FFmpeg's `loudnorm` filter (`I=-16`, `LRA=11`,
 `TP=-1.5`). Pause and continue suspend/resume that same mpv process, so playback
-does not restart. Override the voice directory, cache, or binaries when needed:
+does not restart. A small `current/total` chunk counter appears beneath the
+bottom-right reading percentage while Piper is active. Normal generation and
+playback show no central Piper overlay; actual Piper errors still appear there.
+Override the voice directory, cache, or binaries when needed:
 
 ```sh
 python3 piper_bridge.py --voice-dir /path/to/voices --port 8000
@@ -175,7 +181,7 @@ parsing code and are not simple browser additions.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v25.js` and `styles-v25.css`) so a
+The app files carry versioned names (`renderer-v29.js` and `styles-v29.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 
 EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and

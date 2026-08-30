@@ -662,17 +662,30 @@ body.is-right-dragging * {
   transform: translateX(-50%);
 }
 
-#reading-progress {
+#progress-stack {
   position: fixed;
   z-index: 20;
   right: 1rem;
   bottom: 0.8rem;
+  display: grid;
+  justify-items: end;
+  gap: 0.08rem;
+  pointer-events: none;
+}
+
+#reading-progress,
+#speech-progress {
   color: var(--muted);
   font-family: var(--reader-font);
   font-size: 0.72rem;
   letter-spacing: var(--reader-tracking);
-  pointer-events: none;
   opacity: 0.72;
+}
+
+#speech-progress {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
 }
 
 [hidden] {

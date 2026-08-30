@@ -6,7 +6,7 @@ serve:
 	python3 -m http.server 8000
 
 check:
-	node --check renderer-v25.js
+	node --check renderer-v29.js
 	node test/smoke-renderer.js
 	node test/vendor-archive.js
 	python3 -m py_compile piper_bridge.py
