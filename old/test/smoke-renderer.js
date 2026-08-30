@@ -14,10 +14,8 @@ const makeElement = () => {
     textContent: "",
     value: "",
     files: null,
-    disabled: false,
     className: "",
     dataset: {},
-    attributes: {},
     children: [],
     listeners,
     capturedPointer: null,
@@ -30,12 +28,6 @@ const makeElement = () => {
     },
     replaceChildren() {
       this.children = [];
-    },
-    setAttribute(name, value) {
-      this.attributes[name] = String(value);
-    },
-    getAttribute(name) {
-      return this.attributes[name] ?? null;
     },
     querySelectorAll() {
       return [];
@@ -62,54 +54,13 @@ const elements = {
   "#drag-cover": makeElement(),
   "#status": makeElement(),
   "#file-input": makeElement(),
-  "#recent-books": makeElement(),
-  "#recent-book-list": makeElement(),
-  "#drop-picker": makeElement(),
-  "#start-open": makeElement(),
-  "#start-reopen": makeElement(),
-  "#start-palette-next": makeElement(),
-  "#start-palette": makeElement(),
-  "#start-font-next": makeElement(),
-  "#start-font": makeElement(),
-  "#start-font-size": makeElement(),
-  "#start-font-size-value": makeElement(),
-  "#start-line-height": makeElement(),
-  "#start-line-height-value": makeElement(),
-  "#start-tracking-down": makeElement(),
-  "#start-tracking-reset": makeElement(),
-  "#start-tracking-up": makeElement(),
-  "#start-width": makeElement(),
-  "#start-width-value": makeElement(),
-  "#settings-menu": makeElement(),
-  "#settings-toggle": makeElement(),
-  "#settings-panel": makeElement(),
-  "#settings-palette": makeElement(),
-  "#settings-font": makeElement(),
-  "#settings-font-size": makeElement(),
-  "#settings-font-size-value": makeElement(),
-  "#settings-line-height": makeElement(),
-  "#settings-line-height-value": makeElement(),
-  "#settings-tracking-value": makeElement(),
-  "#settings-tracking-down": makeElement(),
-  "#settings-tracking-reset": makeElement(),
-  "#settings-tracking-up": makeElement(),
-  "#settings-width": makeElement(),
-  "#settings-width-value": makeElement(),
-  "#settings-home": makeElement(),
-  "#settings-page-up": makeElement(),
-  "#settings-page-down": makeElement(),
-  "#settings-open": makeElement(),
-  "#settings-reopen": makeElement(),
-  "#reading-progress": makeElement()
+  "#last-book": makeElement()
 };
 
 elements["#reader"].hidden = true;
 elements["#drag-cover"].hidden = true;
 elements["#status"].hidden = true;
-elements["#recent-books"].hidden = true;
-elements["#settings-menu"].hidden = true;
-elements["#settings-panel"].hidden = true;
-elements["#reading-progress"].hidden = true;
+elements["#last-book"].hidden = true;
 
 const windowListeners = new Map();
 const stored = new Map();
@@ -208,10 +159,8 @@ const context = vm.createContext({
   clearTimeout,
   crypto: {
     subtle: {
-      async digest(_algorithm, bytes) {
-        const digest = new Uint8Array(32);
-        digest[0] = new Uint8Array(bytes)[0] || 0;
-        return digest.buffer;
+      async digest() {
+        return new Uint8Array(32).buffer;
       }
     }
   },
@@ -295,39 +244,26 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v18.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v13.js");
 vm.runInContext(fs.readFileSync(rendererPath, "utf8"), context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v18.css"), "utf8");
-assert.match(indexSource, /styles-v18\.css/);
-assert.match(indexSource, /renderer-v18\.js/);
-assert.match(indexSource, /id="recent-books"/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v13.css"), "utf8");
+assert.match(indexSource, /styles-v13\.css/);
+assert.match(indexSource, /renderer-v13\.js/);
+assert.match(indexSource, /id="last-book"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
 assert.match(indexSource, /Middle-click/);
 assert.match(indexSource, /Right-drag/);
 assert.match(indexSource, /Alt\+Shift\+M/);
-assert.match(indexSource, /id="settings-menu"/);
-assert.match(indexSource, /id="settings-width"/);
-assert.match(indexSource, /id="reading-progress"/);
-assert.match(indexSource, /id="settings-home"[^>]*>HOME</);
-assert.doesNotMatch(indexSource, /id="settings-end"/);
-assert.match(indexSource, /id="settings-font-size"/);
-assert.match(indexSource, /id="settings-line-height"/);
 assert.match(indexSource, /fonts\.googleapis\.com/);
 assert.match(indexSource, /fonts\.gstatic\.com/);
 assert.match(stylesSource, /"Noto Serif"/);
 assert.match(stylesSource, /"EB Garamond"/);
 assert.match(stylesSource, /"Cascadia Mono"/);
-assert.match(stylesSource, /font-family:\s*var\(--reader-font\)/);
-assert.match(stylesSource, /--reader-width:\s*72ch/);
-assert.match(stylesSource, /--reader-font-size:\s*20px/);
-assert.match(stylesSource, /--reader-line-height:\s*1\.72/);
-assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*var\(--reader-font-size\)/s);
-assert.match(stylesSource, /font-size:\s*clamp\(0\.82rem, 0\.72em, 1rem\)/);
 assert.doesNotMatch(stylesSource, /html,\s*body[^}]*overflow:\s*hidden/s);
 assert.match(stylesSource, /overflow:\s*visible\s*!important/);
 assert.match(stylesSource, /#333d4d/i);
@@ -339,42 +275,31 @@ const file = {
   }
 };
 
-const drop = (droppedFile = file) => windowListeners.get("drop")({
+const drop = () => windowListeners.get("drop")({
   preventDefault() {},
-  dataTransfer: { files: [droppedFile] }
+  dataTransfer: { files: [file] }
 });
 
 (async () => {
   await wait(20);
-  assert.equal(elements["#recent-books"].hidden, false);
-  assert.equal(elements["#recent-book-list"].children.length, 1);
+  assert.equal(elements["#last-book"].hidden, false);
   assert.equal(
-    elements["#recent-book-list"].children[0].textContent,
-    "Previous Book — previous.epub"
+    elements["#last-book"].textContent,
+    "LAST: Previous Book — previous.epub · R TO REOPEN"
   );
-  assert.equal(elements["#recent-book-list"].children[0].disabled, false);
-  assert.equal(elements["#start-reopen"].disabled, false);
-  assert.equal(elements["#start-palette"].children.length, 10);
-  assert.equal(elements["#start-font"].children.length, 11);
-  assert.equal(elements["#start-width-value"].textContent, "≈ 72 chars");
-  assert.equal(elements["#start-font-size-value"].textContent, "20px");
-  assert.equal(elements["#start-line-height-value"].textContent, "1.72");
 
   drop();
   await wait(80);
 
   assert.equal(elements["#reader"].hidden, false);
   assert.equal(elements["#drop-zone"].hidden, true);
-  assert.equal(elements["#settings-menu"].hidden, false);
-  assert.equal(elements["#reading-progress"].hidden, false);
   assert.equal(elements["#viewer"].children.length, 2);
   assert.deepEqual(renderedSections, [1, 2]);
   assert.equal(unloadedSections, 2);
   assert.equal(context.document.title, "Test Book — Smooth Reader");
-  assert.equal(elements["#recent-book-list"].children.length, 2);
   assert.equal(
-    elements["#recent-book-list"].children[0].textContent,
-    "Test Book — test.epub"
+    elements["#last-book"].textContent,
+    "LAST: Test Book — test.epub · R TO REOPEN"
   );
   assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).fileName, "test.epub");
 
@@ -441,7 +366,6 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   context.window.scrollY = 800;
   windowListeners.get("scroll")();
   await wait(220);
-  assert.equal(elements["#reading-progress"].textContent, "36%");
 
   const storedPositionEntry = [...stored.entries()]
     .find(([key]) => key.startsWith("smooth-reader:position:"));
@@ -539,92 +463,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(pressKey("0"), true);
   assert.equal(context.document.documentElement.style["--reader-tracking"], "0.01em");
 
-  assert.equal(pressKey("]"), true);
-  assert.equal(context.document.documentElement.style["--reader-font-size"], "21px");
-  assert.equal(stored.get("smooth-reader:font-size"), "21");
-  assert.equal(pressKey("["), true);
-  assert.equal(context.document.documentElement.style["--reader-font-size"], "20px");
-
-  assert.equal(pressKey("}"), true);
-  assert.equal(context.document.documentElement.style["--reader-line-height"], "1.76");
-  assert.equal(stored.get("smooth-reader:line-height"), "1.76");
-  assert.equal(pressKey("{"), true);
-  assert.equal(context.document.documentElement.style["--reader-line-height"], "1.72");
-
-  elements["#settings-font-size"].listeners.get("input")({ target: { value: "24" } });
-  assert.equal(context.document.documentElement.style["--reader-font-size"], "24px");
-  elements["#settings-line-height"].listeners.get("input")({ target: { value: "1.88" } });
-  assert.equal(context.document.documentElement.style["--reader-line-height"], "1.88");
-
-  elements["#settings-width"].listeners.get("input")({ target: { value: "84" } });
-  assert.equal(context.document.documentElement.style["--reader-width"], "84ch");
-  assert.equal(elements["#start-width-value"].textContent, "≈ 84 chars");
-  assert.equal(stored.get("smooth-reader:text-width"), "84");
-
-  elements["#settings-toggle"].listeners.get("click")();
-  assert.equal(elements["#settings-panel"].hidden, false);
-  assert.equal(elements["#settings-toggle"].getAttribute("aria-expanded"), "true");
-
-  elements["#settings-palette"].listeners.get("change")({
-    target: { value: "nord" }
-  });
-  assert.equal(context.document.documentElement.dataset.palette, "nord");
-
-  assert.equal(elements["#recent-book-list"].children[0].listeners.has("click"), true);
-  assert.equal(elements["#start-open"].listeners.has("click"), true);
-
   assert.equal(pressKey("r"), true);
   await wait(80);
   assert.equal(elements["#viewer"].children.length, 2);
   assert.deepEqual(renderedSections, [1, 2, 1, 2, 1, 2]);
-
-  const secondFile = {
-    name: "second.epub",
-    async arrayBuffer() {
-      return new Uint8Array([5, 2, 3, 4]).buffer;
-    }
-  };
-  const thirdFile = {
-    name: "third.epub",
-    async arrayBuffer() {
-      return new Uint8Array([6, 2, 3, 4]).buffer;
-    }
-  };
-
-  drop(secondFile);
-  await wait(80);
-  drop(thirdFile);
-  await wait(80);
-
-  assert.equal(elements["#recent-book-list"].children.length, 3);
-  assert.equal(
-    elements["#recent-book-list"].children[0].textContent,
-    "Test Book — third.epub"
-  );
-  assert.equal(
-    elements["#recent-book-list"].children[1].textContent,
-    "Test Book — second.epub"
-  );
-  assert.deepEqual(
-    JSON.parse(stored.get("smooth-reader:recent-books")).map((book) => book.fileName),
-    ["third.epub", "second.epub", "test.epub"]
-  );
-
-  elements["#recent-book-list"].children[1].listeners.get("click")();
-  await wait(80);
-  assert.equal(
-    elements["#recent-book-list"].children[0].textContent,
-    "Test Book — second.epub"
-  );
-  assert.equal(renderedSections.length, 12);
-
-  elements["#settings-home"].listeners.get("click")();
-  assert.equal(elements["#drop-zone"].hidden, false);
-  assert.equal(elements["#reader"].hidden, true);
-  assert.equal(elements["#settings-menu"].hidden, true);
-  assert.equal(elements["#reading-progress"].hidden, true);
-  assert.equal(elements["#recent-book-list"].children.length, 3);
-  assert.equal(context.document.title, "Smooth Reader");
 
   console.log("renderer DOM smoke test passed");
 })().catch((error) => {

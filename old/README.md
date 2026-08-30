@@ -1,3 +1,7 @@
+![slopware warning](https://brontosaurusrex.github.io/media/slopware02.svg)  
+This software and documentation are AI generated.
+
+
 # Smooth Reader — web edition
 
 A dependency-free local webpage that loads an EPUB's entire reading order into
@@ -23,34 +27,21 @@ runtime, or build step. The folder itself is the finished web app.
 
 Click the drop surface to choose a file.
 All keyboard shortcuts and mouse scrolling controls are listed unobtrusively on
-that initial screen. Open, reopen, palette, font, letter-spacing, and text-width
-controls on that screen are also clickable.
-The opening screen uses the selected book font and scales gently with the book
-font-size setting, with readable minimum and maximum interface sizes.
+that initial screen.
 
-The initial drop screen shows up to three recently opened books. Each title is
-clickable and immediately opens its locally cached EPUB at its remembered
-position. Press `R` or click the `R` help row to reopen the newest one. Entries
-whose cached data was cleared remain visible but disabled until dropped again.
-
-While reading, move to the faint `MENU` tab in the top-left corner to open the
-mouse settings panel. It provides palette and font selectors, letter spacing,
-font size, line height, approximate characters per line, page navigation, a
-`HOME` button back to the recent-books screen, and open/reopen actions.
-A small bottom-right number shows the current reading percentage.
+The initial drop screen shows the title and filename of the last successfully
+opened book. Press `R` to reopen its cached copy without selecting it again.
 
 ## Reading controls
 
 - `O`: open another EPUB with the system file selector
-- `R`: reopen the newest book from the browser's local cache
+- `R`: reopen the last book from the browser's local cache
 - Mouse wheel, trackpad, and middle-click autoscroll: native browser behavior
 - Hold the right mouse button and move anywhere on the reading page: scroll in
   the direction of the mouse movement; release to stop
 - `Home` / `End`: beginning / end of the book
 - `Page Up` / `Page Down`: smooth movement by roughly one screen
 - `Ctrl` + mouse wheel or `Ctrl` + `+` / `-`: native browser zoom
-- `[` / `]`: decrease / increase book font size
-- `{` / `}`: decrease / increase book line height
 - `+` / `-`: increase / decrease letter spacing
 - `0`: reset letter spacing to the comfortable default
 - `P` / `Shift+P`: next / previous color palette
@@ -61,31 +52,14 @@ A small bottom-right number shows the current reading percentage.
 
 Palette order: Charcoal, Geany, Midnight, Sepia, Forest, Paper, Nord, Solarized
 Dark, Gruvbox, Plum. Geany is based on the supplied screenshot's `#333d4d`
-background and muted teal-green accents. The palette choice is remembered and
-is available from both the keyboard and mouse settings.
+background and muted teal-green accents. The palette choice is remembered, and
+there is no persistent settings GUI.
 
 Font order: System Sans, Noto Serif, Literata, Source Serif 4, Lora, Atkinson
 Hyperlegible, Crimson Pro, Alegreya, EB Garamond, Merriweather, System Mono. The
 nine named web families are loaded through the Google Fonts CSS API; System Mono
 uses the best locally installed monospace font. Font and letter-spacing choices
 are remembered.
-
-Book font size and line height are separate from browser zoom. Browser zoom
-scales the entire app, while these two settings reflow only the book text and
-leave the menu, progress indicator, and other interface elements unchanged.
-Font size ranges from 14 to 36 pixels; line height ranges from 1.20 to 2.20.
-
-Text width is measured in `ch` units and can be set from approximately 40 to 100
-characters per line. It is an estimate because proportional fonts have letters
-of different widths. The selected width is remembered.
-
-## Possible next formats
-
-Plain text (`.txt`) and standalone HTML (`.html`) would be trivial additions.
-Markdown (`.md`) would need a small parser, while FictionBook (`.fb2`) is also a
-good fit because it is XML. PDF can be displayed but would not share this
-reader's reflowing-text behavior. MOBI and AZW would require substantially more
-parsing code and are not simple browser additions.
 
 ## Current scope
 
@@ -100,14 +74,13 @@ parsing code and are not simple browser additions.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v18.js` and `styles-v18.css`) so a
+The app files carry versioned names (`renderer-v13.js` and `styles-v13.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 
 EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and
 font files are requested externally; the EPUB itself never leaves the browser.
-Up to three recently opened EPUBs can be cached in IndexedDB on this browser so
-their titles can reopen them directly; clearing site data removes those cached
-copies and saved reading positions.
+The last opened EPUB can be cached in IndexedDB on this browser so `R` can reopen
+it; clearing site data removes that cached copy and saved reading positions.
 
 ## Verify the source
 

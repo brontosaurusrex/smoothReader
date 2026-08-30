@@ -12,46 +12,99 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;1,400;1,700&amp;family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&amp;family=Crimson+Pro:ital,wght@0,400;0,700;1,400;1,700&amp;family=EB+Garamond:ital,wght@0,400;0,700;1,400;1,700&amp;family=Literata:ital,wght@0,400;0,700;1,400;1,700&amp;family=Lora:ital,wght@0,400;0,700;1,400;1,700&amp;family=Merriweather:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,400;0,700;1,400;1,700&amp;family=Source+Serif+4:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap"
     >
-    <link rel="stylesheet" href="styles-v13.css">
+    <link rel="stylesheet" href="styles-v18.css">
   </head>
   <body>
     <main id="app">
-      <button id="drop-zone" type="button" aria-label="Drop an EPUB here or choose a file">
-        <span>DROP THE EBOOK</span>
-        <small>EPUB</small>
-        <small id="last-book" hidden></small>
+      <section id="drop-zone" aria-label="Open an EPUB">
+        <button id="drop-picker" type="button" aria-label="Choose an EPUB file">
+          <span>DROP THE EBOOK</span>
+          <small>EPUB</small>
+        </button>
+        <div id="recent-books" hidden>
+          <small>RECENT BOOKS</small>
+          <div id="recent-book-list"></div>
+        </div>
         <span id="start-hotkeys" aria-label="Keyboard shortcuts">
-          <span><kbd>O</kbd> open another book</span>
-          <span><kbd>R</kbd> reopen last book</span>
+          <button id="start-open" type="button"><kbd>O</kbd> open another book</button>
+          <button id="start-reopen" type="button" disabled><kbd>R</kbd> reopen last book</button>
           <span><kbd>Middle-click</kbd> native browser autoscroll</span>
           <span><kbd>Right-drag</kbd> scroll in the drag direction</span>
           <span><kbd>Home</kbd> / <kbd>End</kbd> book start / end</span>
           <span><kbd>PgUp</kbd> / <kbd>PgDn</kbd> move one screen</span>
-          <span><kbd>P</kbd> / <kbd>Shift+P</kbd> next / previous palette</span>
-          <span><kbd>Alt+1…9/0</kbd> choose palette</span>
-          <span><kbd>F</kbd> / <kbd>Shift+F</kbd> next / previous font</span>
-          <span><kbd>Alt+Shift+1…9/0</kbd> choose font</span>
-          <span><kbd>Alt+Shift+M</kbd> system mono</span>
+          <button id="start-palette-next" type="button"><kbd>P</kbd> / <kbd>Shift+P</kbd> cycle palette</button>
+          <label class="start-select"><span><kbd>Alt+1…9/0</kbd> palette</span><select id="start-palette" aria-label="Color palette"></select></label>
+          <button id="start-font-next" type="button"><kbd>F</kbd> / <kbd>Shift+F</kbd> cycle font</button>
+          <label class="start-select"><span><kbd>Alt+Shift+1…9/0</kbd> font · <kbd>Alt+Shift+M</kbd> mono</span><select id="start-font" aria-label="Reading font"></select></label>
+          <label class="start-range">
+            <span>Font size <kbd>[</kbd> / <kbd>]</kbd> <output id="start-font-size-value"></output></span>
+            <input id="start-font-size" type="range" min="14" max="36" step="1" aria-label="Book font size">
+          </label>
+          <label class="start-range">
+            <span>Line height <kbd>{</kbd> / <kbd>}</kbd> <output id="start-line-height-value"></output></span>
+            <input id="start-line-height" type="range" min="1.20" max="2.20" step="0.04" aria-label="Book line height">
+          </label>
           <span><kbd>Ctrl + wheel</kbd> or <kbd>Ctrl + +/−</kbd> zoom</span>
-          <span><kbd>+</kbd> / <kbd>−</kbd> letter spacing · <kbd>0</kbd> reset</span>
+          <span class="start-tracking">
+            <span>Letter spacing</span>
+            <button id="start-tracking-down" type="button" aria-label="Decrease letter spacing"><kbd>−</kbd></button>
+            <button id="start-tracking-reset" type="button" aria-label="Reset letter spacing"><kbd>0</kbd></button>
+            <button id="start-tracking-up" type="button" aria-label="Increase letter spacing"><kbd>+</kbd></button>
+          </span>
+          <label class="start-range">
+            <span>Text width <output id="start-width-value"></output></span>
+            <input id="start-width" type="range" min="40" max="100" step="2" aria-label="Approximate characters per line">
+          </label>
         </span>
-      </button>
+      </section>
 
       <section id="reader" aria-label="Ebook reader" hidden>
         <div id="viewer"></div>
       </section>
+
+      <aside id="settings-menu" hidden>
+        <button
+          id="settings-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="settings-panel"
+        >MENU</button>
+        <div id="settings-panel" hidden>
+          <strong>READER</strong>
+          <label>Palette<select id="settings-palette"></select></label>
+          <label>Font<select id="settings-font"></select></label>
+          <label>Font size <output id="settings-font-size-value"></output><input id="settings-font-size" type="range" min="14" max="36" step="1"></label>
+          <label>Line height <output id="settings-line-height-value"></output><input id="settings-line-height" type="range" min="1.20" max="2.20" step="0.04"></label>
+          <span class="settings-label">Letter spacing <output id="settings-tracking-value"></output></span>
+          <div class="settings-row">
+            <button id="settings-tracking-down" type="button">−</button>
+            <button id="settings-tracking-reset" type="button">RESET</button>
+            <button id="settings-tracking-up" type="button">+</button>
+          </div>
+          <label>Text width <output id="settings-width-value"></output><input id="settings-width" type="range" min="40" max="100" step="2"></label>
+          <span class="settings-label">Navigation</span>
+          <div class="settings-row settings-navigation">
+            <button id="settings-home" type="button">HOME</button>
+            <button id="settings-page-up" type="button">PAGE ↑</button>
+            <button id="settings-page-down" type="button">PAGE ↓</button>
+          </div>
+          <button id="settings-open" class="settings-wide" type="button">OPEN ANOTHER EPUB</button>
+          <button id="settings-reopen" class="settings-wide" type="button" disabled>REOPEN LAST EPUB</button>
+        </div>
+      </aside>
 
       <div id="drag-cover" aria-hidden="true" hidden>
         <span>DROP THE EBOOK</span>
       </div>
 
       <div id="status" role="status" aria-live="polite" hidden></div>
+      <output id="reading-progress" aria-label="Reading progress" hidden>0%</output>
       <input id="file-input" type="file" accept=".epub,application/epub+zip" hidden>
     </main>
 
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v13.js"></script>
+    <script src="renderer-v18.js"></script>
   </body>
 </html>
