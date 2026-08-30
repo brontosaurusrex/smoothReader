@@ -106,6 +106,7 @@ const MAX_SPEECH_MAX_LENGTH = 1200;
 const DEFAULT_SPEECH_POSITION_PERCENT = 15;
 const MIN_SPEECH_POSITION_PERCENT = 5;
 const MAX_SPEECH_POSITION_PERCENT = 50;
+const SPEECH_SCROLL_DURATION_MS = 180;
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
   { id: "charcoal", name: "CHARCOAL" },
@@ -155,6 +156,7 @@ let speechActiveElements = [];
 let speechAudioFinish = null;
 let speechAudioUnlockPromise = Promise.resolve();
 let speechMarkerFrame = null;
+let speechScrollFrame = null;
 let speechTextMaps = new WeakMap();
 const chapterLookup = new Map();
 let paletteIndex = Math.max(
@@ -809,6 +811,7 @@ const stopRightDrag = (event) => {
 };
 
 const handleRightDragStart = (event) => {
+  cancelSpeechScroll();
   if (
     event.button !== 2 ||
     reader.hidden ||
@@ -1162,6 +1165,45 @@ const clearSpeechVisuals = () => {
   speechMarker.hidden = true;
 };
 
+const cancelSpeechScroll = () => {
+  if (speechScrollFrame === null) return;
+  window.cancelAnimationFrame(speechScrollFrame);
+  speechScrollFrame = null;
+};
+
+const animateSpeechScrollBy = (offset) => {
+  cancelSpeechScroll();
+  if (!Number.isFinite(offset) || Math.abs(offset) <= 1) return;
+
+  const startY = window.scrollY || 0;
+  const scrollLimit = Math.max(
+    0,
+    document.documentElement.scrollHeight - window.innerHeight
+  );
+  const targetY = Math.max(0, Math.min(scrollLimit, startY + offset));
+  const distance = targetY - startY;
+  if (Math.abs(distance) <= 1) return;
+
+  let startTime = null;
+  const step = (time) => {
+    if (startTime === null) startTime = time;
+    const progress = Math.min(1, (time - startTime) / SPEECH_SCROLL_DURATION_MS);
+    const eased = 1 - ((1 - progress) ** 3);
+    window.scrollTo({
+      top: startY + distance * eased,
+      left: 0,
+      behavior: "auto"
+    });
+    if (progress < 1) {
+      speechScrollFrame = window.requestAnimationFrame(step);
+    } else {
+      speechScrollFrame = null;
+    }
+  };
+
+  speechScrollFrame = window.requestAnimationFrame(step);
+};
+
 const positionSpeechMarker = (followText = false) => {
   clearSpeechVisuals();
   if (!speechActiveJob) return;
@@ -1184,11 +1226,7 @@ const positionSpeechMarker = (followText = false) => {
 
     const scrollOffset = firstRect.top - window.innerHeight * (speechPositionPercent / 100);
     if (followText && Math.abs(scrollOffset) > 1) {
-      window.scrollBy({
-        top: scrollOffset,
-        left: 0,
-        behavior: "smooth"
-      });
+      animateSpeechScrollBy(scrollOffset);
     }
   } else {
     speechActiveElements = [...new Set(
@@ -1201,7 +1239,7 @@ const positionSpeechMarker = (followText = false) => {
   if (followText && rects.length === 0 && rect) {
     const fallbackOffset = rect.top - window.innerHeight * (speechPositionPercent / 100);
     if (Math.abs(fallbackOffset) > 1) {
-      window.scrollBy({ top: fallbackOffset, left: 0, behavior: "smooth" });
+      animateSpeechScrollBy(fallbackOffset);
     }
   }
 };
@@ -1215,6 +1253,7 @@ function scheduleSpeechMarkerRefresh() {
 }
 
 const clearSpeechSelection = () => {
+  cancelSpeechScroll();
   speechActiveJob = null;
   if (speechMarkerFrame !== null) {
     window.cancelAnimationFrame(speechMarkerFrame);
@@ -1948,6 +1987,8 @@ installDropTarget(window);
 
 viewer.addEventListener("click", handleBookLink);
 window.addEventListener("pointerdown", handleRightDragStart);
+window.addEventListener("wheel", cancelSpeechScroll, { passive: true });
+window.addEventListener("touchstart", cancelSpeechScroll, { passive: true });
 window.addEventListener("pointermove", handleRightDragMove);
 window.addEventListener("pointerup", stopRightDrag);
 window.addEventListener("pointercancel", stopRightDrag);

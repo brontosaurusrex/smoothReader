@@ -101,9 +101,17 @@ with tempfile.TemporaryDirectory() as temporary_directory:
             assert response.headers["Content-Type"] == "audio/wav"
             assert response.headers["Content-Range"].startswith("bytes 0-43/")
             assert response.read().startswith(b"RIFF")
+        index_request = urllib.request.Request(
+            base_url + "/",
+            headers={"If-Modified-Since": "Wed, 31 Dec 2099 23:59:59 GMT"},
+        )
+        with urllib.request.urlopen(index_request, timeout=2) as response:
+            assert response.status == 200
+            assert response.headers["Cache-Control"] == "no-store"
+            assert b"styles-v36.css" in response.read()
     finally:
         server.shutdown()
         server.server_close()
         server_thread.join(timeout=2)
 
-print("cached Piper WAV, FFmpeg loudnorm, and browser audio test passed")
+print("uncached app shell, cached Piper WAV, loudnorm, and browser audio test passed")

@@ -312,6 +312,12 @@ class SmoothReaderHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(APP_DIR), **kwargs)
 
+    def end_headers(self) -> None:
+        request_path = self.path.split("?", 1)[0]
+        if not request_path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def _json_response(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
         encoded = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -400,6 +406,9 @@ class SmoothReaderHandler(SimpleHTTPRequestHandler):
                     {"ok": False, "error": str(error)},
                 )
             return
+        for validator in ("If-Modified-Since", "If-None-Match"):
+            if validator in self.headers:
+                del self.headers[validator]
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802

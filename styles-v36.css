@@ -200,15 +200,16 @@ html {
 }
 
 #drop-zone {
-  position: fixed;
+  position: relative;
   z-index: 5;
-  inset: 0;
   display: grid;
-  place-content: center;
+  place-content: start center;
   gap: 0.65rem;
   width: 100%;
-  overflow-y: auto;
-  padding: 3rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible;
+  padding: clamp(3rem, 8vh, 7rem) 3rem 3rem;
   color: var(--text);
   background: var(--background);
   cursor: default;
@@ -395,7 +396,6 @@ body.is-dragging #drop-zone::before {
 
 @media (max-width: 620px) {
   #drop-zone {
-    place-content: start center;
     padding: 3.5rem 2.5rem;
   }
 

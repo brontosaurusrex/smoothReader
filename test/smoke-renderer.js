@@ -411,16 +411,16 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v34.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v36.js");
 const rendererSource = fs.readFileSync(rendererPath, "utf8");
 vm.runInContext(rendererSource, context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v34.css"), "utf8");
-assert.match(indexSource, /styles-v34\.css/);
-assert.match(indexSource, /renderer-v34\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36.css"), "utf8");
+assert.match(indexSource, /styles-v36\.css/);
+assert.match(indexSource, /renderer-v36\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
@@ -447,6 +447,9 @@ assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
 assert.doesNotMatch(rendererSource, /\/api\/piper\/(?:play|pause|resume)/);
 assert.match(rendererSource, /await speechAudio\.play\(\)/);
+assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 180/);
+assert.match(rendererSource, /const eased = 1 - \(\(1 - progress\) \*\* 3\)/);
+assert.doesNotMatch(rendererSource, /await animateSpeechScrollBy/);
 assert.match(rendererSource, /unlockSpeechAudio\(\);\s*const generation/);
 assert.match(rendererSource, /nextPreparation/);
 assert.match(rendererSource, /speechProgress\.textContent = `\$\{index \+ 1\}\/\$\{jobs\.length\}`/);
@@ -471,6 +474,8 @@ assert.match(stylesSource, /--reader-font-size:\s*20px/);
 assert.match(stylesSource, /#progress-stack[^{]*\{[^}]*right:\s*1rem[^}]*bottom:\s*0\.8rem/s);
 assert.match(stylesSource, /--reader-line-height:\s*1\.72/);
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*var\(--reader-font-size\)/s);
+assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*relative[^}]*place-content:\s*start center[^}]*min-height:\s*100dvh[^}]*overflow:\s*visible/s);
+assert.doesNotMatch(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*fixed/s);
 assert.match(stylesSource, /font-size:\s*clamp\(0\.82rem, 0\.72em, 1rem\)/);
 assert.doesNotMatch(stylesSource, /html,\s*body[^}]*overflow:\s*hidden/s);
 assert.match(stylesSource, /overflow:\s*visible\s*!important/);
@@ -557,12 +562,11 @@ assert.equal(createdRanges.at(-1).startOffset, 0);
 assert.equal(createdRanges.at(-1).endNode, speechNodeTwo);
 assert.equal(elements["#speech-marker"].hidden, false);
 assert.equal(elements["#speech-marker"].style.left, "62px");
-assert.equal(scrollByCalls.at(-1).behavior, "smooth");
+assert.equal(vm.runInContext("speechScrollFrame !== null", context), true);
 vm.runInContext("setSpeechActiveJob(testSpeechJobs[1])", context);
 assert.equal(selectionRanges.length, 0);
 assert.equal(createdRanges.at(-1).startNode, speechNodeTwo);
-assert.equal(scrollByCalls.length >= 2, true);
-assert.equal(scrollByCalls.at(-1).behavior, "smooth");
+assert.equal(vm.runInContext("speechScrollFrame !== null", context), true);
 speechRectLeft = 160;
 speechBlockLeft = 100;
 vm.runInContext("positionSpeechMarker(false)", context);
@@ -570,6 +574,7 @@ assert.equal(elements["#speech-marker"].style.left, "82px");
 vm.runInContext("clearSpeechSelection()", context);
 assert.equal(selectionRanges.length, 0);
 assert.equal(elements["#speech-marker"].hidden, true);
+assert.equal(vm.runInContext("speechScrollFrame === null", context), true);
 
 const file = {
   name: "test.epub",
@@ -642,6 +647,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#viewer"].listeners.has("wheel"), false);
   assert.equal(elements["#viewer"].listeners.has("pointerdown"), false);
   assert.equal(windowListeners.has("pointerdown"), true);
+  assert.equal(windowListeners.has("wheel"), true);
   assert.equal(windowListeners.has("keydown"), true);
 
   let rightDragPrevented = false;

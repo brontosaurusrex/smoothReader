@@ -36,7 +36,10 @@ All keyboard shortcuts and mouse scrolling controls are listed unobtrusively on
 that initial screen. Open, reopen, palette, font, letter-spacing, and text-width
 controls on that screen are also clickable.
 The opening screen uses the selected book font and scales gently with the book
-font-size setting, with readable minimum and maximum interface sizes.
+font-size setting, with readable minimum and maximum interface sizes. It is a
+normal vertically scrolling page rather than a fixed, vertically centred
+overlay, so its heading and controls remain reachable at high browser zoom.
+Dropping an EPUB anywhere on it still opens the book.
 
 The initial drop screen shows up to three left-aligned recently opened books at
 the same width as the help panel. Each title is
@@ -124,9 +127,10 @@ Immediately before each cached chunk plays, the reader maps that chunk back to
 its original DOM text nodes. A slim vertical marker appears just left of that
 range instead of selecting and recoloring a large block of text. Its horizontal
 position is anchored just outside the containing text block, even when reading
-begins in the middle of a paragraph or on an indented line. Each new chunk
-smoothly moves its actual first rendered line—not merely its paragraph—to the
-upper reading area, so long paragraphs follow correctly. The marker is
+begins in the middle of a paragraph or on an indented line. Each new chunk uses
+a short 180 ms ease-out to move its actual first rendered line—not merely its
+paragraph—to the upper reading area, so long paragraphs follow correctly. This
+visual animation runs independently and never delays audio playback. The marker is
 recalculated after browser zoom, font changes, width changes, and other text
 reflow, and is cleared when reading stops. Exact ranges and fallback block
 mapping both place the spoken text at a remembered height in the viewport. The
@@ -186,8 +190,10 @@ parsing code and are not simple browser additions.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v34.js` and `styles-v34.css`) so a
+The app files carry versioned names (`renderer-v36.js` and `styles-v36.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
+The local bridge also serves the HTML, JavaScript, and CSS with `no-store` while
+retaining long-lived caching for generated WAV audio.
 
 EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and
 font files are requested externally; the EPUB itself never leaves the browser.
