@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression checks for cached generation, overlap, loudnorm, and pause."""
+"""Regression checks for cached Piper generation, FFmpeg loudnorm, and WAV serving."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import stat
 import sys
 import tempfile
 import threading
-import time
+import urllib.request
 from pathlib import Path
 
 
@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory() as temporary_directory:
         fake_piper,
         "import sys, time, wave\n"
         "text = sys.stdin.buffer.read()\n"
-        "time.sleep(0.15)\n"
+        "time.sleep(0.05)\n"
         "output_path = sys.argv[sys.argv.index('--output_file') + 1]\n"
         "with wave.open(output_path, 'wb') as audio:\n"
         "    audio.setnchannels(1)\n"
@@ -51,55 +51,59 @@ with tempfile.TemporaryDirectory() as temporary_directory:
         "    audio.setframerate(24000)\n"
         "    audio.writeframes(b'\\0\\0' * max(1, len(text) * 40))\n",
     )
-    mpv_log = root / "mpv-arguments.json"
-    fake_mpv = root / "fake-mpv"
+    ffmpeg_log = root / "ffmpeg-arguments.json"
+    fake_ffmpeg = root / "fake-ffmpeg"
     make_executable(
-        fake_mpv,
-        "import json, os, sys, time\n"
-        "open(os.environ['FAKE_MPV_LOG'], 'w', encoding='utf-8').write(json.dumps(sys.argv[1:]))\n"
-        "time.sleep(0.4)\n",
+        fake_ffmpeg,
+        "import json, os, shutil, sys, time\n"
+        "arguments = sys.argv[1:]\n"
+        "open(os.environ['FAKE_FFMPEG_LOG'], 'w', encoding='utf-8').write(json.dumps(arguments))\n"
+        "time.sleep(0.05)\n"
+        "source = arguments[arguments.index('-i') + 1]\n"
+        "shutil.copyfile(source, arguments[-1])\n",
     )
 
     os.environ["PIPER_BIN"] = str(fake_piper)
-    os.environ["MPV_BIN"] = str(fake_mpv)
-    os.environ["FAKE_MPV_LOG"] = str(mpv_log)
+    os.environ["FFMPEG_BIN"] = str(fake_ffmpeg)
+    os.environ["FAKE_FFMPEG_LOG"] = str(ffmpeg_log)
     controller = BRIDGE.PiperController(voice_dir, cache_dir, 16)
 
-    first = controller.prepare("The first cached chunk.", None)
+    status = controller.status()
+    assert status["available"] is True
+    assert status["loudnorm"] == BRIDGE.LOUDNORM_FILTER
+
+    first = controller.prepare("The first normalized cached chunk.", None)
     assert first["cached"] is False
     assert first["sampleRate"] == 24_000
-    assert (cache_dir / f"{first['cacheId']}.wav").read_bytes().startswith(b"RIFF")
-    assert controller.prepare("The first cached chunk.", None)["cached"] is True
+    assert first["audioUrl"] == f"/api/piper/audio/{first['cacheId']}"
+    cached_wav = cache_dir / f"{first['cacheId']}.wav"
+    assert cached_wav.read_bytes().startswith(b"RIFF")
+    assert controller.audio_path(first["cacheId"]) == cached_wav
+    assert controller.prepare("The first normalized cached chunk.", None)["cached"] is True
 
-    playback_errors: list[Exception] = []
+    ffmpeg_arguments = json.loads(ffmpeg_log.read_text(encoding="utf-8"))
+    assert ffmpeg_arguments[ffmpeg_arguments.index("-af") + 1] == BRIDGE.LOUDNORM_FILTER
+    assert ffmpeg_arguments[ffmpeg_arguments.index("-ar") + 1] == "24000"
+    assert ffmpeg_arguments[ffmpeg_arguments.index("-c:a") + 1] == "pcm_s16le"
 
-    def play_first() -> None:
-        try:
-            controller.play(first["cacheId"])
-        except Exception as error:  # pragma: no cover - surfaced by assertion below
-            playback_errors.append(error)
+    BRIDGE.SmoothReaderHandler.controller = controller
+    server = BRIDGE.ThreadingHTTPServer(("127.0.0.1", 0), BRIDGE.SmoothReaderHandler)
+    server_thread = threading.Thread(target=server.serve_forever)
+    server_thread.start()
+    try:
+        base_url = f"http://127.0.0.1:{server.server_address[1]}"
+        request = urllib.request.Request(
+            base_url + first["audioUrl"],
+            headers={"Range": "bytes=0-43"},
+        )
+        with urllib.request.urlopen(request, timeout=2) as response:
+            assert response.status == 206
+            assert response.headers["Content-Type"] == "audio/wav"
+            assert response.headers["Content-Range"].startswith("bytes 0-43/")
+            assert response.read().startswith(b"RIFF")
+    finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=2)
 
-    playback_thread = threading.Thread(target=play_first)
-    playback_thread.start()
-    for _ in range(100):
-        if controller.status()["active"]:
-            break
-        time.sleep(0.01)
-    assert controller.set_paused(True) == {"ok": True, "active": True, "paused": True}
-
-    second = controller.prepare("The next chunk is generated in the background.", None)
-    assert second["cached"] is False
-    assert playback_thread.is_alive(), "generation should finish while cached audio is still playing"
-    assert controller.set_paused(False) == {"ok": True, "active": True, "paused": False}
-    playback_thread.join(timeout=2)
-    assert not playback_thread.is_alive()
-    assert not playback_errors
-    assert controller.prepare("The next chunk is generated in the background.", None)["cached"] is True
-
-    mpv_arguments = json.loads(mpv_log.read_text(encoding="utf-8"))
-    assert f"--af={BRIDGE.LOUDNORM_FILTER}" in mpv_arguments
-    assert not any(argument.startswith("--demuxer=rawaudio") for argument in mpv_arguments)
-    assert not any(argument.startswith("--demuxer-rawaudio-") for argument in mpv_arguments)
-    assert mpv_arguments[-1].endswith(".wav")
-
-print("cached Piper WAV pipeline, loudnorm, and pause test passed")
+print("cached Piper WAV, FFmpeg loudnorm, and browser audio test passed")

@@ -10,7 +10,6 @@ import os
 import random
 import re
 import shutil
-import signal
 import subprocess
 import threading
 import wave
@@ -23,8 +22,8 @@ from typing import Any
 APP_DIR = Path(__file__).resolve().parent
 MAX_REQUEST_BYTES = 32_000
 MAX_TEXT_LENGTH = 8_000
-CACHE_FORMAT_VERSION = 2
-LOUDNORM_FILTER = "lavfi=[loudnorm=I=-16:LRA=11:TP=-1.5]"
+CACHE_FORMAT_VERSION = 3
+LOUDNORM_FILTER = "loudnorm=I=-16:LRA=11:TP=-1.5"
 CACHE_ID_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 
 
@@ -39,13 +38,10 @@ class PiperController:
         self.piper_bin = configured_piper or shutil.which("piper") or (
             str(local_piper) if local_piper.is_file() else None
         )
-        self.mpv_bin = os.environ.get("MPV_BIN") or shutil.which("mpv")
+        self.ffmpeg_bin = os.environ.get("FFMPEG_BIN") or shutil.which("ffmpeg")
         self._state_lock = threading.Lock()
         self._generation_lock = threading.Lock()
-        self._playback_lock = threading.Lock()
         self._generation_process: subprocess.Popen[bytes] | None = None
-        self._mpv_process: subprocess.Popen[bytes] | None = None
-        self._paused = False
 
     def voices(self) -> list[Path]:
         if not self.voice_dir.is_dir():
@@ -57,13 +53,10 @@ class PiperController:
         missing = []
         if not self.piper_bin:
             missing.append("piper")
-        if not self.mpv_bin:
-            missing.append("mpv")
+        if not self.ffmpeg_bin:
+            missing.append("ffmpeg")
         if not voices:
             missing.append(f"*.onnx voices in {self.voice_dir}")
-        with self._state_lock:
-            active = self._mpv_process is not None and self._mpv_process.poll() is None
-            paused = active and self._paused
         return {
             "ok": True,
             "available": not missing,
@@ -71,8 +64,8 @@ class PiperController:
             "voiceDirectory": str(self.voice_dir),
             "cacheDirectory": str(self.cache_dir),
             "loudnorm": LOUDNORM_FILTER,
-            "active": active,
-            "paused": paused,
+            "active": False,
+            "paused": False,
             "error": f"Missing: {', '.join(missing)}" if missing else "",
         }
 
@@ -171,11 +164,14 @@ class PiperController:
             "voice": metadata["voice"],
             "speaker": metadata["speaker"],
             "sampleRate": metadata["sampleRate"],
+            "audioUrl": f"/api/piper/audio/{metadata['cacheId']}",
         }
 
     def prepare(self, text: str, requested_voice: str | None) -> dict[str, Any]:
         if not self.piper_bin:
             raise RuntimeError("piper must be installed")
+        if not self.ffmpeg_bin:
+            raise RuntimeError("ffmpeg must be installed")
         model = self._select_voice(requested_voice, text)
         speaker_count, sample_rate = self._voice_config(model)
         speaker = self._speaker_for_text(text, model, speaker_count)
@@ -193,9 +189,11 @@ class PiperController:
             except FileNotFoundError:
                 pass
 
-            temporary_wav = self.cache_dir / (
-                f".{cache_id}.{threading.get_ident()}.{random.randrange(1 << 30)}.tmp.wav"
+            temporary_prefix = (
+                f".{cache_id}.{threading.get_ident()}.{random.randrange(1 << 30)}"
             )
+            temporary_piper_wav = self.cache_dir / f"{temporary_prefix}.piper.tmp.wav"
+            temporary_wav = self.cache_dir / f"{temporary_prefix}.normalized.tmp.wav"
             piper_command = [
                 self.piper_bin,
                 "-s",
@@ -203,7 +201,7 @@ class PiperController:
                 "-m",
                 str(model),
                 "--output_file",
-                str(temporary_wav),
+                str(temporary_piper_wav),
             ]
             try:
                 process = subprocess.Popen(
@@ -217,6 +215,39 @@ class PiperController:
                 process.communicate(text.encode("utf-8"))
                 if process.returncode != 0:
                     raise RuntimeError("Piper audio generation failed")
+                _, piper_sample_rate, _ = self._validate_wav(temporary_piper_wav)
+
+                ffmpeg_command = [
+                    self.ffmpeg_bin,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    str(temporary_piper_wav),
+                    "-af",
+                    LOUDNORM_FILTER,
+                    "-ac",
+                    "1",
+                    "-ar",
+                    str(piper_sample_rate),
+                    "-c:a",
+                    "pcm_s16le",
+                    str(temporary_wav),
+                ]
+                process = subprocess.Popen(
+                    ffmpeg_command,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                )
+                with self._state_lock:
+                    self._generation_process = process
+                _, ffmpeg_error = process.communicate()
+                if process.returncode != 0:
+                    detail = ffmpeg_error.decode("utf-8", errors="replace").strip()
+                    raise RuntimeError(
+                        f"FFmpeg loudnorm failed{f': {detail[-400:]}' if detail else ''}"
+                    )
                 _, actual_sample_rate, _ = self._validate_wav(temporary_wav)
 
                 metadata = {
@@ -234,85 +265,24 @@ class PiperController:
             finally:
                 with self._state_lock:
                     self._generation_process = None
+                temporary_piper_wav.unlink(missing_ok=True)
                 temporary_wav.unlink(missing_ok=True)
                 temporary_wav.with_suffix(".json.tmp").unlink(missing_ok=True)
 
-    def play(self, cache_id: str) -> dict[str, Any]:
-        if not self.mpv_bin:
-            raise RuntimeError("mpv must be installed")
+    def audio_path(self, cache_id: str) -> Path:
         metadata = self._read_cache_record(cache_id)
-        wav_path = metadata["wavPath"]
-        mpv_command = [
-            self.mpv_bin,
-            "--no-resume-playback",
-            "--no-video",
-            "--no-input-default-bindings",
-            "--msg-level=all=no",
-            "--volume=90",
-            f"--af={LOUDNORM_FILTER}",
-            str(wav_path),
-        ]
-
-        with self._playback_lock:
-            process = subprocess.Popen(
-                mpv_command,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            with self._state_lock:
-                self._mpv_process = process
-                self._paused = False
-            try:
-                return_code = process.wait()
-                if return_code not in (0, -signal.SIGTERM):
-                    raise RuntimeError("Cached Piper playback failed")
-                try:
-                    os.utime(wav_path, None)
-                    os.utime(metadata["metadataPath"], None)
-                except OSError:
-                    pass
-            finally:
-                with self._state_lock:
-                    self._mpv_process = None
-                    self._paused = False
-
-        return {
-            "ok": True,
-            "cacheId": cache_id,
-            "voice": metadata["voice"],
-            "speaker": metadata["speaker"],
-            "loudnorm": LOUDNORM_FILTER,
-        }
-
-    def set_paused(self, paused: bool) -> dict[str, Any]:
-        with self._state_lock:
-            process = self._mpv_process
-            active = process is not None and process.poll() is None
-            if not active:
-                self._paused = False
-                return {"ok": True, "active": False, "paused": False}
-            try:
-                process.send_signal(signal.SIGSTOP if paused else signal.SIGCONT)
-            except ProcessLookupError:
-                self._paused = False
-                return {"ok": True, "active": False, "paused": False}
-            self._paused = paused
-            return {"ok": True, "active": True, "paused": paused}
+        try:
+            os.utime(metadata["wavPath"], None)
+            os.utime(metadata["metadataPath"], None)
+        except OSError:
+            pass
+        return metadata["wavPath"]
 
     def stop(self) -> None:
         with self._state_lock:
             generation_process = self._generation_process
-            mpv_process = self._mpv_process
-            was_paused = self._paused
-            self._paused = False
-        if was_paused and mpv_process and mpv_process.poll() is None:
-            try:
-                mpv_process.send_signal(signal.SIGCONT)
-            except ProcessLookupError:
-                pass
-        for process in (generation_process, mpv_process):
-            if process and process.poll() is None:
-                process.terminate()
+        if generation_process and generation_process.poll() is None:
+            generation_process.terminate()
 
     def _prune_cache(self, protected_cache_id: str) -> None:
         files = []
@@ -360,38 +330,91 @@ class SmoothReaderHandler(SimpleHTTPRequestHandler):
             raise ValueError("JSON request must be an object")
         return payload
 
+    def _send_audio(self, cache_id: str) -> None:
+        wav_path = self.controller.audio_path(cache_id)
+        file_size = wav_path.stat().st_size
+        start = 0
+        end = file_size - 1
+        status = HTTPStatus.OK
+        range_header = self.headers.get("Range")
+
+        if range_header:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+            if not match or (not match.group(1) and not match.group(2)):
+                self.send_error(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                return
+            if match.group(1):
+                start = int(match.group(1))
+                end = int(match.group(2)) if match.group(2) else end
+            else:
+                suffix_length = int(match.group(2))
+                start = max(0, file_size - suffix_length)
+            if start >= file_size or end < start:
+                self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_header("Content-Range", f"bytes */{file_size}")
+                self.end_headers()
+                return
+            end = min(end, file_size - 1)
+            status = HTTPStatus.PARTIAL_CONTENT
+
+        content_length = end - start + 1
+        self.send_response(status)
+        self.send_header("Content-Type", "audio/wav")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(content_length))
+        self.send_header("Cache-Control", "private, max-age=31536000, immutable")
+        if status == HTTPStatus.PARTIAL_CONTENT:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+        self.end_headers()
+
+        try:
+            with wav_path.open("rb") as audio_file:
+                audio_file.seek(start)
+                remaining = content_length
+                while remaining > 0:
+                    block = audio_file.read(min(64 * 1024, remaining))
+                    if not block:
+                        break
+                    self.wfile.write(block)
+                    remaining -= len(block)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def do_GET(self) -> None:  # noqa: N802
         if self.path == "/api/piper/status":
             self._json_response(HTTPStatus.OK, self.controller.status())
             return
+        request_path = self.path.split("?", 1)[0]
+        audio_prefix = "/api/piper/audio/"
+        if request_path.startswith(audio_prefix):
+            try:
+                self._send_audio(request_path.removeprefix(audio_prefix))
+            except ValueError as error:
+                self._json_response(HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(error)})
+            except FileNotFoundError as error:
+                self._json_response(HTTPStatus.NOT_FOUND, {"ok": False, "error": str(error)})
+            except Exception as error:
+                self.log_error("Piper audio error: %s", error)
+                self._json_response(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {"ok": False, "error": str(error)},
+                )
+            return
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path == "/api/piper/pause":
-            self._json_response(HTTPStatus.OK, self.controller.set_paused(True))
-            return
-        if self.path == "/api/piper/resume":
-            self._json_response(HTTPStatus.OK, self.controller.set_paused(False))
-            return
-        if self.path == "/api/piper/stop":
-            self.controller.stop()
-            self._json_response(HTTPStatus.OK, {"ok": True})
-            return
-
         try:
+            if self.path == "/api/piper/stop":
+                self.controller.stop()
+                self._json_response(HTTPStatus.OK, {"ok": True})
+                return
+
             payload = self._read_payload()
             if self.path in ("/api/piper/prepare", "/api/piper/speak"):
                 text = str(payload.get("text", "")).strip()
                 if not text or len(text) > MAX_TEXT_LENGTH:
                     raise ValueError("Speech text must contain 1 to 8000 characters")
                 result = self.controller.prepare(text, payload.get("voice"))
-                if self.path == "/api/piper/speak":
-                    playback = self.controller.play(result["cacheId"])
-                    result = {**result, **playback}
-                self._json_response(HTTPStatus.OK, result)
-                return
-            if self.path == "/api/piper/play":
-                result = self.controller.play(str(payload.get("cacheId", "")))
                 self._json_response(HTTPStatus.OK, result)
                 return
             self._json_response(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Not found"})

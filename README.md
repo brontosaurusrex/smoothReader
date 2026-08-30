@@ -29,7 +29,7 @@ python3 piper_bridge.py
 
 Then open `http://127.0.0.1:8000`. The ordinary GitHub Pages version cannot
 launch a local executable; the bridge is the deliberately small local part that
-connects the same web reader to Piper and mpv.
+connects the same web reader to Piper and FFmpeg.
 
 Click the drop surface to choose a file.
 All keyboard shortcuts and mouse scrolling controls are listed unobtrusively on
@@ -98,24 +98,27 @@ The hidden reading menu contains a Piper voice selector, remembered minimum and
 maximum chunk controls, `READ FROM HERE`, `PAUSE` / `CONTINUE`, and `STOP`. If
 text is selected, only that selection is read. Otherwise reading
 starts at the first text block near the upper-middle of the viewport and
-continues through the rest of the book. Text is normalized and split on
-punctuation. Every generated Piper chunk ends on `.`, `!`, or `?`; the maximum
-is therefore a target rather than a destructive hard cut, and a very long
-sentence may exceed it. Text from adjacent short EPUB paragraphs is accumulated before
+continues through the rest of the book. Text is normalized and split near the
+configured limit. Between the minimum and maximum, the reader prefers the last
+strong stop (`.`, `!`, or `?`), then the last softer pause (`,`, `;`, or `:`),
+then a whole-word boundary. Only an unbroken word longer than the limit is cut
+exactly at the maximum, so the maximum is always a strict character limit. Text
+from adjacent short EPUB paragraphs is accumulated before
 splitting, preventing tiny audio files that can produce Piper or loudnorm
 artifacts. The defaults are 350–550 characters; minimum can be set from 100–500
-and maximum from 300–1200. Chunks use whole sentences, so the maximum is a
-target; the final short sentence group is joined to the preceding chunk. If the
-total selected text is too short to meet the minimum, one shorter chunk is
+and maximum from 300–1200. A final remainder may be shorter than the configured
+minimum because it is never merged in a way that would exceed the maximum. If
+the total selected text is too short to meet the minimum, one shorter chunk is
 unavoidable. Random voice selection is the default;
 choosing a specific installed model keeps that voice.
 
-Piper generates the first chunk into a persistent local WAV cache. While
-mpv plays that cached chunk, the bridge generates the next chunk in a separate
-request. Playback therefore stays one prepared chunk ahead whenever Piper is
-fast enough. Repeated text with the same model and speaker reuses its cached
-audio without running Piper again. Random selection is stable per text chunk so
-those cache hits remain possible.
+Piper generates the first chunk as WAV, then FFmpeg applies `loudnorm` once and
+stores the normalized result in a persistent local cache. While the browser
+plays that cached chunk, the bridge generates and normalizes the next chunk in
+a separate request. Playback therefore stays one prepared chunk ahead whenever
+Piper is fast enough. Repeated text with the same model and speaker reuses its
+cached audio without running Piper or FFmpeg again. Random selection is stable
+per text chunk so those cache hits remain possible.
 
 Immediately before each cached chunk plays, the reader maps that chunk back to
 its original DOM text nodes. A slim vertical marker appears just left of that
@@ -134,21 +137,22 @@ The bridge listens only on `127.0.0.1`. By default it looks for `.onnx` and
 `.onnx.json` voice files in `~/piper`, selects among available speakers when a
 model has more than one, and reads the model sample rate. Piper writes proper
 WAV files with an embedded format and sample-rate header; the bridge validates
-that header before caching or playback. Cached WAV audio is played through mpv
-with FFmpeg's `loudnorm` filter (`I=-16`, `LRA=11`,
-`TP=-1.5`). Pause and continue suspend/resume that same mpv process, so playback
-does not restart. A small `current/total` chunk counter appears beneath the
-bottom-right reading percentage while Piper is active. Normal generation and
+that header, runs FFmpeg's `loudnorm` filter (`I=-16`, `LRA=11`, `TP=-1.5`), and
+caches the normalized PCM WAV. The browser's native audio element plays those
+files and handles pause/continue locally, preserving the exact playback
+position. No mpv process or IPC socket is used. The active voice name
+and a small `current/total` chunk counter appear beneath the bottom-right
+reading percentage while Piper is active. Normal generation and
 playback show no central Piper overlay; actual Piper errors still appear there.
 Override the voice directory, cache, or binaries when needed:
 
 ```sh
 python3 piper_bridge.py --voice-dir /path/to/voices --port 8000
 python3 piper_bridge.py --cache-dir /path/to/cache --cache-max-mb 2048
-PIPER_BIN=/path/to/piper MPV_BIN=/path/to/mpv python3 piper_bridge.py
+PIPER_BIN=/path/to/piper FFMPEG_BIN=/path/to/ffmpeg python3 piper_bridge.py
 ```
 
-Install or provide `piper` and `mpv`; no npm packages are involved. On WSL2,
+Install or provide `piper` and `ffmpeg`; mpv and npm are not required. On WSL2,
 opening the printed localhost URL in the Windows browser normally reaches the
 loopback server forwarded by WSL.
 
@@ -181,7 +185,7 @@ parsing code and are not simple browser additions.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v29.js` and `styles-v29.css`) so a
+The app files carry versioned names (`renderer-v33.js` and `styles-v33.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 
 EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and

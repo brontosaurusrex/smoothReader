@@ -14,6 +14,9 @@ const makeElement = () => {
     hidden: false,
     textContent: "",
     value: "",
+    src: "",
+    muted: false,
+    paused: true,
     files: null,
     disabled: false,
     className: "",
@@ -50,6 +53,10 @@ const makeElement = () => {
     getAttribute(name) {
       return this.attributes[name] ?? null;
     },
+    removeAttribute(name) {
+      delete this.attributes[name];
+      if (name === "src") this.src = "";
+    },
     querySelectorAll() {
       return [];
     },
@@ -58,6 +65,15 @@ const makeElement = () => {
     },
     click() {
       this.clickCount = (this.clickCount || 0) + 1;
+    },
+    load() {},
+    pause() {
+      this.paused = true;
+    },
+    play() {
+      this.paused = false;
+      if (this.autoEnd) setTimeout(() => this.onended?.(), 0);
+      return Promise.resolve();
     },
     setPointerCapture(pointerId) {
       this.capturedPointer = pointerId;
@@ -124,7 +140,9 @@ const elements = {
   "#settings-page-down": makeElement(),
   "#settings-open": makeElement(),
   "#settings-reopen": makeElement(),
+  "#speech-voice": makeElement(),
   "#speech-progress": makeElement(),
+  "#speech-audio": makeElement(),
   "#reading-progress": makeElement(),
   "#speech-marker": makeElement()
 };
@@ -137,6 +155,7 @@ elements["#settings-menu"].hidden = true;
 elements["#settings-panel"].hidden = true;
 elements["#reading-progress"].hidden = true;
 elements["#speech-progress"].hidden = true;
+elements["#speech-voice"].hidden = true;
 elements["#speech-marker"].hidden = true;
 
 const windowListeners = new Map();
@@ -392,16 +411,16 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v29.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v33.js");
 const rendererSource = fs.readFileSync(rendererPath, "utf8");
 vm.runInContext(rendererSource, context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v29.css"), "utf8");
-assert.match(indexSource, /styles-v29\.css/);
-assert.match(indexSource, /renderer-v29\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v33.css"), "utf8");
+assert.match(indexSource, /styles-v33\.css/);
+assert.match(indexSource, /renderer-v33\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
@@ -412,7 +431,9 @@ assert.match(indexSource, /id="settings-menu"/);
 assert.match(indexSource, /id="settings-width"/);
 assert.match(indexSource, /id="reading-progress"/);
 assert.match(indexSource, /id="progress-stack"/);
+assert.match(indexSource, /id="speech-voice"/);
 assert.match(indexSource, /id="speech-progress"/);
+assert.match(indexSource, /id="speech-audio"[^>]*preload="auto"/);
 assert.match(indexSource, /id="settings-home"[^>]*>HOME</);
 assert.doesNotMatch(indexSource, /id="settings-end"/);
 assert.match(indexSource, /id="settings-font-size"/);
@@ -424,9 +445,12 @@ assert.match(indexSource, /id="settings-speech-position"[^>]*min="5"[^>]*max="50
 assert.match(indexSource, /id="settings-speech-pause"/);
 assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
-assert.match(rendererSource, /\/api\/piper\/play/);
+assert.doesNotMatch(rendererSource, /\/api\/piper\/(?:play|pause|resume)/);
+assert.match(rendererSource, /await speechAudio\.play\(\)/);
+assert.match(rendererSource, /unlockSpeechAudio\(\);\s*const generation/);
 assert.match(rendererSource, /nextPreparation/);
 assert.match(rendererSource, /speechProgress\.textContent = `\$\{index \+ 1\}\/\$\{jobs\.length\}`/);
+assert.match(rendererSource, /speechVoice\.textContent = voiceName/);
 assert.doesNotMatch(rendererSource, /PIPER · PLAYING|PIPER · [0-9]/);
 assert.equal((rendererSource.match(/showStatus\(`PIPER ERROR/g) || []).length, 2);
 assert.match(rendererSource, /createSpeechRange/);
@@ -466,8 +490,9 @@ const boundedSpeechLengths = JSON.parse(vm.runInContext(`JSON.stringify(
   ).map((chunk) => chunk.length)
 )`, context));
 assert.ok(boundedSpeechLengths.length > 1);
-assert.equal(boundedSpeechLengths.every((length) => length >= 350), true);
-assert.equal(Math.max(...boundedSpeechLengths) <= 900, true);
+assert.equal(boundedSpeechLengths.slice(0, -1).every((length) => length >= 350), true);
+assert.equal(boundedSpeechLengths.at(-1) > 0, true);
+assert.equal(Math.max(...boundedSpeechLengths) <= 550, true);
 assert.equal(
   vm.runInContext(
     "splitSpeechText('One sentence. Another sentence! Is this the third? Final words', 20, 45).every((chunk) => /[.!?]$/.test(chunk))",
@@ -475,6 +500,24 @@ assert.equal(
   ),
   true
 );
+const wordLimitedSpeechLengths = JSON.parse(vm.runInContext(
+  "JSON.stringify(splitSpeechText('ordinary '.repeat(300).trim(), 100, 180).map((chunk) => chunk.length))",
+  context
+));
+assert.ok(wordLimitedSpeechLengths.length > 1);
+assert.equal(wordLimitedSpeechLengths.every((length) => length <= 180), true);
+const unbrokenSpeechChunks = JSON.parse(vm.runInContext(
+  "JSON.stringify(splitSpeechText('x'.repeat(500), 100, 180))",
+  context
+));
+assert.equal(unbrokenSpeechChunks.every((chunk) => chunk.length <= 180), true);
+assert.equal(unbrokenSpeechChunks[0], "x".repeat(180));
+const punctuationPriorityChunks = JSON.parse(vm.runInContext(
+  "JSON.stringify(splitSpeechText('A fairly long clause, and another clause; then a final clause without a strong stop before the configured boundary ' + 'ordinary '.repeat(20), 40, 100))",
+  context
+));
+assert.equal(punctuationPriorityChunks[0].endsWith(";"), true);
+assert.equal(punctuationPriorityChunks.every((chunk) => chunk.length <= 100), true);
 
 const speechElementOne = makeElement();
 const speechElementTwo = makeElement();
@@ -558,6 +601,25 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#settings-speech-min-value"].textContent, "350 chars");
   assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
   assert.equal(elements["#settings-speech-position-value"].textContent, "15%");
+
+  elements["#speech-audio"].autoEnd = true;
+  await vm.runInContext(
+    "playPreparedAudio({ audioUrl: '/api/piper/audio/test-cache-id' })",
+    context
+  );
+  assert.equal(elements["#speech-audio"].src, "");
+  elements["#speech-audio"].autoEnd = false;
+  vm.runInContext(
+    "speechIsActive = true; speechIsPaused = false; speechAudio.src = '/api/piper/audio/test';",
+    context
+  );
+  await vm.runInContext("toggleSpeechPause()", context);
+  assert.equal(elements["#speech-audio"].paused, true);
+  assert.equal(elements["#settings-speech-pause"].textContent, "CONTINUE");
+  await vm.runInContext("toggleSpeechPause()", context);
+  assert.equal(elements["#speech-audio"].paused, false);
+  assert.equal(elements["#settings-speech-pause"].textContent, "PAUSE");
+  vm.runInContext("speechIsActive = false; releaseSpeechAudio();", context);
 
   drop();
   await wait(80);

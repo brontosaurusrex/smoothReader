@@ -51,12 +51,14 @@ const settingsSpeechPause = document.querySelector("#settings-speech-pause");
 const settingsSpeechStop = document.querySelector("#settings-speech-stop");
 const settingsSpeechStatus = document.querySelector("#settings-speech-status");
 const speechMarker = document.querySelector("#speech-marker");
+const speechAudio = document.querySelector("#speech-audio");
 const settingsHome = document.querySelector("#settings-home");
 const settingsPageUp = document.querySelector("#settings-page-up");
 const settingsPageDown = document.querySelector("#settings-page-down");
 const settingsOpen = document.querySelector("#settings-open");
 const settingsReopen = document.querySelector("#settings-reopen");
 const readingProgress = document.querySelector("#reading-progress");
+const speechVoice = document.querySelector("#speech-voice");
 const speechProgress = document.querySelector("#speech-progress");
 
 const POSITION_PREFIX = "smooth-reader:position:";
@@ -69,6 +71,7 @@ const WIDTH_KEY = "smooth-reader:text-width";
 const SPEECH_MIN_KEY = "smooth-reader:speech-minimum";
 const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
 const SPEECH_POSITION_KEY = "smooth-reader:speech-position";
+const SILENT_WAV_DATA_URL = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
 const RECENT_BOOKS_KEY = "smooth-reader:recent-books";
 const LAST_BOOK_DB = "smooth-reader-library";
@@ -149,6 +152,8 @@ let speechIsActive = false;
 let speechIsPaused = false;
 let speechActiveJob = null;
 let speechActiveElements = [];
+let speechAudioFinish = null;
+let speechAudioUnlockPromise = Promise.resolve();
 let speechMarkerFrame = null;
 let speechTextMaps = new WeakMap();
 const chapterLookup = new Map();
@@ -952,44 +957,52 @@ const buildSpeechJobs = (
 
   const minimum = Math.max(1, Math.min(minimumLength, maximumLength));
   const maximum = Math.max(minimum, maximumLength);
-  const sentences = [];
-  const sentencePattern = /[^.!?]*[.!?]+["'’”)]*|[^.!?]+$/g;
-  for (const match of source.text.matchAll(sentencePattern)) {
-    let start = match.index;
-    let end = start + match[0].length;
-    while (start < end && /\s/.test(source.text[start])) start += 1;
-    while (end > start && /\s/.test(source.text[end - 1])) end -= 1;
-    if (end > start) sentences.push({ start, end });
-  }
-
   const groups = [];
-  let current = null;
-  sentences.forEach((sentence) => {
-    if (!current) {
-      current = { ...sentence };
-      return;
+  let start = 0;
+  while (start < totalLength) {
+    while (start < totalLength && /\s/.test(source.text[start])) start += 1;
+    if (start >= totalLength) break;
+
+    const hardEnd = Math.min(totalLength, start + maximum);
+    let end = hardEnd;
+    if (hardEnd < totalLength) {
+      const minimumEnd = Math.min(hardEnd, start + minimum);
+      const windowText = source.text.slice(start, hardEnd);
+      const findLastPunctuationEnd = (pattern) => {
+        let foundEnd = -1;
+        for (const match of windowText.matchAll(pattern)) {
+          const candidateEnd = start + match.index + match[0].length;
+          if (candidateEnd >= minimumEnd) foundEnd = candidateEnd;
+        }
+        return foundEnd;
+      };
+      const strongEnd = findLastPunctuationEnd(/[.!?]+["'’”)]*/g);
+      const softEnd = strongEnd < 0
+        ? findLastPunctuationEnd(/[,;:]+["'’”)]*/g)
+        : -1;
+      const punctuationEnd = strongEnd >= 0 ? strongEnd : softEnd;
+
+      if (punctuationEnd >= 0) {
+        end = punctuationEnd;
+      } else {
+        for (let index = hardEnd - 1; index >= minimumEnd; index -= 1) {
+          if (/\s/.test(source.text[index])) {
+            end = index;
+            break;
+          }
+        }
+      }
     }
-    const currentLength = current.end - current.start;
-    const combinedLength = sentence.end - current.start;
-    if (currentLength >= minimum && combinedLength > maximum) {
-      groups.push(current);
-      current = { ...sentence };
-    } else {
-      current.end = sentence.end;
-    }
-  });
-  if (current) groups.push(current);
-  if (groups.length > 1) {
-    const tail = groups.at(-1);
-    if (tail.end - tail.start < minimum) {
-      groups[groups.length - 2].end = tail.end;
-      groups.pop();
-    }
+
+    while (end > start && /\s/.test(source.text[end - 1])) end -= 1;
+    if (end <= start) end = hardEnd;
+    groups.push({ start, end });
+    start = end;
   }
 
   const jobs = groups.map(({ start, end }) => {
     let text = source.text.slice(start, end).trim();
-    if (!/[.!?]["'’”)]*$/.test(text)) text += ".";
+    if (!/[.!?,;:]["'’”)]*$/.test(text) && text.length < maximum) text += ".";
     const segments = source.segments.filter((segment) => (
       segment.end > start && segment.start < end
     ));
@@ -1252,7 +1265,7 @@ const requestPiper = async (path, options = {}) => {
 
 const inspectPiperBridge = async () => {
   const bridge = await requestPiper("/api/piper/status");
-  if (!bridge.available) throw new Error(bridge.error || "Piper or mpv was not found.");
+  if (!bridge.available) throw new Error(bridge.error || "Piper or FFmpeg was not found.");
   updateSpeechVoices(bridge.voices || []);
   settingsSpeechStatus.textContent = `${bridge.voices.length} local voice${bridge.voices.length === 1 ? "" : "s"} ready.`;
   return bridge;
@@ -1273,6 +1286,76 @@ const speechBlocksFromViewport = () => {
   return blocks.slice(Math.max(0, startIndex));
 };
 
+const clearSpeechIndicators = () => {
+  speechVoice.hidden = true;
+  speechVoice.textContent = "";
+  speechProgress.hidden = true;
+  speechProgress.textContent = "";
+};
+
+const releaseSpeechAudio = () => {
+  speechAudioFinish?.();
+  speechAudioFinish = null;
+  speechAudio.pause();
+  speechAudio.onended = null;
+  speechAudio.onerror = null;
+  speechAudio.removeAttribute("src");
+  speechAudio.load();
+};
+
+const unlockSpeechAudio = () => {
+  speechAudio.muted = true;
+  speechAudio.src = SILENT_WAV_DATA_URL;
+  speechAudio.load();
+  speechAudioUnlockPromise = Promise.resolve(speechAudio.play())
+    .catch(() => {})
+    .finally(() => {
+      if (speechAudio.src === SILENT_WAV_DATA_URL) {
+        speechAudio.pause();
+        speechAudio.removeAttribute("src");
+        speechAudio.load();
+      }
+      speechAudio.muted = false;
+    });
+};
+
+const playPreparedAudio = async (prepared) => {
+  await speechAudioUnlockPromise;
+  releaseSpeechAudio();
+  speechAudio.muted = false;
+  speechAudio.src = prepared.audioUrl;
+  speechAudio.load();
+
+  let finishPlayback;
+  const finished = new Promise((resolve, reject) => {
+    let settled = false;
+    finishPlayback = (error = null) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve();
+    };
+    speechAudio.onended = () => finishPlayback();
+    speechAudio.onerror = () => finishPlayback(new Error("Browser WAV playback failed."));
+  });
+  speechAudioFinish = () => finishPlayback();
+
+  try {
+    await speechAudio.play();
+    await finished;
+  } catch (error) {
+    finishPlayback();
+    throw error;
+  } finally {
+    if (speechAudioFinish) speechAudioFinish = null;
+    speechAudio.pause();
+    speechAudio.onended = null;
+    speechAudio.onerror = null;
+    speechAudio.removeAttribute("src");
+    speechAudio.load();
+  }
+};
+
 const stopSpeech = () => {
   const wasActive = speechIsActive;
   speechGeneration += 1;
@@ -1282,8 +1365,8 @@ const stopSpeech = () => {
   settingsSpeechPause.disabled = true;
   settingsSpeechPause.textContent = "PAUSE";
   settingsSpeechStop.disabled = true;
-  speechProgress.hidden = true;
-  speechProgress.textContent = "";
+  clearSpeechIndicators();
+  releaseSpeechAudio();
   clearSpeechSelection();
 
   if (wasActive && typeof window.fetch === "function") {
@@ -1293,15 +1376,12 @@ const stopSpeech = () => {
 };
 
 const toggleSpeechPause = async () => {
-  if (!speechIsActive) return;
+  if (!speechIsActive || !speechAudio.src) return;
   const nextPaused = !speechIsPaused;
   try {
-    const result = await requestPiper(
-      nextPaused ? "/api/piper/pause" : "/api/piper/resume",
-      { method: "POST" }
-    );
-    if (!result.active) throw new Error("No Piper audio is currently playing.");
-    speechIsPaused = Boolean(result.paused);
+    if (nextPaused) speechAudio.pause();
+    else await speechAudio.play();
+    speechIsPaused = nextPaused;
     settingsSpeechPause.textContent = speechIsPaused ? "CONTINUE" : "PAUSE";
     settingsSpeechStatus.textContent = speechIsPaused
       ? "Playback paused; background generation may continue."
@@ -1315,6 +1395,7 @@ const toggleSpeechPause = async () => {
 
 const startSpeech = async () => {
   if (reader.hidden || viewer.children.length === 0 || speechIsActive) return;
+  unlockSpeechAudio();
   const generation = ++speechGeneration;
   speechIsActive = true;
   speechIsPaused = false;
@@ -1376,17 +1457,15 @@ const startSpeech = async () => {
         ? settlePreparation(jobs[index + 1])
         : null;
       const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
+      speechVoice.textContent = voiceName;
+      speechVoice.hidden = false;
       setSpeechActiveJob(jobs[index]);
       settingsSpeechStatus.textContent = nextPreparation
         ? `Playing with ${voiceName}; generating next…`
         : `Playing with ${voiceName}…`;
       settingsSpeechPause.disabled = false;
 
-      await requestPiper("/api/piper/play", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cacheId: prepared.cacheId })
-      });
+      await playPreparedAudio(prepared);
       speechIsPaused = false;
       settingsSpeechPause.disabled = true;
       settingsSpeechPause.textContent = "PAUSE";
@@ -1406,8 +1485,8 @@ const startSpeech = async () => {
     settingsSpeechPause.disabled = true;
     settingsSpeechPause.textContent = "PAUSE";
     settingsSpeechStop.disabled = true;
-    speechProgress.hidden = true;
-    speechProgress.textContent = "";
+    clearSpeechIndicators();
+    releaseSpeechAudio();
     clearSpeechSelection();
     settingsSpeechStatus.textContent = "Finished.";
   } catch (error) {
@@ -1418,8 +1497,8 @@ const startSpeech = async () => {
     settingsSpeechPause.disabled = true;
     settingsSpeechPause.textContent = "PAUSE";
     settingsSpeechStop.disabled = true;
-    speechProgress.hidden = true;
-    speechProgress.textContent = "";
+    clearSpeechIndicators();
+    releaseSpeechAudio();
     clearSpeechSelection();
     const message = error?.message || "Local Piper could not read this text.";
     settingsSpeechStatus.textContent = message;

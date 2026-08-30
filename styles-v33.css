@@ -674,6 +674,7 @@ body.is-right-dragging * {
 }
 
 #reading-progress,
+#speech-voice,
 #speech-progress {
   color: var(--muted);
   font-family: var(--reader-font);
@@ -682,10 +683,18 @@ body.is-right-dragging * {
   opacity: 0.72;
 }
 
+#speech-voice,
 #speech-progress {
   font-size: 0.62rem;
   letter-spacing: 0.06em;
   opacity: 0.55;
+}
+
+#speech-voice {
+  max-width: min(16rem, 45vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 [hidden] {
