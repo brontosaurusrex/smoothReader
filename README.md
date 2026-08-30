@@ -94,27 +94,60 @@ Font size ranges from 14 to 36 pixels; line height ranges from 1.20 to 2.20.
 
 ## Local Piper speech
 
-The hidden reading menu contains a Piper voice selector, `READ FROM HERE`, and
-`STOP`. If text is selected, only that selection is read. Otherwise reading
+The hidden reading menu contains a Piper voice selector, remembered minimum and
+maximum chunk controls, `READ FROM HERE`, `PAUSE` / `CONTINUE`, and `STOP`. If
+text is selected, only that selection is read. Otherwise reading
 starts at the first text block near the upper-middle of the viewport and
 continues through the rest of the book. Text is normalized and split on
-punctuation into chunks of about 550 characters, following the supplied
-`piperread` script's useful behavior. Random voice selection is the default;
+punctuation. Every generated Piper chunk ends on `.`, `!`, or `?`; the maximum
+is therefore a target rather than a destructive hard cut, and a very long
+sentence may exceed it. Text from adjacent short EPUB paragraphs is accumulated before
+splitting, preventing tiny audio files that can produce Piper or loudnorm
+artifacts. The defaults are 350–550 characters; minimum can be set from 100–500
+and maximum from 300–1200. Chunks use whole sentences, so the maximum is a
+target; the final short sentence group is joined to the preceding chunk. If the
+total selected text is too short to meet the minimum, one shorter chunk is
+unavoidable. Random voice selection is the default;
 choosing a specific installed model keeps that voice.
 
+Piper generates the first chunk into a persistent local WAV cache. While
+mpv plays that cached chunk, the bridge generates the next chunk in a separate
+request. Playback therefore stays one prepared chunk ahead whenever Piper is
+fast enough. Repeated text with the same model and speaker reuses its cached
+audio without running Piper again. Random selection is stable per text chunk so
+those cache hits remain possible.
+
+Immediately before each cached chunk plays, the reader maps that chunk back to
+its original DOM text nodes. A slim vertical marker appears just left of that
+range instead of selecting and recoloring a large block of text. Its horizontal
+position is anchored just outside the containing text block, even when reading
+begins in the middle of a paragraph or on an indented line. Each new chunk
+smoothly moves its actual first rendered line—not merely its paragraph—to the
+upper reading area, so long paragraphs follow correctly. The marker is
+recalculated after browser zoom, font changes, width changes, and other text
+reflow, and is cleared when reading stops.
+
 The bridge listens only on `127.0.0.1`. By default it looks for `.onnx` and
-`.onnx.json` voice files in `~/piper`, selects a random speaker when a model has
-more than one, reads the model sample rate, and streams Piper's raw audio to
-mpv. Override the voice directory or binaries when needed:
+`.onnx.json` voice files in `~/piper`, selects among available speakers when a
+model has more than one, and reads the model sample rate. Piper writes proper
+WAV files with an embedded format and sample-rate header; the bridge validates
+that header before caching or playback. Cached WAV audio is played through mpv
+with FFmpeg's `loudnorm` filter (`I=-16`, `LRA=11`,
+`TP=-1.5`). Pause and continue suspend/resume that same mpv process, so playback
+does not restart. Override the voice directory, cache, or binaries when needed:
 
 ```sh
 python3 piper_bridge.py --voice-dir /path/to/voices --port 8000
+python3 piper_bridge.py --cache-dir /path/to/cache --cache-max-mb 2048
 PIPER_BIN=/path/to/piper MPV_BIN=/path/to/mpv python3 piper_bridge.py
 ```
 
 Install or provide `piper` and `mpv`; no npm packages are involved. On WSL2,
 opening the printed localhost URL in the Windows browser normally reaches the
 loopback server forwarded by WSL.
+
+The default cache is `~/.cache/smooth-reader-piper` and is pruned least-recently
+used above 1024 MiB.
 
 Text width is measured in `ch` units and can be set from approximately 40 to 100
 characters per line. It is an estimate because proportional fonts have letters
@@ -142,7 +175,7 @@ parsing code and are not simple browser additions.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v19.js` and `styles-v19.css`) so a
+The app files carry versioned names (`renderer-v25.js` and `styles-v25.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 
 EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and
