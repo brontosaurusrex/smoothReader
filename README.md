@@ -140,8 +140,9 @@ WAV files with an embedded format and sample-rate header; the bridge validates
 that header, runs FFmpeg's `loudnorm` filter (`I=-16`, `LRA=11`, `TP=-1.5`), and
 caches the normalized PCM WAV. The browser's native audio element plays those
 files and handles pause/continue locally, preserving the exact playback
-position. No mpv process or IPC socket is used. The active voice name
-and a small `current/total` chunk counter appear beneath the bottom-right
+position. No mpv process or IPC socket is used. The active voice name with its
+zero-based internal speaker ID (for example, `model-name/3`) and a small
+`current/total` chunk counter appear beneath the bottom-right
 reading percentage while Piper is active. Normal generation and
 playback show no central Piper overlay; actual Piper errors still appear there.
 Override the voice directory, cache, or binaries when needed:
@@ -185,7 +186,7 @@ parsing code and are not simple browser additions.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v33.js` and `styles-v33.css`) so a
+The app files carry versioned names (`renderer-v34.js` and `styles-v34.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 
 EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and

@@ -411,16 +411,16 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v33.js");
+const rendererPath = path.join(__dirname, "..", "renderer-v34.js");
 const rendererSource = fs.readFileSync(rendererPath, "utf8");
 vm.runInContext(rendererSource, context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v33.css"), "utf8");
-assert.match(indexSource, /styles-v33\.css/);
-assert.match(indexSource, /renderer-v33\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v34.css"), "utf8");
+assert.match(indexSource, /styles-v34\.css/);
+assert.match(indexSource, /renderer-v34\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
@@ -450,7 +450,7 @@ assert.match(rendererSource, /await speechAudio\.play\(\)/);
 assert.match(rendererSource, /unlockSpeechAudio\(\);\s*const generation/);
 assert.match(rendererSource, /nextPreparation/);
 assert.match(rendererSource, /speechProgress\.textContent = `\$\{index \+ 1\}\/\$\{jobs\.length\}`/);
-assert.match(rendererSource, /speechVoice\.textContent = voiceName/);
+assert.match(rendererSource, /speechVoice\.textContent = `\$\{voiceName\}\/\$\{speakerId\}`/);
 assert.doesNotMatch(rendererSource, /PIPER · PLAYING|PIPER · [0-9]/);
 assert.equal((rendererSource.match(/showStatus\(`PIPER ERROR/g) || []).length, 2);
 assert.match(rendererSource, /createSpeechRange/);

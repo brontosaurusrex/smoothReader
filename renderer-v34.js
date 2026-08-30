@@ -1457,7 +1457,8 @@ const startSpeech = async () => {
         ? settlePreparation(jobs[index + 1])
         : null;
       const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
-      speechVoice.textContent = voiceName;
+      const speakerId = Number.isInteger(prepared.speaker) ? prepared.speaker : 0;
+      speechVoice.textContent = `${voiceName}/${speakerId}`;
       speechVoice.hidden = false;
       setSpeechActiveJob(jobs[index]);
       settingsSpeechStatus.textContent = nextPreparation
