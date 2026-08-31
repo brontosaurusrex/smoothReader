@@ -200,15 +200,16 @@ html {
 }
 
 #drop-zone {
-  position: fixed;
+  position: relative;
   z-index: 5;
-  inset: 0;
   display: grid;
-  place-content: center;
+  place-content: start center;
   gap: 0.65rem;
   width: 100%;
-  overflow-y: auto;
-  padding: 3rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible;
+  padding: clamp(3rem, 8vh, 7rem) 3rem 3rem;
   color: var(--text);
   background: var(--background);
   cursor: default;
@@ -395,7 +396,6 @@ body.is-dragging #drop-zone::before {
 
 @media (max-width: 620px) {
   #drop-zone {
-    place-content: start center;
     padding: 3.5rem 2.5rem;
   }
 
@@ -492,7 +492,7 @@ body.is-dragging #drop-zone::before {
 }
 
 .settings-speech {
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr;
 }
 
 #settings-speech-status {
@@ -577,9 +577,18 @@ body.is-right-dragging * {
 }
 
 #viewer .speech-active {
-  border-radius: 0.2rem;
-  outline: 0.18rem solid var(--hover);
-  background: var(--hover);
+  box-shadow: inset 2px 0 var(--link);
+}
+
+#speech-marker {
+  position: absolute;
+  z-index: 18;
+  width: 2px;
+  min-height: 18px;
+  border-radius: 999px;
+  background: var(--link);
+  pointer-events: none;
+  opacity: 0.78;
 }
 
 #viewer img,
@@ -653,17 +662,39 @@ body.is-right-dragging * {
   transform: translateX(-50%);
 }
 
-#reading-progress {
+#progress-stack {
   position: fixed;
   z-index: 20;
   right: 1rem;
   bottom: 0.8rem;
+  display: grid;
+  justify-items: end;
+  gap: 0.08rem;
+  pointer-events: none;
+}
+
+#reading-progress,
+#speech-voice,
+#speech-progress {
   color: var(--muted);
   font-family: var(--reader-font);
   font-size: 0.72rem;
   letter-spacing: var(--reader-tracking);
-  pointer-events: none;
   opacity: 0.72;
+}
+
+#speech-voice,
+#speech-progress {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  opacity: 0.55;
+}
+
+#speech-voice {
+  max-width: min(16rem, 45vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 [hidden] {

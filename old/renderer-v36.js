@@ -40,15 +40,26 @@ const settingsTrackingUp = document.querySelector("#settings-tracking-up");
 const settingsWidth = document.querySelector("#settings-width");
 const settingsWidthValue = document.querySelector("#settings-width-value");
 const settingsSpeechVoice = document.querySelector("#settings-speech-voice");
+const settingsSpeechMin = document.querySelector("#settings-speech-min");
+const settingsSpeechMinValue = document.querySelector("#settings-speech-min-value");
+const settingsSpeechMax = document.querySelector("#settings-speech-max");
+const settingsSpeechMaxValue = document.querySelector("#settings-speech-max-value");
+const settingsSpeechPosition = document.querySelector("#settings-speech-position");
+const settingsSpeechPositionValue = document.querySelector("#settings-speech-position-value");
 const settingsSpeechStart = document.querySelector("#settings-speech-start");
+const settingsSpeechPause = document.querySelector("#settings-speech-pause");
 const settingsSpeechStop = document.querySelector("#settings-speech-stop");
 const settingsSpeechStatus = document.querySelector("#settings-speech-status");
+const speechMarker = document.querySelector("#speech-marker");
+const speechAudio = document.querySelector("#speech-audio");
 const settingsHome = document.querySelector("#settings-home");
 const settingsPageUp = document.querySelector("#settings-page-up");
 const settingsPageDown = document.querySelector("#settings-page-down");
 const settingsOpen = document.querySelector("#settings-open");
 const settingsReopen = document.querySelector("#settings-reopen");
 const readingProgress = document.querySelector("#reading-progress");
+const speechVoice = document.querySelector("#speech-voice");
+const speechProgress = document.querySelector("#speech-progress");
 
 const POSITION_PREFIX = "smooth-reader:position:";
 const PALETTE_KEY = "smooth-reader:palette";
@@ -57,6 +68,10 @@ const FONT_SIZE_KEY = "smooth-reader:font-size";
 const LINE_HEIGHT_KEY = "smooth-reader:line-height";
 const TRACKING_KEY = "smooth-reader:tracking";
 const WIDTH_KEY = "smooth-reader:text-width";
+const SPEECH_MIN_KEY = "smooth-reader:speech-minimum";
+const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
+const SPEECH_POSITION_KEY = "smooth-reader:speech-position";
+const SILENT_WAV_DATA_URL = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
 const RECENT_BOOKS_KEY = "smooth-reader:recent-books";
 const LAST_BOOK_DB = "smooth-reader-library";
@@ -82,7 +97,16 @@ const DEFAULT_LINE_HEIGHT = 1.72;
 const MIN_LINE_HEIGHT = 1.2;
 const MAX_LINE_HEIGHT = 2.2;
 const LINE_HEIGHT_STEP = 0.04;
-const SPEECH_CHUNK_LENGTH = 550;
+const DEFAULT_SPEECH_MIN_LENGTH = 350;
+const DEFAULT_SPEECH_MAX_LENGTH = 550;
+const MIN_SPEECH_MIN_LENGTH = 100;
+const MAX_SPEECH_MIN_LENGTH = 500;
+const MIN_SPEECH_MAX_LENGTH = 300;
+const MAX_SPEECH_MAX_LENGTH = 1200;
+const DEFAULT_SPEECH_POSITION_PERCENT = 15;
+const MIN_SPEECH_POSITION_PERCENT = 5;
+const MAX_SPEECH_POSITION_PERCENT = 50;
+const SPEECH_SCROLL_DURATION_MS = 5; // 180
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
   { id: "charcoal", name: "CHARCOAL" },
@@ -126,7 +150,14 @@ let pendingLayoutAnchor = null;
 let layoutChangeGeneration = 0;
 let speechGeneration = 0;
 let speechIsActive = false;
-let speechActiveElement = null;
+let speechIsPaused = false;
+let speechActiveJob = null;
+let speechActiveElements = [];
+let speechAudioFinish = null;
+let speechAudioUnlockPromise = Promise.resolve();
+let speechMarkerFrame = null;
+let speechScrollFrame = null;
+let speechTextMaps = new WeakMap();
 const chapterLookup = new Map();
 let paletteIndex = Math.max(
   0,
@@ -152,6 +183,24 @@ const savedLineHeight = Number.parseFloat(localStorage.getItem(LINE_HEIGHT_KEY))
 let lineHeight = Number.isFinite(savedLineHeight)
   ? Math.max(MIN_LINE_HEIGHT, Math.min(MAX_LINE_HEIGHT, savedLineHeight))
   : DEFAULT_LINE_HEIGHT;
+const savedSpeechMinimum = Number.parseInt(localStorage.getItem(SPEECH_MIN_KEY), 10);
+const savedSpeechMaximum = Number.parseInt(localStorage.getItem(SPEECH_MAX_KEY), 10);
+const savedSpeechPosition = Number.parseInt(localStorage.getItem(SPEECH_POSITION_KEY), 10);
+let speechMinimumLength = Number.isFinite(savedSpeechMinimum)
+  ? Math.max(MIN_SPEECH_MIN_LENGTH, Math.min(MAX_SPEECH_MIN_LENGTH, savedSpeechMinimum))
+  : DEFAULT_SPEECH_MIN_LENGTH;
+let speechMaximumLength = Number.isFinite(savedSpeechMaximum)
+  ? Math.max(MIN_SPEECH_MAX_LENGTH, Math.min(MAX_SPEECH_MAX_LENGTH, savedSpeechMaximum))
+  : DEFAULT_SPEECH_MAX_LENGTH;
+let speechPositionPercent = Number.isFinite(savedSpeechPosition)
+  ? Math.max(
+    MIN_SPEECH_POSITION_PERCENT,
+    Math.min(MAX_SPEECH_POSITION_PERCENT, savedSpeechPosition)
+  )
+  : DEFAULT_SPEECH_POSITION_PERCENT;
+if (speechMinimumLength > speechMaximumLength) {
+  speechMinimumLength = Math.min(DEFAULT_SPEECH_MIN_LENGTH, speechMaximumLength);
+}
 
 const showStatus = (message, hideAfter = 0) => {
   window.clearTimeout(statusTimer);
@@ -387,6 +436,7 @@ const scheduleLayoutAnchorRestore = (anchor) => {
       if (Math.abs(correction) > 0.5) {
         window.scrollBy({ top: correction, left: 0, behavior: "auto" });
       }
+      scheduleSpeechMarkerRefresh();
       updateReadingProgress();
       schedulePositionSave();
     });
@@ -592,6 +642,7 @@ const destroyCurrentBook = () => {
   }
 
   viewer.replaceChildren();
+  speechTextMaps = new WeakMap();
   chapterLookup.clear();
   window.scrollTo(0, 0);
 };
@@ -760,6 +811,7 @@ const stopRightDrag = (event) => {
 };
 
 const handleRightDragStart = (event) => {
+  cancelSpeechScroll();
   if (
     event.button !== 2 ||
     reader.hidden ||
@@ -838,53 +890,382 @@ const normalizeSpeechText = (text) => String(text || "")
   .replace(/\s+/g, " ")
   .trim();
 
-const splitSpeechText = (text, maximumLength = SPEECH_CHUNK_LENGTH) => {
-  const normalized = normalizeSpeechText(text);
-  if (!normalized) return [];
+const applySpeechBounds = (nextMinimum, nextMaximum, changed = "", announce = false) => {
+  let minimum = Math.round(Math.max(
+    MIN_SPEECH_MIN_LENGTH,
+    Math.min(MAX_SPEECH_MIN_LENGTH, nextMinimum)
+  ));
+  let maximum = Math.round(Math.max(
+    MIN_SPEECH_MAX_LENGTH,
+    Math.min(MAX_SPEECH_MAX_LENGTH, nextMaximum)
+  ));
 
-  const sentences = normalized.match(/[^.!?…]+(?:[.!?…]+["'’”)]*|$)/g) || [normalized];
-  const chunks = [];
-  let chunk = "";
-
-  const pushPiece = (piece) => {
-    let remainder = piece.trim();
-    while (remainder.length > maximumLength) {
-      let splitAt = remainder.lastIndexOf(" ", maximumLength);
-      if (splitAt < maximumLength * 0.55) splitAt = maximumLength;
-      chunks.push(remainder.slice(0, splitAt).trim());
-      remainder = remainder.slice(splitAt).trim();
-    }
-    return remainder;
-  };
-
-  sentences.forEach((sentence) => {
-    const cleanSentence = sentence.trim();
-    if (!cleanSentence) return;
-    if (chunk && `${chunk} ${cleanSentence}`.length > maximumLength) {
-      chunks.push(chunk);
-      chunk = "";
-    }
-    if (cleanSentence.length > maximumLength) {
-      if (chunk) chunks.push(chunk);
-      chunk = pushPiece(cleanSentence);
-    } else {
-      chunk = chunk ? `${chunk} ${cleanSentence}` : cleanSentence;
-    }
-  });
-
-  if (chunk) chunks.push(chunk);
-  return chunks;
+  if (minimum > maximum) {
+    if (changed === "maximum") minimum = maximum;
+    else maximum = minimum;
+  }
+  speechMinimumLength = minimum;
+  speechMaximumLength = maximum;
+  localStorage.setItem(SPEECH_MIN_KEY, String(minimum));
+  localStorage.setItem(SPEECH_MAX_KEY, String(maximum));
+  settingsSpeechMin.value = String(minimum);
+  settingsSpeechMax.value = String(maximum);
+  settingsSpeechMinValue.textContent = `${minimum} chars`;
+  settingsSpeechMaxValue.textContent = `${maximum} chars`;
 };
 
-const setSpeechActiveElement = (element) => {
-  speechActiveElement?.classList?.remove("speech-active");
-  speechActiveElement = element || null;
-  speechActiveElement?.classList?.add("speech-active");
+applySpeechBounds(speechMinimumLength, speechMaximumLength);
 
-  const rect = speechActiveElement?.getBoundingClientRect?.();
-  if (rect && (rect.top < 60 || rect.bottom > window.innerHeight - 40)) {
-    speechActiveElement.scrollIntoView({ behavior: "smooth", block: "center" });
+const applySpeechPosition = (nextPosition, followCurrent = false) => {
+  speechPositionPercent = Math.round(Math.max(
+    MIN_SPEECH_POSITION_PERCENT,
+    Math.min(MAX_SPEECH_POSITION_PERCENT, nextPosition)
+  ));
+  localStorage.setItem(SPEECH_POSITION_KEY, String(speechPositionPercent));
+  settingsSpeechPosition.value = String(speechPositionPercent);
+  settingsSpeechPositionValue.textContent = `${speechPositionPercent}%`;
+  if (followCurrent && speechActiveJob) positionSpeechMarker(true);
+};
+
+applySpeechPosition(speechPositionPercent);
+
+const speechSourceFromEntries = (entries) => {
+  let text = "";
+  const segments = [];
+  entries.forEach((entry) => {
+    const entryText = normalizeSpeechText(entry.text);
+    if (!entryText) return;
+    if (text) text += " ";
+    const start = text.length;
+    text += entryText;
+    segments.push({
+      start,
+      end: text.length,
+      element: entry.element,
+      selectedRange: entry.selectedRange || null,
+      mapBaseOffset: entry.mapBaseOffset || 0
+    });
+  });
+  return { text, segments };
+};
+
+const buildSpeechJobs = (
+  entries,
+  minimumLength = speechMinimumLength,
+  maximumLength = speechMaximumLength
+) => {
+  const source = speechSourceFromEntries(entries);
+  const totalLength = source.text.length;
+  if (totalLength === 0) return [];
+
+  const minimum = Math.max(1, Math.min(minimumLength, maximumLength));
+  const maximum = Math.max(minimum, maximumLength);
+  const groups = [];
+  let start = 0;
+  while (start < totalLength) {
+    while (start < totalLength && /\s/.test(source.text[start])) start += 1;
+    if (start >= totalLength) break;
+
+    const hardEnd = Math.min(totalLength, start + maximum);
+    let end = hardEnd;
+    if (hardEnd < totalLength) {
+      const minimumEnd = Math.min(hardEnd, start + minimum);
+      const windowText = source.text.slice(start, hardEnd);
+      const findLastPunctuationEnd = (pattern) => {
+        let foundEnd = -1;
+        for (const match of windowText.matchAll(pattern)) {
+          const candidateEnd = start + match.index + match[0].length;
+          if (candidateEnd >= minimumEnd) foundEnd = candidateEnd;
+        }
+        return foundEnd;
+      };
+      const strongEnd = findLastPunctuationEnd(/[.!?]+["'’”)]*/g);
+      const softEnd = strongEnd < 0
+        ? findLastPunctuationEnd(/[,;:]+["'’”)]*/g)
+        : -1;
+      const punctuationEnd = strongEnd >= 0 ? strongEnd : softEnd;
+
+      if (punctuationEnd >= 0) {
+        end = punctuationEnd;
+      } else {
+        for (let index = hardEnd - 1; index >= minimumEnd; index -= 1) {
+          if (/\s/.test(source.text[index])) {
+            end = index;
+            break;
+          }
+        }
+      }
+    }
+
+    while (end > start && /\s/.test(source.text[end - 1])) end -= 1;
+    if (end <= start) end = hardEnd;
+    groups.push({ start, end });
+    start = end;
   }
+
+  const jobs = groups.map(({ start, end }) => {
+    let text = source.text.slice(start, end).trim();
+    if (!/[.!?,;:]["'’”)]*$/.test(text) && text.length < maximum) text += ".";
+    const segments = source.segments.filter((segment) => (
+      segment.end > start && segment.start < end
+    ));
+    return {
+      element: segments[0]?.element || null,
+      text,
+      sourceStart: start,
+      sourceEnd: end,
+      segments
+    };
+  });
+  return jobs;
+};
+
+const splitSpeechText = (
+  text,
+  minimumLength = speechMinimumLength,
+  maximumLength = speechMaximumLength
+) => buildSpeechJobs([{ element: null, text }], minimumLength, maximumLength)
+  .map((job) => job.text);
+
+const replaceMappedText = (mappedText, pattern, replacement) => {
+  const resultText = [];
+  const resultMap = [];
+  let cursor = 0;
+  for (const match of mappedText.text.matchAll(pattern)) {
+    const matchStart = match.index;
+    const matchEnd = matchStart + match[0].length;
+    resultText.push(mappedText.text.slice(cursor, matchStart));
+    resultMap.push(...mappedText.map.slice(cursor, matchStart));
+    const firstPoint = mappedText.map[matchStart];
+    const lastPoint = mappedText.map[Math.max(matchStart, matchEnd - 1)];
+    resultText.push(replacement);
+    for (let index = 0; index < replacement.length; index += 1) {
+      resultMap.push({
+        startNode: firstPoint.startNode,
+        startOffset: firstPoint.startOffset,
+        endNode: lastPoint.endNode,
+        endOffset: lastPoint.endOffset
+      });
+    }
+    cursor = matchEnd;
+  }
+  resultText.push(mappedText.text.slice(cursor));
+  resultMap.push(...mappedText.map.slice(cursor));
+  return { text: resultText.join(""), map: resultMap };
+};
+
+const createSpeechTextMap = (element) => {
+  if (!element || !document.createTreeWalker) return null;
+  const cached = speechTextMaps.get(element);
+  if (cached) return cached;
+
+  const walker = document.createTreeWalker(element, 4);
+  const characters = [];
+  const points = [];
+  let node = walker.nextNode();
+  while (node) {
+    const value = node.nodeValue || "";
+    for (let offset = 0; offset < value.length; offset += 1) {
+      characters.push(value[offset]);
+      points.push({
+        startNode: node,
+        startOffset: offset,
+        endNode: node,
+        endOffset: offset + 1
+      });
+    }
+    node = walker.nextNode();
+  }
+
+  let mapped = { text: characters.join(""), map: points };
+  mapped = replaceMappedText(mapped, /\bDr\./g, "Doctor");
+  mapped = replaceMappedText(mapped, /\bMr\./g, "Mister");
+  mapped = replaceMappedText(mapped, /\bMs\./g, "Miss");
+
+  const normalizedCharacters = [];
+  const normalizedMap = [];
+  let inWhitespace = false;
+  for (let index = 0; index < mapped.text.length; index += 1) {
+    const character = mapped.text[index];
+    if (/\s/.test(character)) {
+      if (!inWhitespace && normalizedCharacters.length > 0) {
+        normalizedCharacters.push(" ");
+        normalizedMap.push(mapped.map[index]);
+      }
+      inWhitespace = true;
+    } else {
+      normalizedCharacters.push(character);
+      normalizedMap.push(mapped.map[index]);
+      inWhitespace = false;
+    }
+  }
+  if (normalizedCharacters.at(-1) === " ") {
+    normalizedCharacters.pop();
+    normalizedMap.pop();
+  }
+  const result = { text: normalizedCharacters.join(""), map: normalizedMap };
+  speechTextMaps.set(element, result);
+  return result;
+};
+
+const domBoundaryForOffset = (mapped, offset, isEnd) => {
+  if (!mapped?.map.length) return null;
+  if (offset <= 0) {
+    const point = mapped.map[0];
+    return { node: point.startNode, offset: point.startOffset };
+  }
+  if (offset >= mapped.map.length) {
+    const point = mapped.map.at(-1);
+    return { node: point.endNode, offset: point.endOffset };
+  }
+  const point = isEnd ? mapped.map[offset - 1] : mapped.map[offset];
+  return isEnd
+    ? { node: point.endNode, offset: point.endOffset }
+    : { node: point.startNode, offset: point.startOffset };
+};
+
+const createSpeechRange = (job) => {
+  const firstSegment = job?.segments?.[0];
+  const lastSegment = job?.segments?.at(-1);
+  if (!firstSegment || !lastSegment || !document.createRange) return null;
+  if (!firstSegment.element && firstSegment.selectedRange && firstSegment === lastSegment) {
+    return firstSegment.selectedRange.cloneRange?.() || firstSegment.selectedRange;
+  }
+  if (!firstSegment.element || !lastSegment.element) return null;
+
+  const firstMap = createSpeechTextMap(firstSegment.element);
+  const lastMap = firstSegment.element === lastSegment.element
+    ? firstMap
+    : createSpeechTextMap(lastSegment.element);
+  const startOffset = Math.max(
+    0,
+    firstSegment.mapBaseOffset + job.sourceStart - firstSegment.start
+  );
+  const endOffset = Math.max(
+    0,
+    lastSegment.mapBaseOffset + job.sourceEnd - lastSegment.start
+  );
+  const startBoundary = domBoundaryForOffset(firstMap, startOffset, false);
+  const endBoundary = domBoundaryForOffset(lastMap, endOffset, true);
+  if (!startBoundary || !endBoundary) return null;
+
+  try {
+    const range = document.createRange();
+    range.setStart(startBoundary.node, startBoundary.offset);
+    range.setEnd(endBoundary.node, endBoundary.offset);
+    return range;
+  } catch {
+    return null;
+  }
+};
+
+const clearSpeechVisuals = () => {
+  speechActiveElements.forEach((element) => element.classList?.remove("speech-active"));
+  speechActiveElements = [];
+  speechMarker.hidden = true;
+};
+
+const cancelSpeechScroll = () => {
+  if (speechScrollFrame === null) return;
+  window.cancelAnimationFrame(speechScrollFrame);
+  speechScrollFrame = null;
+};
+
+const animateSpeechScrollBy = (offset) => {
+  cancelSpeechScroll();
+  if (!Number.isFinite(offset) || Math.abs(offset) <= 1) return;
+
+  const startY = window.scrollY || 0;
+  const scrollLimit = Math.max(
+    0,
+    document.documentElement.scrollHeight - window.innerHeight
+  );
+  const targetY = Math.max(0, Math.min(scrollLimit, startY + offset));
+  const distance = targetY - startY;
+  if (Math.abs(distance) <= 1) return;
+
+  let startTime = null;
+  const step = (time) => {
+    if (startTime === null) startTime = time;
+    const progress = Math.min(1, (time - startTime) / SPEECH_SCROLL_DURATION_MS);
+    const eased = 1 - ((1 - progress) ** 3);
+    window.scrollTo({
+      top: startY + distance * eased,
+      left: 0,
+      behavior: "auto"
+    });
+    if (progress < 1) {
+      speechScrollFrame = window.requestAnimationFrame(step);
+    } else {
+      speechScrollFrame = null;
+    }
+  };
+
+  speechScrollFrame = window.requestAnimationFrame(step);
+};
+
+const positionSpeechMarker = (followText = false) => {
+  clearSpeechVisuals();
+  if (!speechActiveJob) return;
+
+  const range = createSpeechRange(speechActiveJob);
+  const rects = [...(range?.getClientRects?.() || [])]
+    .filter((rect) => rect.height > 0 && rect.width > 0);
+  const firstElement = speechActiveJob.segments?.find(
+    (segment) => segment.element
+  )?.element;
+  if (rects.length > 0) {
+    const firstRect = rects[0];
+    const lastRect = rects.at(-1);
+    const blockRect = firstElement?.getBoundingClientRect?.();
+    const blockLeft = Number.isFinite(blockRect?.left) ? blockRect.left : firstRect.left;
+    speechMarker.style.left = `${(window.scrollX || 0) + Math.max(8, blockLeft - 18)}px`;
+    speechMarker.style.top = `${window.scrollY + firstRect.top}px`;
+    speechMarker.style.height = `${Math.max(18, lastRect.bottom - firstRect.top)}px`;
+    speechMarker.hidden = false;
+
+    const scrollOffset = firstRect.top - window.innerHeight * (speechPositionPercent / 100);
+    if (followText && Math.abs(scrollOffset) > 1) {
+      animateSpeechScrollBy(scrollOffset);
+    }
+  } else {
+    speechActiveElements = [...new Set(
+      (speechActiveJob.segments || []).map((segment) => segment.element).filter(Boolean)
+    )];
+    speechActiveElements.forEach((element) => element.classList?.add("speech-active"));
+  }
+
+  const rect = firstElement?.getBoundingClientRect?.();
+  if (followText && rects.length === 0 && rect) {
+    const fallbackOffset = rect.top - window.innerHeight * (speechPositionPercent / 100);
+    if (Math.abs(fallbackOffset) > 1) {
+      animateSpeechScrollBy(fallbackOffset);
+    }
+  }
+};
+
+function scheduleSpeechMarkerRefresh() {
+  if (!speechActiveJob || speechMarkerFrame !== null) return;
+  speechMarkerFrame = window.requestAnimationFrame(() => {
+    speechMarkerFrame = null;
+    positionSpeechMarker(false);
+  });
+}
+
+const clearSpeechSelection = () => {
+  cancelSpeechScroll();
+  speechActiveJob = null;
+  if (speechMarkerFrame !== null) {
+    window.cancelAnimationFrame(speechMarkerFrame);
+    speechMarkerFrame = null;
+  }
+  clearSpeechVisuals();
+};
+
+const setSpeechActiveJob = (job) => {
+  clearSpeechSelection();
+  speechActiveJob = job;
+  positionSpeechMarker(true);
 };
 
 const updateSpeechVoices = (voices) => {
@@ -923,7 +1304,7 @@ const requestPiper = async (path, options = {}) => {
 
 const inspectPiperBridge = async () => {
   const bridge = await requestPiper("/api/piper/status");
-  if (!bridge.available) throw new Error(bridge.error || "Piper or mpv was not found.");
+  if (!bridge.available) throw new Error(bridge.error || "Piper or FFmpeg was not found.");
   updateSpeechVoices(bridge.voices || []);
   settingsSpeechStatus.textContent = `${bridge.voices.length} local voice${bridge.voices.length === 1 ? "" : "s"} ready.`;
   return bridge;
@@ -944,26 +1325,122 @@ const speechBlocksFromViewport = () => {
   return blocks.slice(Math.max(0, startIndex));
 };
 
+const clearSpeechIndicators = () => {
+  speechVoice.hidden = true;
+  speechVoice.textContent = "";
+  speechProgress.hidden = true;
+  speechProgress.textContent = "";
+};
+
+const releaseSpeechAudio = () => {
+  speechAudioFinish?.();
+  speechAudioFinish = null;
+  speechAudio.pause();
+  speechAudio.onended = null;
+  speechAudio.onerror = null;
+  speechAudio.removeAttribute("src");
+  speechAudio.load();
+};
+
+const unlockSpeechAudio = () => {
+  speechAudio.muted = true;
+  speechAudio.src = SILENT_WAV_DATA_URL;
+  speechAudio.load();
+  speechAudioUnlockPromise = Promise.resolve(speechAudio.play())
+    .catch(() => {})
+    .finally(() => {
+      if (speechAudio.src === SILENT_WAV_DATA_URL) {
+        speechAudio.pause();
+        speechAudio.removeAttribute("src");
+        speechAudio.load();
+      }
+      speechAudio.muted = false;
+    });
+};
+
+const playPreparedAudio = async (prepared) => {
+  await speechAudioUnlockPromise;
+  releaseSpeechAudio();
+  speechAudio.muted = false;
+  speechAudio.src = prepared.audioUrl;
+  speechAudio.load();
+
+  let finishPlayback;
+  const finished = new Promise((resolve, reject) => {
+    let settled = false;
+    finishPlayback = (error = null) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve();
+    };
+    speechAudio.onended = () => finishPlayback();
+    speechAudio.onerror = () => finishPlayback(new Error("Browser WAV playback failed."));
+  });
+  speechAudioFinish = () => finishPlayback();
+
+  try {
+    await speechAudio.play();
+    await finished;
+  } catch (error) {
+    finishPlayback();
+    throw error;
+  } finally {
+    if (speechAudioFinish) speechAudioFinish = null;
+    speechAudio.pause();
+    speechAudio.onended = null;
+    speechAudio.onerror = null;
+    speechAudio.removeAttribute("src");
+    speechAudio.load();
+  }
+};
+
 const stopSpeech = () => {
   const wasActive = speechIsActive;
   speechGeneration += 1;
   speechIsActive = false;
+  speechIsPaused = false;
   settingsSpeechStart.disabled = false;
+  settingsSpeechPause.disabled = true;
+  settingsSpeechPause.textContent = "PAUSE";
   settingsSpeechStop.disabled = true;
-  setSpeechActiveElement(null);
+  clearSpeechIndicators();
+  releaseSpeechAudio();
+  clearSpeechSelection();
 
   if (wasActive && typeof window.fetch === "function") {
     window.fetch("/api/piper/stop", { method: "POST", keepalive: true }).catch(() => {});
     settingsSpeechStatus.textContent = "Stopped.";
-    showStatus("PIPER · STOPPED", 900);
+  }
+};
+
+const toggleSpeechPause = async () => {
+  if (!speechIsActive || !speechAudio.src) return;
+  const nextPaused = !speechIsPaused;
+  try {
+    if (nextPaused) speechAudio.pause();
+    else await speechAudio.play();
+    speechIsPaused = nextPaused;
+    settingsSpeechPause.textContent = speechIsPaused ? "CONTINUE" : "PAUSE";
+    settingsSpeechStatus.textContent = speechIsPaused
+      ? "Playback paused; background generation may continue."
+      : "Playback continuing…";
+  } catch (error) {
+    const message = error?.message || "Piper pause control failed.";
+    settingsSpeechStatus.textContent = message;
+    showStatus(`PIPER ERROR · ${message}`, 2200);
   }
 };
 
 const startSpeech = async () => {
   if (reader.hidden || viewer.children.length === 0 || speechIsActive) return;
+  unlockSpeechAudio();
   const generation = ++speechGeneration;
   speechIsActive = true;
+  speechIsPaused = false;
   settingsSpeechStart.disabled = true;
+  settingsSpeechPause.disabled = true;
+  settingsSpeechPause.textContent = "PAUSE";
   settingsSpeechStop.disabled = false;
   settingsSpeechStatus.textContent = "Connecting to local Piper…";
 
@@ -971,55 +1448,101 @@ const startSpeech = async () => {
     await inspectPiperBridge();
     if (generation !== speechGeneration) return;
 
-    const selectedText = normalizeSpeechText(window.getSelection?.().toString());
+    const currentSelection = window.getSelection?.();
+    const selectedText = normalizeSpeechText(currentSelection?.toString());
+    const selectedRange = selectedText && currentSelection?.rangeCount
+      ? currentSelection.getRangeAt(0).cloneRange()
+      : null;
+    const selectedContainer = selectedRange?.commonAncestorContainer;
+    const selectedElement = selectedContainer?.nodeType === 1
+      ? selectedContainer
+      : selectedContainer?.parentElement;
+    const selectedMap = selectedElement ? createSpeechTextMap(selectedElement) : null;
+    const selectedMapOffset = selectedMap?.text.indexOf(selectedText) ?? -1;
+    if (selectedText) currentSelection?.removeAllRanges();
     const entries = selectedText
-      ? [{ element: null, text: selectedText }]
+      ? [{
+        element: selectedMapOffset >= 0 ? selectedElement : null,
+        text: selectedText,
+        selectedRange,
+        mapBaseOffset: Math.max(0, selectedMapOffset)
+      }]
       : speechBlocksFromViewport().map((element) => ({
         element,
         text: normalizeSpeechText(element.textContent)
       }));
     if (entries.length === 0) throw new Error("No readable text was found here.");
+    const jobs = buildSpeechJobs(entries);
+    if (jobs.length === 0) throw new Error("No readable text was found here.");
+    speechProgress.textContent = `1/${jobs.length}`;
+    speechProgress.hidden = false;
 
-    for (const entry of entries) {
+    const requestedVoice = settingsSpeechVoice.value || null;
+    const prepareJob = (job) => requestPiper("/api/piper/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: job.text, voice: requestedVoice })
+    });
+    const settlePreparation = (job) => prepareJob(job)
+      .then((value) => ({ value }), (error) => ({ error }));
+
+    settingsSpeechStatus.textContent = "Generating first chunk…";
+    let prepared = await prepareJob(jobs[0]);
+
+    for (let index = 0; index < jobs.length; index += 1) {
       if (generation !== speechGeneration) return;
-      setSpeechActiveElement(entry.element);
-      const chunks = splitSpeechText(entry.text);
+      speechProgress.textContent = `${index + 1}/${jobs.length}`;
+      const nextPreparation = index + 1 < jobs.length
+        ? settlePreparation(jobs[index + 1])
+        : null;
+      const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
+      const speakerId = Number.isInteger(prepared.speaker) ? prepared.speaker : 0;
+      speechVoice.textContent = `${voiceName}/${speakerId}`;
+      speechVoice.hidden = false;
+      setSpeechActiveJob(jobs[index]);
+      settingsSpeechStatus.textContent = nextPreparation
+        ? `Playing with ${voiceName}; generating next…`
+        : `Playing with ${voiceName}…`;
+      settingsSpeechPause.disabled = false;
 
-      for (let index = 0; index < chunks.length; index += 1) {
-        if (generation !== speechGeneration) return;
-        const progress = `${index + 1}/${chunks.length}`;
-        settingsSpeechStatus.textContent = `Reading chunk ${progress}…`;
-        showStatus(`PIPER · ${progress}`);
-        const result = await requestPiper("/api/piper/speak", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: chunks[index],
-            voice: settingsSpeechVoice.value || null
-          })
-        });
-        if (result.voice) {
-          settingsSpeechStatus.textContent = `Reading with ${result.voice.replace(/\.onnx$/i, "")}…`;
-        }
+      await playPreparedAudio(prepared);
+      speechIsPaused = false;
+      settingsSpeechPause.disabled = true;
+      settingsSpeechPause.textContent = "PAUSE";
+      if (generation !== speechGeneration) return;
+
+      if (nextPreparation) {
+        const settled = await nextPreparation;
+        if (settled.error) throw settled.error;
+        prepared = settled.value;
       }
     }
 
     if (generation !== speechGeneration) return;
     speechIsActive = false;
+    speechIsPaused = false;
     settingsSpeechStart.disabled = false;
+    settingsSpeechPause.disabled = true;
+    settingsSpeechPause.textContent = "PAUSE";
     settingsSpeechStop.disabled = true;
-    setSpeechActiveElement(null);
+    clearSpeechIndicators();
+    releaseSpeechAudio();
+    clearSpeechSelection();
     settingsSpeechStatus.textContent = "Finished.";
-    showStatus("PIPER · FINISHED", 1000);
   } catch (error) {
     if (generation !== speechGeneration) return;
     speechIsActive = false;
+    speechIsPaused = false;
     settingsSpeechStart.disabled = false;
+    settingsSpeechPause.disabled = true;
+    settingsSpeechPause.textContent = "PAUSE";
     settingsSpeechStop.disabled = true;
-    setSpeechActiveElement(null);
+    clearSpeechIndicators();
+    releaseSpeechAudio();
+    clearSpeechSelection();
     const message = error?.message || "Local Piper could not read this text.";
     settingsSpeechStatus.textContent = message;
-    showStatus(`PIPER · ${message}`, 3200);
+    showStatus(`PIPER ERROR · ${message}`, 3200);
   }
 };
 
@@ -1333,7 +1856,24 @@ settingsOpen.addEventListener("click", () => fileInput.click());
 startReopen.addEventListener("click", reopenLastBook);
 settingsReopen.addEventListener("click", reopenLastBook);
 settingsSpeechStart.addEventListener("click", startSpeech);
+settingsSpeechPause.addEventListener("click", toggleSpeechPause);
 settingsSpeechStop.addEventListener("click", stopSpeech);
+
+settingsSpeechMin.addEventListener("input", (event) => {
+  applySpeechBounds(Number(event.target.value), speechMaximumLength, "minimum");
+});
+settingsSpeechMin.addEventListener("change", (event) => {
+  applySpeechBounds(Number(event.target.value), speechMaximumLength, "minimum", true);
+});
+settingsSpeechMax.addEventListener("input", (event) => {
+  applySpeechBounds(speechMinimumLength, Number(event.target.value), "maximum");
+});
+settingsSpeechMax.addEventListener("change", (event) => {
+  applySpeechBounds(speechMinimumLength, Number(event.target.value), "maximum", true);
+});
+settingsSpeechPosition.addEventListener("input", (event) => {
+  applySpeechPosition(Number(event.target.value), true);
+});
 
 startPaletteNext.addEventListener("click", () => applyPalette(paletteIndex + 1));
 startFontNext.addEventListener("click", () => applyFont(fontIndex + 1));
@@ -1447,6 +1987,8 @@ installDropTarget(window);
 
 viewer.addEventListener("click", handleBookLink);
 window.addEventListener("pointerdown", handleRightDragStart);
+window.addEventListener("wheel", cancelSpeechScroll, { passive: true });
+window.addEventListener("touchstart", cancelSpeechScroll, { passive: true });
 window.addEventListener("pointermove", handleRightDragMove);
 window.addEventListener("pointerup", stopRightDrag);
 window.addEventListener("pointercancel", stopRightDrag);
@@ -1459,5 +2001,10 @@ window.addEventListener("scroll", () => {
   schedulePositionSave();
   updateReadingProgress();
 }, { passive: true });
+window.addEventListener("resize", scheduleSpeechMarkerRefresh, { passive: true });
+if (typeof window.ResizeObserver === "function") {
+  const speechLayoutObserver = new window.ResizeObserver(scheduleSpeechMarkerRefresh);
+  speechLayoutObserver.observe(viewer);
+}
 window.addEventListener("blur", () => stopRightDrag());
 window.addEventListener("beforeunload", savePositionNow);

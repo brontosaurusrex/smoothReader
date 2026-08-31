@@ -447,13 +447,21 @@ assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
 assert.doesNotMatch(rendererSource, /\/api\/piper\/(?:play|pause|resume)/);
 assert.match(rendererSource, /await speechAudio\.play\(\)/);
-assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 180/);
+assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 5/);
 assert.match(rendererSource, /const eased = 1 - \(\(1 - progress\) \*\* 3\)/);
 assert.doesNotMatch(rendererSource, /await animateSpeechScrollBy/);
 assert.match(rendererSource, /unlockSpeechAudio\(\);\s*const generation/);
 assert.match(rendererSource, /nextPreparation/);
 assert.match(rendererSource, /speechProgress\.textContent = `\$\{index \+ 1\}\/\$\{jobs\.length\}`/);
-assert.match(rendererSource, /speechVoice\.textContent = `\$\{voiceName\}\/\$\{speakerId\}`/);
+assert.match(rendererSource, /speechVoice\.textContent = formatSpeechVoice\(prepared\)/);
+assert.equal(
+  vm.runInContext("formatSpeechVoice({ voice: 'solo.onnx', speaker: 0, speakerCount: 1 })", context),
+  "solo"
+);
+assert.equal(
+  vm.runInContext("formatSpeechVoice({ voice: 'multi.onnx', speaker: 3, speakerCount: 8 })", context),
+  "multi/3"
+);
 assert.doesNotMatch(rendererSource, /PIPER · PLAYING|PIPER · [0-9]/);
 assert.equal((rendererSource.match(/showStatus\(`PIPER ERROR/g) || []).length, 2);
 assert.match(rendererSource, /createSpeechRange/);

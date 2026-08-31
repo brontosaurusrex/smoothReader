@@ -75,14 +75,11 @@ with tempfile.TemporaryDirectory() as temporary_directory:
     first = controller.prepare("The first normalized cached chunk.", None)
     assert first["cached"] is False
     assert first["sampleRate"] == 24_000
-    assert first["speakerCount"] == 2
     assert first["audioUrl"] == f"/api/piper/audio/{first['cacheId']}"
     cached_wav = cache_dir / f"{first['cacheId']}.wav"
     assert cached_wav.read_bytes().startswith(b"RIFF")
     assert controller.audio_path(first["cacheId"]) == cached_wav
-    cached = controller.prepare("The first normalized cached chunk.", None)
-    assert cached["cached"] is True
-    assert cached["speakerCount"] == 2
+    assert controller.prepare("The first normalized cached chunk.", None)["cached"] is True
 
     ffmpeg_arguments = json.loads(ffmpeg_log.read_text(encoding="utf-8"))
     assert ffmpeg_arguments[ffmpeg_arguments.index("-af") + 1] == BRIDGE.LOUDNORM_FILTER

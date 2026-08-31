@@ -9,17 +9,33 @@ const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mill
 
 const makeElement = () => {
   const listeners = new Map();
+  const classes = new Set();
   return {
     hidden: false,
     textContent: "",
     value: "",
+    src: "",
+    muted: false,
+    paused: true,
     files: null,
     disabled: false,
     className: "",
+    style: {},
     dataset: {},
     attributes: {},
     children: [],
     listeners,
+    classList: {
+      add(name) {
+        classes.add(name);
+      },
+      remove(name) {
+        classes.delete(name);
+      },
+      contains(name) {
+        return classes.has(name);
+      }
+    },
     capturedPointer: null,
     addEventListener(name, callback) {
       listeners.set(name, callback);
@@ -37,6 +53,10 @@ const makeElement = () => {
     getAttribute(name) {
       return this.attributes[name] ?? null;
     },
+    removeAttribute(name) {
+      delete this.attributes[name];
+      if (name === "src") this.src = "";
+    },
     querySelectorAll() {
       return [];
     },
@@ -45,6 +65,15 @@ const makeElement = () => {
     },
     click() {
       this.clickCount = (this.clickCount || 0) + 1;
+    },
+    load() {},
+    pause() {
+      this.paused = true;
+    },
+    play() {
+      this.paused = false;
+      if (this.autoEnd) setTimeout(() => this.onended?.(), 0);
+      return Promise.resolve();
     },
     setPointerCapture(pointerId) {
       this.capturedPointer = pointerId;
@@ -96,7 +125,14 @@ const elements = {
   "#settings-width": makeElement(),
   "#settings-width-value": makeElement(),
   "#settings-speech-voice": makeElement(),
+  "#settings-speech-min": makeElement(),
+  "#settings-speech-min-value": makeElement(),
+  "#settings-speech-max": makeElement(),
+  "#settings-speech-max-value": makeElement(),
+  "#settings-speech-position": makeElement(),
+  "#settings-speech-position-value": makeElement(),
   "#settings-speech-start": makeElement(),
+  "#settings-speech-pause": makeElement(),
   "#settings-speech-stop": makeElement(),
   "#settings-speech-status": makeElement(),
   "#settings-home": makeElement(),
@@ -104,7 +140,11 @@ const elements = {
   "#settings-page-down": makeElement(),
   "#settings-open": makeElement(),
   "#settings-reopen": makeElement(),
-  "#reading-progress": makeElement()
+  "#speech-voice": makeElement(),
+  "#speech-progress": makeElement(),
+  "#speech-audio": makeElement(),
+  "#reading-progress": makeElement(),
+  "#speech-marker": makeElement()
 };
 
 elements["#reader"].hidden = true;
@@ -114,6 +154,9 @@ elements["#recent-books"].hidden = true;
 elements["#settings-menu"].hidden = true;
 elements["#settings-panel"].hidden = true;
 elements["#reading-progress"].hidden = true;
+elements["#speech-progress"].hidden = true;
+elements["#speech-voice"].hidden = true;
+elements["#speech-marker"].hidden = true;
 
 const windowListeners = new Map();
 const stored = new Map();
@@ -134,6 +177,10 @@ const scrollByCalls = [];
 const renderedSections = [];
 let unloadedSections = 0;
 let anchorRectCalls = 0;
+const selectionRanges = [];
+const createdRanges = [];
+let speechRectLeft = 120;
+let speechBlockLeft = 80;
 const anchorTextNode = {
   nodeType: 3,
   textContent: "A stable reading anchor",
@@ -264,16 +311,42 @@ const context = vm.createContext({
       if (elements["#reader"].hidden) return null;
       return { offsetNode: anchorTextNode, offset: 4 };
     },
-    createRange() {
+    createTreeWalker(element) {
+      const nodes = element.textNodes || [];
+      let index = 0;
       return {
-        setStart() {},
-        setEnd() {},
+        nextNode() {
+          const node = nodes[index] || null;
+          index += 1;
+          return node;
+        }
+      };
+    },
+    createRange() {
+      const range = {
+        setStart(node, offset) {
+          this.startNode = node;
+          this.startOffset = offset;
+        },
+        setEnd(node, offset) {
+          this.endNode = node;
+          this.endOffset = offset;
+        },
         collapse() {},
+        cloneRange() {
+          return this;
+        },
         getBoundingClientRect() {
           anchorRectCalls += 1;
           return { top: anchorRectCalls === 1 ? 200 : 260 };
+        },
+        getClientRects() {
+          const top = this.startNode === speechNodeOne ? 650 : 520;
+          return [{ left: speechRectLeft, top, bottom: top + 80, width: 240, height: 20 }];
         }
       };
+      createdRanges.push(range);
+      return range;
     }
   },
   window: {
@@ -298,6 +371,23 @@ const context = vm.createContext({
       this.scrollY += options.top;
       scrollByCalls.push(options);
     },
+    getSelection() {
+      return {
+        rangeCount: selectionRanges.length,
+        toString() {
+          return "";
+        },
+        getRangeAt(index) {
+          return selectionRanges[index];
+        },
+        removeAllRanges() {
+          selectionRanges.length = 0;
+        },
+        addRange(range) {
+          selectionRanges.push(range);
+        }
+      };
+    },
     addEventListener(name, callback) {
       windowListeners.set(name, callback);
     }
@@ -321,15 +411,16 @@ const context = vm.createContext({
   }
 });
 
-const rendererPath = path.join(__dirname, "..", "renderer-v19.js");
-vm.runInContext(fs.readFileSync(rendererPath, "utf8"), context, {
+const rendererPath = path.join(__dirname, "..", "renderer-v36.js");
+const rendererSource = fs.readFileSync(rendererPath, "utf8");
+vm.runInContext(rendererSource, context, {
   filename: rendererPath
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v19.css"), "utf8");
-assert.match(indexSource, /styles-v19\.css/);
-assert.match(indexSource, /renderer-v19\.js/);
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36.css"), "utf8");
+assert.match(indexSource, /styles-v36\.css/);
+assert.match(indexSource, /renderer-v36\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
@@ -339,12 +430,39 @@ assert.match(indexSource, /Alt\+Shift\+M/);
 assert.match(indexSource, /id="settings-menu"/);
 assert.match(indexSource, /id="settings-width"/);
 assert.match(indexSource, /id="reading-progress"/);
+assert.match(indexSource, /id="progress-stack"/);
+assert.match(indexSource, /id="speech-voice"/);
+assert.match(indexSource, /id="speech-progress"/);
+assert.match(indexSource, /id="speech-audio"[^>]*preload="auto"/);
 assert.match(indexSource, /id="settings-home"[^>]*>HOME</);
 assert.doesNotMatch(indexSource, /id="settings-end"/);
 assert.match(indexSource, /id="settings-font-size"/);
 assert.match(indexSource, /id="settings-line-height"/);
 assert.match(indexSource, /id="settings-speech-start"/);
+assert.match(indexSource, /id="settings-speech-min"/);
+assert.match(indexSource, /id="settings-speech-max"/);
+assert.match(indexSource, /id="settings-speech-position"[^>]*min="5"[^>]*max="50"/);
+assert.match(indexSource, /id="settings-speech-pause"/);
 assert.match(indexSource, /id="settings-speech-stop"/);
+assert.match(rendererSource, /\/api\/piper\/prepare/);
+assert.doesNotMatch(rendererSource, /\/api\/piper\/(?:play|pause|resume)/);
+assert.match(rendererSource, /await speechAudio\.play\(\)/);
+assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 180/);
+assert.match(rendererSource, /const eased = 1 - \(\(1 - progress\) \*\* 3\)/);
+assert.doesNotMatch(rendererSource, /await animateSpeechScrollBy/);
+assert.match(rendererSource, /unlockSpeechAudio\(\);\s*const generation/);
+assert.match(rendererSource, /nextPreparation/);
+assert.match(rendererSource, /speechProgress\.textContent = `\$\{index \+ 1\}\/\$\{jobs\.length\}`/);
+assert.match(rendererSource, /speechVoice\.textContent = `\$\{voiceName\}\/\$\{speakerId\}`/);
+assert.doesNotMatch(rendererSource, /PIPER · PLAYING|PIPER · [0-9]/);
+assert.equal((rendererSource.match(/showStatus\(`PIPER ERROR/g) || []).length, 2);
+assert.match(rendererSource, /createSpeechRange/);
+assert.match(rendererSource, /addEventListener\("resize", scheduleSpeechMarkerRefresh/);
+assert.match(rendererSource, /ResizeObserver\(scheduleSpeechMarkerRefresh\)/);
+assert.equal((rendererSource.match(/speechPositionPercent \/ 100/g) || []).length, 2);
+assert.doesNotMatch(rendererSource, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
+assert.match(indexSource, /id="speech-marker"/);
+assert.match(stylesSource, /#speech-marker/);
 assert.match(indexSource, /fonts\.googleapis\.com/);
 assert.match(indexSource, /fonts\.gstatic\.com/);
 assert.match(stylesSource, /"Noto Serif"/);
@@ -353,8 +471,11 @@ assert.match(stylesSource, /"Cascadia Mono"/);
 assert.match(stylesSource, /font-family:\s*var\(--reader-font\)/);
 assert.match(stylesSource, /--reader-width:\s*72ch/);
 assert.match(stylesSource, /--reader-font-size:\s*20px/);
+assert.match(stylesSource, /#progress-stack[^{]*\{[^}]*right:\s*1rem[^}]*bottom:\s*0\.8rem/s);
 assert.match(stylesSource, /--reader-line-height:\s*1\.72/);
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*var\(--reader-font-size\)/s);
+assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*relative[^}]*place-content:\s*start center[^}]*min-height:\s*100dvh[^}]*overflow:\s*visible/s);
+assert.doesNotMatch(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*fixed/s);
 assert.match(stylesSource, /font-size:\s*clamp\(0\.82rem, 0\.72em, 1rem\)/);
 assert.doesNotMatch(stylesSource, /html,\s*body[^}]*overflow:\s*hidden/s);
 assert.match(stylesSource, /overflow:\s*visible\s*!important/);
@@ -363,9 +484,97 @@ assert.match(stylesSource, /#recent-books[^{]*\{[^}]*width:\s*min\(50rem/s);
 assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*text-align:\s*left/s);
 
 assert.equal(
-  JSON.stringify(vm.runInContext("splitSpeechText('Dr. One. Mr. Two.', 12)", context)),
+  JSON.stringify(vm.runInContext("splitSpeechText('Dr. One. Mr. Two.', 1, 12)", context)),
   JSON.stringify(["Doctor One.", "Mister Two."])
 );
+const boundedSpeechLengths = JSON.parse(vm.runInContext(`JSON.stringify(
+  splitSpeechText(
+    Array.from({ length: 80 }, (_, index) => 'Sentence ' + index + ' has enough words for reliable Piper synthesis.').join(' '),
+    350,
+    550
+  ).map((chunk) => chunk.length)
+)`, context));
+assert.ok(boundedSpeechLengths.length > 1);
+assert.equal(boundedSpeechLengths.slice(0, -1).every((length) => length >= 350), true);
+assert.equal(boundedSpeechLengths.at(-1) > 0, true);
+assert.equal(Math.max(...boundedSpeechLengths) <= 550, true);
+assert.equal(
+  vm.runInContext(
+    "splitSpeechText('One sentence. Another sentence! Is this the third? Final words', 20, 45).every((chunk) => /[.!?]$/.test(chunk))",
+    context
+  ),
+  true
+);
+const wordLimitedSpeechLengths = JSON.parse(vm.runInContext(
+  "JSON.stringify(splitSpeechText('ordinary '.repeat(300).trim(), 100, 180).map((chunk) => chunk.length))",
+  context
+));
+assert.ok(wordLimitedSpeechLengths.length > 1);
+assert.equal(wordLimitedSpeechLengths.every((length) => length <= 180), true);
+const unbrokenSpeechChunks = JSON.parse(vm.runInContext(
+  "JSON.stringify(splitSpeechText('x'.repeat(500), 100, 180))",
+  context
+));
+assert.equal(unbrokenSpeechChunks.every((chunk) => chunk.length <= 180), true);
+assert.equal(unbrokenSpeechChunks[0], "x".repeat(180));
+const punctuationPriorityChunks = JSON.parse(vm.runInContext(
+  "JSON.stringify(splitSpeechText('A fairly long clause, and another clause; then a final clause without a strong stop before the configured boundary ' + 'ordinary '.repeat(20), 40, 100))",
+  context
+));
+assert.equal(punctuationPriorityChunks[0].endsWith(";"), true);
+assert.equal(punctuationPriorityChunks.every((chunk) => chunk.length <= 100), true);
+
+const speechElementOne = makeElement();
+const speechElementTwo = makeElement();
+const speechNodeOne = {
+  nodeType: 3,
+  nodeValue: "Alpha beta gamma.",
+  parentElement: speechElementOne
+};
+const speechNodeTwo = {
+  nodeType: 3,
+  nodeValue: "Delta epsilon zeta eta theta. Iota kappa lambda mu nu xi omicron pi rho sigma tau.",
+  parentElement: speechElementTwo
+};
+speechElementOne.textContent = speechNodeOne.nodeValue;
+speechElementOne.textNodes = [speechNodeOne];
+speechElementOne.getBoundingClientRect = () => ({
+  left: speechBlockLeft,
+  top: 650,
+  bottom: 730
+});
+speechElementTwo.textContent = speechNodeTwo.nodeValue;
+speechElementTwo.textNodes = [speechNodeTwo];
+speechElementTwo.getBoundingClientRect = () => ({
+  left: speechBlockLeft,
+  top: 520,
+  bottom: 600
+});
+context.testSpeechEntries = [
+  { element: speechElementOne, text: speechElementOne.textContent },
+  { element: speechElementTwo, text: speechElementTwo.textContent }
+];
+vm.runInContext("globalThis.testSpeechJobs = buildSpeechJobs(testSpeechEntries, 30, 48)", context);
+vm.runInContext("setSpeechActiveJob(testSpeechJobs[0])", context);
+assert.equal(selectionRanges.length, 0);
+assert.equal(createdRanges.at(-1).startNode, speechNodeOne);
+assert.equal(createdRanges.at(-1).startOffset, 0);
+assert.equal(createdRanges.at(-1).endNode, speechNodeTwo);
+assert.equal(elements["#speech-marker"].hidden, false);
+assert.equal(elements["#speech-marker"].style.left, "62px");
+assert.equal(vm.runInContext("speechScrollFrame !== null", context), true);
+vm.runInContext("setSpeechActiveJob(testSpeechJobs[1])", context);
+assert.equal(selectionRanges.length, 0);
+assert.equal(createdRanges.at(-1).startNode, speechNodeTwo);
+assert.equal(vm.runInContext("speechScrollFrame !== null", context), true);
+speechRectLeft = 160;
+speechBlockLeft = 100;
+vm.runInContext("positionSpeechMarker(false)", context);
+assert.equal(elements["#speech-marker"].style.left, "82px");
+vm.runInContext("clearSpeechSelection()", context);
+assert.equal(selectionRanges.length, 0);
+assert.equal(elements["#speech-marker"].hidden, true);
+assert.equal(vm.runInContext("speechScrollFrame === null", context), true);
 
 const file = {
   name: "test.epub",
@@ -394,6 +603,28 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#start-width-value"].textContent, "≈ 72 chars");
   assert.equal(elements["#start-font-size-value"].textContent, "20px");
   assert.equal(elements["#start-line-height-value"].textContent, "1.72");
+  assert.equal(elements["#settings-speech-min-value"].textContent, "350 chars");
+  assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "15%");
+
+  elements["#speech-audio"].autoEnd = true;
+  await vm.runInContext(
+    "playPreparedAudio({ audioUrl: '/api/piper/audio/test-cache-id' })",
+    context
+  );
+  assert.equal(elements["#speech-audio"].src, "");
+  elements["#speech-audio"].autoEnd = false;
+  vm.runInContext(
+    "speechIsActive = true; speechIsPaused = false; speechAudio.src = '/api/piper/audio/test';",
+    context
+  );
+  await vm.runInContext("toggleSpeechPause()", context);
+  assert.equal(elements["#speech-audio"].paused, true);
+  assert.equal(elements["#settings-speech-pause"].textContent, "CONTINUE");
+  await vm.runInContext("toggleSpeechPause()", context);
+  assert.equal(elements["#speech-audio"].paused, false);
+  assert.equal(elements["#settings-speech-pause"].textContent, "PAUSE");
+  vm.runInContext("speechIsActive = false; releaseSpeechAudio();", context);
 
   drop();
   await wait(80);
@@ -416,6 +647,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#viewer"].listeners.has("wheel"), false);
   assert.equal(elements["#viewer"].listeners.has("pointerdown"), false);
   assert.equal(windowListeners.has("pointerdown"), true);
+  assert.equal(windowListeners.has("wheel"), true);
   assert.equal(windowListeners.has("keydown"), true);
 
   let rightDragPrevented = false;
@@ -611,7 +843,20 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#recent-book-list"].children[0].listeners.has("click"), true);
   assert.equal(elements["#start-open"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-start"].listeners.has("click"), true);
+  assert.equal(elements["#settings-speech-pause"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-stop"].listeners.has("click"), true);
+
+  elements["#settings-speech-min"].listeners.get("change")({ target: { value: "400" } });
+  elements["#settings-speech-max"].listeners.get("change")({ target: { value: "700" } });
+  assert.equal(elements["#settings-speech-min-value"].textContent, "400 chars");
+  assert.equal(elements["#settings-speech-max-value"].textContent, "700 chars");
+  assert.equal(stored.get("smooth-reader:speech-minimum"), "400");
+  assert.equal(stored.get("smooth-reader:speech-maximum"), "700");
+  elements["#settings-speech-position"].listeners.get("input")({
+    target: { value: "22" }
+  });
+  assert.equal(elements["#settings-speech-position-value"].textContent, "22%");
+  assert.equal(stored.get("smooth-reader:speech-position"), "22");
 
   assert.equal(pressKey("r"), true);
   await wait(80);
