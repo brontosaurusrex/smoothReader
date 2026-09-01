@@ -47,15 +47,20 @@ clickable and immediately opens its locally cached EPUB at its remembered
 position. Press `R` or click the `R` help row to reopen the newest one. Entries
 whose cached data was cleared remain visible but disabled until dropped again.
 
-While reading, move to the faint `MENU` tab in the top-left corner to open the
-mouse settings panel. It provides palette and font selectors, letter spacing,
+While reading, use the faint hamburger button in the top-right corner to open
+the mouse/touch settings panel. It provides palette and font selectors, letter spacing,
 font size, line height, approximate characters per line, page navigation, a
 `HOME` button back to the recent-books screen, and open/reopen actions.
-A small bottom-right number shows the current reading percentage.
+A small bottom-right stack shows playback controls while speech is active,
+followed by reading percentage, chunk progress, and the active voice name.
 
-Font, font-size, line-height, letter-spacing, and text-width changes preserve an
+Font, font-size, line-height, letter spacing, text width, and Piper voice are
+remembered per book. Palette, speech chunk limits, and spoken-line position are
+global. A newly opened book inherits the current reading settings. Changes preserve an
 exact text anchor near the upper-middle of the viewport. The document can
 reflow, but the sentence you were reading should remain in the same place.
+Repeated `R` presses and recent-book clicks are locked while an EPUB is loading,
+fonts and images are settling, and its saved position is being restored.
 
 ## Reading controls
 
@@ -93,11 +98,17 @@ are remembered.
 Book font size and line height are separate from browser zoom. Browser zoom
 scales the entire app, while these two settings reflow only the book text and
 leave the menu, progress indicator, and other interface elements unchanged.
-Font size ranges from 14 to 36 pixels; line height ranges from 1.20 to 2.20.
+Font size ranges from 14 to 80 pixels in two-pixel steps; line height ranges
+from 1.20 to 2.20.
+
+On a first run with no saved preferences, the defaults are Nord, Alegreya,
+36 px text, 1.28 line height, +0.02 em letter spacing, approximately 44
+characters per line, random voice, 150–350 character speech chunks, and a 22%
+spoken-line position.
 
 ## Local Piper speech
 
-The hidden reading menu contains a Piper voice selector, remembered minimum and
+The reading menu contains a Piper voice selector, remembered minimum and
 maximum chunk controls, `READ FROM HERE`, `PAUSE` / `CONTINUE`, and `STOP`. If
 text is selected, only that selection is read. Otherwise reading
 starts at the first text block near the upper-middle of the viewport and
@@ -108,15 +119,18 @@ then a whole-word boundary. Only an unbroken word longer than the limit is cut
 exactly at the maximum, so the maximum is always a strict character limit. Text
 from adjacent short EPUB paragraphs is accumulated before
 splitting, preventing tiny audio files that can produce Piper or loudnorm
-artifacts. The defaults are 350–550 characters; minimum can be set from 100–500
+artifacts. The defaults are 150–350 characters; minimum can be set from 100–500
 and maximum from 300–1200. A final remainder may be shorter than the configured
 minimum because it is never merged in a way that would exceed the maximum. If
 the total selected text is too short to meet the minimum, one shorter chunk is
 unavoidable. Random voice selection is the default;
 choosing a specific installed model keeps that voice.
 
-Piper generates the first chunk as WAV, then FFmpeg applies `loudnorm` once and
-stores the normalized result in a persistent local cache. While the browser
+Piper generates a temporary WAV, then FFmpeg applies `loudnorm` once and stores
+mono Ogg Opus at 48 kbps in a persistent cache. Browsers that cannot play Ogg
+Opus automatically request a normalized PCM WAV fallback instead. Only the
+requested format is generated, so normal Opus clients do not also consume WAV
+cache space. While the browser
 plays that cached chunk, the bridge generates and normalizes the next chunk in
 a separate request. Playback therefore stays one prepared chunk ahead whenever
 Piper is fast enough. Repeated text with the same model and speaker reuses its
@@ -135,23 +149,30 @@ playback. The marker is
 recalculated after browser zoom, font changes, width changes, and other text
 reflow, and is cleared when reading stops. Exact ranges and fallback block
 mapping both place the spoken text at a remembered height in the viewport. The
-hidden menu's `Spoken line position` slider ranges from 5–50% and defaults to
-15% from the top.
+menu's `Spoken line position` slider ranges from 5–50% and defaults to 22% from
+the top. The existing 5 ms TTS follow transition is intentionally unchanged.
 
 The bridge listens only on `127.0.0.1`. By default it looks for `.onnx` and
 `.onnx.json` voice files in `~/piper`, selects among available speakers when a
 model has more than one, and reads the model sample rate. Piper writes proper
 WAV files with an embedded format and sample-rate header; the bridge validates
 that header, runs FFmpeg's `loudnorm` filter (`I=-16`, `LRA=11`, `TP=-1.5`), and
-caches the normalized PCM WAV. The browser's native audio element plays those
-files and handles pause/continue locally, preserving the exact playback
+encodes the requested cached format. The browser's native audio element plays
+those files and handles pause/continue locally, preserving the exact playback
 position. No mpv process or IPC socket is used. The active voice name includes
 its zero-based internal speaker ID (for example, `model-name/3`) only when the
 ONNX model contains multiple speakers. Single-speaker models show only their
-voice name. A small
-`current/total` chunk counter appears beneath the bottom-right
-reading percentage while Piper is active. Normal generation and
+voice name. A small `current/total` chunk counter appears beneath the bottom-right reading
+percentage, with the longer voice name on the lowest line. Play/pause and stop
+buttons appear above these values while Piper is active. Normal generation and
 playback show no central Piper overlay; actual Piper errors still appear there.
+
+Each browser tab has a session identifier. Cache hits and audio downloads can
+run concurrently, while uncached Piper jobs use a fair shared queue and one
+generator at a time to avoid overloading a small server. Pause remains local to
+the browser. Stop cancels only that tab's active or queued generation and cannot
+terminate another user's Piper process. This provides isolated concurrent TTS
+sessions; it does not provide cloud accounts or cross-device book syncing.
 Override the voice directory, cache, or binaries when needed:
 
 ```sh
@@ -165,7 +186,7 @@ opening the printed localhost URL in the Windows browser normally reaches the
 loopback server forwarded by WSL.
 
 The default cache is `~/.cache/smooth-reader-piper` and is pruned least-recently
-used above 1024 MiB.
+used above 1024 MiB. At 48 kbps, Opus uses about 21.6 MB per hour of speech.
 
 Text width is measured in `ch` units and can be set from approximately 40 to 100
 characters per line. It is an estimate because proportional fonts have letters
@@ -182,13 +203,14 @@ parsing code and are not simple browser additions.
 ## Current scope
 
 - EPUB only
-- no bookshelf, chapter list, notes, or accounts; reading settings stay in the
+- no bookshelf, chapter list, notes, or application accounts; reading settings stay in the
   compact hidden menu
 - the complete EPUB spine is placed into one DOM document
 - no pointer lock or wheel interception; right-button drag is the only mouse gesture
 - links inside the EPUB scroll to their matching chapter or fragment
 - position identified by the EPUB contents, so renaming the file does not lose it
-- all reading data remains on the computer
+- EPUB bytes and positions stay in the browser; when Piper is used, only the
+  current text chunks are sent to the configured bridge and cached there as audio
 
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
@@ -196,13 +218,18 @@ more memory than a paginated reader.
 The app files carry versioned names (`renderer-v36.js` and `styles-v36.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 The local bridge also serves the HTML, JavaScript, and CSS with `no-store` while
-retaining long-lived caching for generated WAV audio.
+retaining long-lived caching for generated Opus or compatibility WAV audio.
 
 EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and
 font files are requested externally; the EPUB itself never leaves the browser.
 Up to three recently opened EPUBs can be cached in IndexedDB on this browser so
 their titles can reopen them directly; clearing site data removes those cached
 copies and saved reading positions.
+
+The layout is touch-friendly: the opening screen uses the platform file picker,
+the settings panel becomes a right-side drawer on narrow screens, controls use
+44 px touch targets, native touch scrolling remains enabled, and fixed controls
+respect mobile safe-area insets. Pinch zoom is not disabled.
 
 ## Verify the source
 

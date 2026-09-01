@@ -106,7 +106,7 @@ const MAX_SPEECH_MAX_LENGTH = 1200;
 const DEFAULT_SPEECH_POSITION_PERCENT = 15;
 const MIN_SPEECH_POSITION_PERCENT = 5;
 const MAX_SPEECH_POSITION_PERCENT = 50;
-const SPEECH_SCROLL_DURATION_MS = 5; // 180
+const SPEECH_SCROLL_DURATION_MS = 5;
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
   { id: "charcoal", name: "CHARCOAL" },
@@ -1310,6 +1310,14 @@ const inspectPiperBridge = async () => {
   return bridge;
 };
 
+const formatSpeechVoice = (prepared) => {
+  const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
+  const speakerId = Number.isInteger(prepared.speaker) ? prepared.speaker : 0;
+  return Number(prepared.speakerCount) > 1
+    ? `${voiceName}/${speakerId}`
+    : voiceName;
+};
+
 const speechBlocksFromViewport = () => {
   const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)]
     .filter((element) => normalizeSpeechText(element.textContent));
@@ -1496,8 +1504,7 @@ const startSpeech = async () => {
         ? settlePreparation(jobs[index + 1])
         : null;
       const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
-      const speakerId = Number.isInteger(prepared.speaker) ? prepared.speaker : 0;
-      speechVoice.textContent = `${voiceName}/${speakerId}`;
+      speechVoice.textContent = formatSpeechVoice(prepared);
       speechVoice.hidden = false;
       setSpeechActiveJob(jobs[index]);
       settingsSpeechStatus.textContent = nextPreparation

@@ -12,7 +12,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;1,400;1,700&amp;family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&amp;family=Crimson+Pro:ital,wght@0,400;0,700;1,400;1,700&amp;family=EB+Garamond:ital,wght@0,400;0,700;1,400;1,700&amp;family=Literata:ital,wght@0,400;0,700;1,400;1,700&amp;family=Lora:ital,wght@0,400;0,700;1,400;1,700&amp;family=Merriweather:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,400;0,700;1,400;1,700&amp;family=Source+Serif+4:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap"
     >
-    <link rel="stylesheet" href="styles-v36.css">
+    <link rel="stylesheet" href="styles-v36.css?v=20260901">
   </head>
   <body>
     <main id="app">
@@ -38,7 +38,7 @@
           <label class="start-select"><span><kbd>Alt+Shift+1…9/0</kbd> font · <kbd>Alt+Shift+M</kbd> mono</span><select id="start-font" aria-label="Reading font"></select></label>
           <label class="start-range">
             <span>Font size <kbd>[</kbd> / <kbd>]</kbd> <output id="start-font-size-value"></output></span>
-            <input id="start-font-size" type="range" min="14" max="36" step="1" aria-label="Book font size">
+            <input id="start-font-size" type="range" min="14" max="80" step="2" aria-label="Book font size">
           </label>
           <label class="start-range">
             <span>Line height <kbd>{</kbd> / <kbd>}</kbd> <output id="start-line-height-value"></output></span>
@@ -46,7 +46,7 @@
           </label>
           <span><kbd>Ctrl + wheel</kbd> or <kbd>Ctrl + +/−</kbd> zoom</span>
           <span><kbd>V</kbd> read aloud from here · <kbd>Esc</kbd> stop</span>
-          <span>During speech: click <kbd>MENU</kbd> → PAUSE / CONTINUE</span>
+          <span>During speech: use the bottom-right play/pause and stop controls</span>
           <span class="start-tracking">
             <span>Letter spacing</span>
             <button id="start-tracking-down" type="button" aria-label="Decrease letter spacing"><kbd>−</kbd></button>
@@ -68,14 +68,20 @@
         <button
           id="settings-toggle"
           type="button"
+          aria-label="Open reader settings"
+          title="Reader settings"
           aria-expanded="false"
           aria-controls="settings-panel"
-        >MENU</button>
+        >
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+        </button>
         <div id="settings-panel" hidden>
           <strong>READER</strong>
           <label>Palette<select id="settings-palette"></select></label>
           <label>Font<select id="settings-font"></select></label>
-          <label>Font size <output id="settings-font-size-value"></output><input id="settings-font-size" type="range" min="14" max="36" step="1"></label>
+          <label>Font size <output id="settings-font-size-value"></output><input id="settings-font-size" type="range" min="14" max="80" step="2"></label>
           <label>Line height <output id="settings-line-height-value"></output><input id="settings-line-height" type="range" min="1.20" max="2.20" step="0.04"></label>
           <span class="settings-label">Letter spacing <output id="settings-tracking-value"></output></span>
           <div class="settings-row">
@@ -112,9 +118,13 @@
 
       <div id="status" role="status" aria-live="polite" hidden></div>
       <div id="progress-stack" aria-live="off">
+        <div id="speech-controls" hidden>
+          <button id="speech-overlay-pause" type="button" aria-label="Pause speech" title="Pause speech" disabled>Ⅱ</button>
+          <button id="speech-overlay-stop" type="button" aria-label="Stop speech" title="Stop speech">■</button>
+        </div>
         <output id="reading-progress" aria-label="Reading progress" hidden>0%</output>
-        <output id="speech-voice" aria-label="Active Piper voice" hidden></output>
         <output id="speech-progress" aria-label="Piper chunk progress" hidden></output>
+        <output id="speech-voice" aria-label="Active Piper voice" hidden></output>
       </div>
       <div id="speech-marker" aria-hidden="true" hidden></div>
       <audio id="speech-audio" preload="auto" hidden></audio>
@@ -124,6 +134,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js"></script>
+    <script src="renderer-v36.js?v=20260901"></script>
   </body>
 </html>

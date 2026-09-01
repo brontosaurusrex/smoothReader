@@ -128,9 +128,10 @@ its original DOM text nodes. A slim vertical marker appears just left of that
 range instead of selecting and recoloring a large block of text. Its horizontal
 position is anchored just outside the containing text block, even when reading
 begins in the middle of a paragraph or on an indented line. Each new chunk uses
-a short 180 ms ease-out to move its actual first rendered line—not merely its
-paragraph—to the upper reading area, so long paragraphs follow correctly. This
-visual animation runs independently and never delays audio playback. The marker is
+a near-immediate 5 ms transition to move its actual first rendered line—not
+merely its paragraph—to the upper reading area, so long paragraphs follow
+correctly. This visual animation runs independently and never delays audio
+playback. The marker is
 recalculated after browser zoom, font changes, width changes, and other text
 reflow, and is cleared when reading stops. Exact ranges and fallback block
 mapping both place the spoken text at a remembered height in the viewport. The
@@ -144,9 +145,11 @@ WAV files with an embedded format and sample-rate header; the bridge validates
 that header, runs FFmpeg's `loudnorm` filter (`I=-16`, `LRA=11`, `TP=-1.5`), and
 caches the normalized PCM WAV. The browser's native audio element plays those
 files and handles pause/continue locally, preserving the exact playback
-position. No mpv process or IPC socket is used. The active voice name with its
-zero-based internal speaker ID (for example, `model-name/3`) and a small
-`current/total` chunk counter appear beneath the bottom-right
+position. No mpv process or IPC socket is used. The active voice name includes
+its zero-based internal speaker ID (for example, `model-name/3`) only when the
+ONNX model contains multiple speakers. Single-speaker models show only their
+voice name. A small
+`current/total` chunk counter appears beneath the bottom-right
 reading percentage while Piper is active. Normal generation and
 playback show no central Piper overlay; actual Piper errors still appear there.
 Override the voice directory, cache, or binaries when needed:

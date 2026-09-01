@@ -67,6 +67,9 @@ const makeElement = () => {
       this.clickCount = (this.clickCount || 0) + 1;
     },
     load() {},
+    canPlayType(type) {
+      return type.includes("opus") ? "probably" : "";
+    },
     pause() {
       this.paused = true;
     },
@@ -142,6 +145,9 @@ const elements = {
   "#settings-reopen": makeElement(),
   "#speech-voice": makeElement(),
   "#speech-progress": makeElement(),
+  "#speech-controls": makeElement(),
+  "#speech-overlay-pause": makeElement(),
+  "#speech-overlay-stop": makeElement(),
   "#speech-audio": makeElement(),
   "#reading-progress": makeElement(),
   "#speech-marker": makeElement()
@@ -156,6 +162,7 @@ elements["#settings-panel"].hidden = true;
 elements["#reading-progress"].hidden = true;
 elements["#speech-progress"].hidden = true;
 elements["#speech-voice"].hidden = true;
+elements["#speech-controls"].hidden = true;
 elements["#speech-marker"].hidden = true;
 
 const windowListeners = new Map();
@@ -433,6 +440,9 @@ assert.match(indexSource, /id="reading-progress"/);
 assert.match(indexSource, /id="progress-stack"/);
 assert.match(indexSource, /id="speech-voice"/);
 assert.match(indexSource, /id="speech-progress"/);
+assert.match(indexSource, /id="speech-controls"/);
+assert.match(indexSource, /id="speech-overlay-pause"/);
+assert.match(indexSource, /id="speech-overlay-stop"/);
 assert.match(indexSource, /id="speech-audio"[^>]*preload="auto"/);
 assert.match(indexSource, /id="settings-home"[^>]*>HOME</);
 assert.doesNotMatch(indexSource, /id="settings-end"/);
@@ -444,7 +454,13 @@ assert.match(indexSource, /id="settings-speech-max"/);
 assert.match(indexSource, /id="settings-speech-position"[^>]*min="5"[^>]*max="50"/);
 assert.match(indexSource, /id="settings-speech-pause"/);
 assert.match(indexSource, /id="settings-speech-stop"/);
+assert.match(indexSource, /id="settings-toggle"[\s\S]*aria-label="Open reader settings"/);
+assert.match(indexSource, /id="settings-font-size"[^>]*max="80"[^>]*step="2"/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
+assert.match(rendererSource, /sessionId:\s*speechSessionId/);
+assert.match(rendererSource, /audioFormat:\s*speechAudioFormat/);
+assert.match(rendererSource, /\/api\/piper\/stop[\s\S]*JSON\.stringify\(\{ sessionId: speechSessionId \}\)/);
+assert.match(rendererSource, /BOOK_SETTINGS_PREFIX/);
 assert.doesNotMatch(rendererSource, /\/api\/piper\/(?:play|pause|resume)/);
 assert.match(rendererSource, /await speechAudio\.play\(\)/);
 assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 5/);
@@ -477,10 +493,19 @@ assert.match(stylesSource, /"Noto Serif"/);
 assert.match(stylesSource, /"EB Garamond"/);
 assert.match(stylesSource, /"Cascadia Mono"/);
 assert.match(stylesSource, /font-family:\s*var\(--reader-font\)/);
-assert.match(stylesSource, /--reader-width:\s*72ch/);
-assert.match(stylesSource, /--reader-font-size:\s*20px/);
-assert.match(stylesSource, /#progress-stack[^{]*\{[^}]*right:\s*1rem[^}]*bottom:\s*0\.8rem/s);
-assert.match(stylesSource, /--reader-line-height:\s*1\.72/);
+assert.match(stylesSource, /--reader-width:\s*44ch/);
+assert.match(stylesSource, /--reader-font-size:\s*36px/);
+assert.match(stylesSource, /#progress-stack[^{]*\{[^}]*safe-area-inset-right[^}]*safe-area-inset-bottom/s);
+assert.match(stylesSource, /--reader-line-height:\s*1\.28/);
+assert.match(stylesSource, /--reader-tracking:\s*0\.02em/);
+assert.match(stylesSource, /#settings-menu[^{]*\{[^}]*right:/s);
+assert.doesNotMatch(stylesSource, /#settings-menu[^{]*\{[^}]*left:\s*0\.8rem/s);
+assert.match(stylesSource, /#speech-controls/);
+assert.match(stylesSource, /safe-area-inset-bottom/);
+assert.match(stylesSource, /@media \(max-width: 620px\)[\s\S]*height:\s*100dvh/);
+assert.ok(indexSource.indexOf('id="speech-controls"') < indexSource.indexOf('id="reading-progress"'));
+assert.ok(indexSource.indexOf('id="reading-progress"') < indexSource.indexOf('id="speech-progress"'));
+assert.ok(indexSource.indexOf('id="speech-progress"') < indexSource.indexOf('id="speech-voice"'));
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*var\(--reader-font-size\)/s);
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*relative[^}]*place-content:\s*start center[^}]*min-height:\s*100dvh[^}]*overflow:\s*visible/s);
 assert.doesNotMatch(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*fixed/s);
@@ -608,12 +633,15 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#start-reopen"].disabled, false);
   assert.equal(elements["#start-palette"].children.length, 10);
   assert.equal(elements["#start-font"].children.length, 11);
-  assert.equal(elements["#start-width-value"].textContent, "≈ 72 chars");
-  assert.equal(elements["#start-font-size-value"].textContent, "20px");
-  assert.equal(elements["#start-line-height-value"].textContent, "1.72");
-  assert.equal(elements["#settings-speech-min-value"].textContent, "350 chars");
-  assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
-  assert.equal(elements["#settings-speech-position-value"].textContent, "15%");
+  assert.equal(elements["#start-width-value"].textContent, "≈ 44 chars");
+  assert.equal(elements["#start-font-size-value"].textContent, "36px");
+  assert.equal(elements["#start-line-height-value"].textContent, "1.28");
+  assert.equal(elements["#settings-speech-min-value"].textContent, "150 chars");
+  assert.equal(elements["#settings-speech-max-value"].textContent, "350 chars");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "22%");
+  assert.equal(context.document.documentElement.dataset.palette, "nord");
+  assert.equal(context.document.documentElement.dataset.font, "alegreya");
+  assert.equal(vm.runInContext("speechAudioFormat", context), "opus");
 
   elements["#speech-audio"].autoEnd = true;
   await vm.runInContext(
@@ -629,9 +657,11 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   await vm.runInContext("toggleSpeechPause()", context);
   assert.equal(elements["#speech-audio"].paused, true);
   assert.equal(elements["#settings-speech-pause"].textContent, "CONTINUE");
+  assert.equal(elements["#speech-overlay-pause"].textContent, "▶");
   await vm.runInContext("toggleSpeechPause()", context);
   assert.equal(elements["#speech-audio"].paused, false);
   assert.equal(elements["#settings-speech-pause"].textContent, "PAUSE");
+  assert.equal(elements["#speech-overlay-pause"].textContent, "Ⅱ");
   vm.runInContext("speechIsActive = false; releaseSpeechAudio();", context);
 
   drop();
@@ -766,27 +796,30 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(pressKey("PageUp"), true);
   assert.equal(scrollByCalls.at(-1).top, -704);
 
-  assert.equal(context.document.documentElement.dataset.palette, "charcoal");
+  assert.equal(context.document.documentElement.dataset.palette, "nord");
   assert.equal(pressKey("p"), true);
-  assert.equal(context.document.documentElement.dataset.palette, "geany");
-  assert.equal(stored.get("smooth-reader:palette"), "geany");
+  assert.equal(context.document.documentElement.dataset.palette, "solarized");
+  assert.equal(stored.get("smooth-reader:palette"), "solarized");
 
   assert.equal(pressKey("P", { shiftKey: true }), true);
-  assert.equal(context.document.documentElement.dataset.palette, "charcoal");
+  assert.equal(context.document.documentElement.dataset.palette, "nord");
 
   assert.equal(pressKey("6", { altKey: true }), true);
   assert.equal(context.document.documentElement.dataset.palette, "paper");
 
-  assert.equal(context.document.documentElement.dataset.font, "system-sans");
+  assert.equal(context.document.documentElement.dataset.font, "alegreya");
   assert.equal(pressKey("f"), true);
-  assert.equal(context.document.documentElement.dataset.font, "noto-serif");
-  assert.equal(stored.get("smooth-reader:font"), "noto-serif");
+  assert.equal(context.document.documentElement.dataset.font, "eb-garamond");
+  const currentBookSettings = () => JSON.parse(
+    [...stored.entries()].find(([key]) => key.startsWith("smooth-reader:book-settings:"))[1]
+  );
+  assert.equal(currentBookSettings().font, "eb-garamond");
   await wait(20);
   assert.equal(scrollByCalls.at(-1).top, 60);
   assert.equal(scrollByCalls.at(-1).behavior, "auto");
 
   assert.equal(pressKey("F", { shiftKey: true }), true);
-  assert.equal(context.document.documentElement.dataset.font, "system-sans");
+  assert.equal(context.document.documentElement.dataset.font, "alegreya");
 
   assert.equal(pressKey("7", { altKey: true, shiftKey: true }), true);
   assert.equal(context.document.documentElement.dataset.font, "crimson-pro");
@@ -802,32 +835,32 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
 
   assert.equal(
     context.document.documentElement.style["--reader-tracking"],
-    "0.01em"
+    "0.02em"
   );
   assert.equal(pressKey("+", { shiftKey: true }), true);
+  assert.equal(context.document.documentElement.style["--reader-tracking"], "0.03em");
+  assert.equal(currentBookSettings().tracking, 0.03);
+
+  assert.equal(pressKey("-"), true);
   assert.equal(context.document.documentElement.style["--reader-tracking"], "0.02em");
-  assert.equal(stored.get("smooth-reader:tracking"), "0.02");
 
   assert.equal(pressKey("-"), true);
   assert.equal(context.document.documentElement.style["--reader-tracking"], "0.01em");
-
-  assert.equal(pressKey("-"), true);
-  assert.equal(context.document.documentElement.style["--reader-tracking"], "0.00em");
 
   assert.equal(pressKey("0"), true);
-  assert.equal(context.document.documentElement.style["--reader-tracking"], "0.01em");
+  assert.equal(context.document.documentElement.style["--reader-tracking"], "0.02em");
 
   assert.equal(pressKey("]"), true);
-  assert.equal(context.document.documentElement.style["--reader-font-size"], "21px");
-  assert.equal(stored.get("smooth-reader:font-size"), "21");
+  assert.equal(context.document.documentElement.style["--reader-font-size"], "38px");
+  assert.equal(currentBookSettings().fontSize, 38);
   assert.equal(pressKey("["), true);
-  assert.equal(context.document.documentElement.style["--reader-font-size"], "20px");
+  assert.equal(context.document.documentElement.style["--reader-font-size"], "36px");
 
   assert.equal(pressKey("}"), true);
-  assert.equal(context.document.documentElement.style["--reader-line-height"], "1.76");
-  assert.equal(stored.get("smooth-reader:line-height"), "1.76");
+  assert.equal(context.document.documentElement.style["--reader-line-height"], "1.32");
+  assert.equal(currentBookSettings().lineHeight, 1.32);
   assert.equal(pressKey("{"), true);
-  assert.equal(context.document.documentElement.style["--reader-line-height"], "1.72");
+  assert.equal(context.document.documentElement.style["--reader-line-height"], "1.28");
 
   elements["#settings-font-size"].listeners.get("input")({ target: { value: "24" } });
   assert.equal(context.document.documentElement.style["--reader-font-size"], "24px");
@@ -837,7 +870,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   elements["#settings-width"].listeners.get("input")({ target: { value: "84" } });
   assert.equal(context.document.documentElement.style["--reader-width"], "84ch");
   assert.equal(elements["#start-width-value"].textContent, "≈ 84 chars");
-  assert.equal(stored.get("smooth-reader:text-width"), "84");
+  assert.equal(currentBookSettings().width, 84);
 
   elements["#settings-toggle"].listeners.get("click")();
   assert.equal(elements["#settings-panel"].hidden, false);
@@ -853,6 +886,9 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#settings-speech-start"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-pause"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-stop"].listeners.has("click"), true);
+  assert.equal(elements["#speech-overlay-pause"].listeners.has("click"), true);
+  assert.equal(elements["#speech-overlay-stop"].listeners.has("click"), true);
+  assert.equal(elements["#settings-speech-voice"].listeners.has("change"), true);
 
   elements["#settings-speech-min"].listeners.get("change")({ target: { value: "400" } });
   elements["#settings-speech-max"].listeners.get("change")({ target: { value: "700" } });
@@ -910,6 +946,34 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     "Test Book — second.epub"
   );
   assert.equal(renderedSections.length, 12);
+  elements["#settings-font-size"].listeners.get("input")({ target: { value: "60" } });
+  assert.equal(context.document.documentElement.style["--reader-font-size"], "60px");
+  elements["#recent-book-list"].children[2].listeners.get("click")();
+  await wait(80);
+  assert.equal(context.document.documentElement.style["--reader-font-size"], "24px");
+  assert.equal(context.document.documentElement.style["--reader-width"], "84ch");
+  assert.equal(renderedSections.length, 14);
+
+  let releaseSlowBook;
+  const slowBook = {
+    name: "slow.epub",
+    arrayBuffer() {
+      return new Promise((resolve) => {
+        releaseSlowBook = () => resolve(new Uint8Array([7, 2, 3, 4]).buffer);
+      });
+    }
+  };
+  drop(slowBook);
+  await wait(10);
+  assert.equal(vm.runInContext("isBookLoading", context), true);
+  assert.equal(elements["#start-reopen"].disabled, true);
+  assert.equal(pressKey("r"), true);
+  assert.equal(renderedSections.length, 14);
+  releaseSlowBook();
+  await wait(100);
+  assert.equal(vm.runInContext("isBookLoading", context), false);
+  assert.equal(vm.runInContext("positionPersistenceSuspended", context), false);
+  assert.equal(renderedSections.length, 16);
 
   elements["#settings-home"].listeners.get("click")();
   assert.equal(elements["#drop-zone"].hidden, false);

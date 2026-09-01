@@ -156,13 +156,18 @@ class PiperController:
         return metadata
 
     @staticmethod
-    def _prepared_result(metadata: dict[str, Any], cached: bool) -> dict[str, Any]:
+    def _prepared_result(
+        metadata: dict[str, Any],
+        cached: bool,
+        speaker_count: int,
+    ) -> dict[str, Any]:
         return {
             "ok": True,
             "cacheId": metadata["cacheId"],
             "cached": cached,
             "voice": metadata["voice"],
             "speaker": metadata["speaker"],
+            "speakerCount": speaker_count,
             "sampleRate": metadata["sampleRate"],
             "audioUrl": f"/api/piper/audio/{metadata['cacheId']}",
         }
@@ -179,13 +184,17 @@ class PiperController:
         wav_path, metadata_path = self._cache_paths(cache_id)
 
         try:
-            return self._prepared_result(self._read_cache_record(cache_id), True)
+            return self._prepared_result(
+                self._read_cache_record(cache_id), True, speaker_count
+            )
         except FileNotFoundError:
             pass
 
         with self._generation_lock:
             try:
-                return self._prepared_result(self._read_cache_record(cache_id), True)
+                return self._prepared_result(
+                    self._read_cache_record(cache_id), True, speaker_count
+                )
             except FileNotFoundError:
                 pass
 
@@ -254,6 +263,7 @@ class PiperController:
                     "cacheId": cache_id,
                     "voice": model.name,
                     "speaker": speaker,
+                    "speakerCount": speaker_count,
                     "sampleRate": actual_sample_rate,
                 }
                 temporary_metadata = temporary_wav.with_suffix(".json.tmp")
@@ -261,7 +271,7 @@ class PiperController:
                 temporary_wav.replace(wav_path)
                 temporary_metadata.replace(metadata_path)
                 self._prune_cache(cache_id)
-                return self._prepared_result(metadata, False)
+                return self._prepared_result(metadata, False, speaker_count)
             finally:
                 with self._state_lock:
                     self._generation_process = None
