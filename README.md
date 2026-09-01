@@ -1,5 +1,8 @@
 # Smooth Reader — web edition
 
+> Smooth Reader was vibe-coded: shaped through conversation, rapid
+> experimentation, and a great deal of iterative testing.
+
 A dependency-free local webpage that loads an EPUB's entire reading order into
 one ordinary scrolling document. Drop an EPUB into the page; its position is
 stored locally and restored when that EPUB is dropped again.
@@ -30,6 +33,10 @@ python3 piper_bridge.py
 Then open `http://127.0.0.1:8000`. The ordinary GitHub Pages version cannot
 launch a local executable; the bridge is the deliberately small local part that
 connects the same web reader to Piper and FFmpeg.
+
+For a complete internet-facing Debian deployment with systemd, Nginx, HTTPS,
+password protection, and Piper voices, see
+[SERVER-INSTALL.md](SERVER-INSTALL.md).
 
 Click the drop surface to choose a file.
 All keyboard shortcuts and mouse scrolling controls are listed unobtrusively on
