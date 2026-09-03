@@ -470,7 +470,7 @@ assert.match(indexSource, /id="settings-toggle"[\s\S]*aria-label="Open reader se
 assert.match(indexSource, /id="settings-font-size"[^>]*max="80"[^>]*step="2"/);
 assert.match(indexSource, /id="settings-font-size-down"/);
 assert.match(indexSource, /id="settings-font-size-up"/);
-assert.match(indexSource, /styles-v36\.css\?v=20260903-contrast2/);
+assert.match(indexSource, /styles-v36\.css\?v=20260903-palette1/);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
 assert.match(rendererSource, /sessionId:\s*speechSessionId/);
@@ -545,6 +545,14 @@ assert.match(stylesSource, /font-size:\s*clamp\(0\.82rem, 0\.72em, 1rem\)/);
 assert.doesNotMatch(stylesSource, /html,\s*body[^}]*overflow:\s*hidden/s);
 assert.match(stylesSource, /overflow:\s*visible\s*!important/);
 assert.match(stylesSource, /#333d4d/i);
+for (const palette of [
+  "charcoal", "geany", "midnight", "sepia", "forest",
+  "paper", "nord", "solarized", "gruvbox", "plum"
+]) {
+  assert.match(stylesSource, new RegExp(`data-palette="${palette}"`), palette);
+}
+assert.match(stylesSource, /data-palette="charcoal"[\s\S]*--background:\s*#121212/);
+assert.match(stylesSource, /data-palette="nord"[\s\S]*--background:\s*#2e3440/);
 assert.match(stylesSource, /#recent-books[^{]*\{[^}]*width:\s*min\(50rem/s);
 assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*text-align:\s*left/s);
 

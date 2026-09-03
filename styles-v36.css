@@ -80,6 +80,19 @@
   --reader-font: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Liberation Mono", Consolas, monospace;
 }
 
+:root[data-palette="charcoal"] {
+  --background: #121212;
+  --text: #dedad1;
+  --muted: #77746e;
+  --line: #373532;
+  --heading: #eeeae1;
+  --link: #bcb6aa;
+  --panel: #1d1c1a;
+  --hover: #181817;
+  --cover: rgb(18 18 18 / 92%);
+  --scrollbar: #47443f;
+}
+
 :root[data-palette="geany"] {
   --background: #333d4d;
   --text: #b7c7c2;
