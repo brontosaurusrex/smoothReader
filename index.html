@@ -9,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smooth Reader</title>
     <link rel="stylesheet" href="vendor/fonts/reader-fonts.css?v=20260903-fonts1">
-    <link rel="stylesheet" href="styles-v36.css?v=20260903-palette1">
+    <link rel="stylesheet" href="styles-v36.css?v=20260903-controls1">
   </head>
   <body>
     <main id="app">
@@ -31,10 +31,14 @@
           <span><kbd>PgUp</kbd> / <kbd>PgDn</kbd> move one screen</span>
           <button id="start-palette-next" type="button"><kbd>P</kbd> / <kbd>Shift+P</kbd> cycle palette</button>
           <label class="start-select"><span><kbd>Alt+1…9/0</kbd> palette</span><select id="start-palette" aria-label="Color palette"></select></label>
-          <label class="start-range start-contrast">
-            <span>Contrast <output id="start-contrast-value"></output></span>
-            <input id="start-contrast" type="range" min="-30" max="30" step="1" aria-label="Palette contrast">
-          </label>
+          <div class="start-range start-contrast">
+            <span><label for="start-contrast">Contrast</label> <output id="start-contrast-value"></output></span>
+            <div class="range-stepper">
+              <button id="start-contrast-down" type="button" aria-label="Decrease palette contrast">−</button>
+              <input id="start-contrast" type="range" min="-30" max="30" step="1" aria-label="Palette contrast">
+              <button id="start-contrast-up" type="button" aria-label="Increase palette contrast">+</button>
+            </div>
+          </div>
           <button id="start-font-next" type="button"><kbd>F</kbd> / <kbd>Shift+F</kbd> cycle font</button>
           <label class="start-select"><span><kbd>Alt+Shift+1…9/0</kbd> font · <kbd>Alt+Shift+M</kbd> mono</span><select id="start-font" aria-label="Reading font"></select></label>
           <div class="start-range">
@@ -45,10 +49,14 @@
               <button id="start-font-size-up" type="button" aria-label="Increase book font size">+</button>
             </div>
           </div>
-          <label class="start-range">
-            <span>Line height <kbd>{</kbd> / <kbd>}</kbd> <output id="start-line-height-value"></output></span>
-            <input id="start-line-height" type="range" min="1.20" max="2.20" step="0.04" aria-label="Book line height">
-          </label>
+          <div class="start-range">
+            <span><label for="start-line-height">Line height <kbd>{</kbd> / <kbd>}</kbd></label> <output id="start-line-height-value"></output></span>
+            <div class="range-stepper">
+              <button id="start-line-height-down" type="button" aria-label="Decrease book line height">−</button>
+              <input id="start-line-height" type="range" min="1.20" max="2.20" step="0.04" aria-label="Book line height">
+              <button id="start-line-height-up" type="button" aria-label="Increase book line height">+</button>
+            </div>
+          </div>
           <span><kbd>Ctrl + wheel</kbd> or <kbd>Ctrl + +/−</kbd> zoom</span>
           <span><kbd>V</kbd> read aloud from here · <kbd>Esc</kbd> stop</span>
           <span>During speech: use the bottom-right play/pause and stop controls</span>
@@ -58,10 +66,15 @@
             <button id="start-tracking-reset" type="button" aria-label="Reset letter spacing"><kbd>0</kbd></button>
             <button id="start-tracking-up" type="button" aria-label="Increase letter spacing"><kbd>+</kbd></button>
           </span>
-          <label class="start-range">
-            <span>Text width <output id="start-width-value"></output></span>
-            <input id="start-width" type="range" min="40" max="100" step="2" aria-label="Approximate characters per line">
-          </label>
+          <div class="start-range">
+            <span><label for="start-width">Text width</label> <output id="start-width-value"></output></span>
+            <div class="range-stepper">
+              <button id="start-width-down" type="button" aria-label="Decrease text width">−</button>
+              <input id="start-width" type="range" min="40" max="100" step="2" aria-label="Approximate characters per line">
+              <button id="start-width-up" type="button" aria-label="Increase text width">+</button>
+            </div>
+          </div>
+          <button id="start-reset-all" class="start-wide" type="button">RESET ALL SETTINGS</button>
         </div>
       </section>
 
@@ -85,7 +98,14 @@
         <div id="settings-panel" hidden>
           <strong>READER</strong>
           <label>Palette<select id="settings-palette"></select></label>
-          <label>Contrast <output id="settings-contrast-value"></output><input id="settings-contrast" type="range" min="-30" max="30" step="1" aria-label="Palette contrast"></label>
+          <div class="settings-control">
+            <span class="settings-label"><label for="settings-contrast">Contrast</label><output id="settings-contrast-value"></output></span>
+            <div class="range-stepper">
+              <button id="settings-contrast-down" type="button" aria-label="Decrease palette contrast">−</button>
+              <input id="settings-contrast" type="range" min="-30" max="30" step="1" aria-label="Palette contrast">
+              <button id="settings-contrast-up" type="button" aria-label="Increase palette contrast">+</button>
+            </div>
+          </div>
           <label>Font<select id="settings-font"></select></label>
           <div class="settings-control">
             <span class="settings-label"><label for="settings-font-size">Font size</label><output id="settings-font-size-value"></output></span>
@@ -95,19 +115,54 @@
               <button id="settings-font-size-up" type="button" aria-label="Increase book font size">+</button>
             </div>
           </div>
-          <label>Line height <output id="settings-line-height-value"></output><input id="settings-line-height" type="range" min="1.20" max="2.20" step="0.04"></label>
+          <div class="settings-control">
+            <span class="settings-label"><label for="settings-line-height">Line height</label><output id="settings-line-height-value"></output></span>
+            <div class="range-stepper">
+              <button id="settings-line-height-down" type="button" aria-label="Decrease book line height">−</button>
+              <input id="settings-line-height" type="range" min="1.20" max="2.20" step="0.04" aria-label="Book line height">
+              <button id="settings-line-height-up" type="button" aria-label="Increase book line height">+</button>
+            </div>
+          </div>
           <span class="settings-label">Letter spacing <output id="settings-tracking-value"></output></span>
           <div class="settings-row">
             <button id="settings-tracking-down" type="button">−</button>
             <button id="settings-tracking-reset" type="button">RESET</button>
             <button id="settings-tracking-up" type="button">+</button>
           </div>
-          <label>Text width <output id="settings-width-value"></output><input id="settings-width" type="range" min="40" max="100" step="2"></label>
+          <div class="settings-control">
+            <span class="settings-label"><label for="settings-width">Text width</label><output id="settings-width-value"></output></span>
+            <div class="range-stepper">
+              <button id="settings-width-down" type="button" aria-label="Decrease text width">−</button>
+              <input id="settings-width" type="range" min="40" max="100" step="2" aria-label="Approximate characters per line">
+              <button id="settings-width-up" type="button" aria-label="Increase text width">+</button>
+            </div>
+          </div>
           <span class="settings-label">Local Piper</span>
           <label>Voice<select id="settings-speech-voice"><option value="">RANDOM VOICE</option></select></label>
-          <label>Minimum chunk <output id="settings-speech-min-value"></output><input id="settings-speech-min" type="range" min="100" max="500" step="50"></label>
-          <label>Maximum chunk <output id="settings-speech-max-value"></output><input id="settings-speech-max" type="range" min="300" max="1200" step="50"></label>
-          <label>Spoken line position <output id="settings-speech-position-value"></output><input id="settings-speech-position" type="range" min="5" max="50" step="1"></label>
+          <div class="settings-control">
+            <span class="settings-label"><label for="settings-speech-min">Minimum chunk</label><output id="settings-speech-min-value"></output></span>
+            <div class="range-stepper">
+              <button id="settings-speech-min-down" type="button" aria-label="Decrease minimum speech chunk">−</button>
+              <input id="settings-speech-min" type="range" min="100" max="500" step="50" aria-label="Minimum speech chunk">
+              <button id="settings-speech-min-up" type="button" aria-label="Increase minimum speech chunk">+</button>
+            </div>
+          </div>
+          <div class="settings-control">
+            <span class="settings-label"><label for="settings-speech-max">Maximum chunk</label><output id="settings-speech-max-value"></output></span>
+            <div class="range-stepper">
+              <button id="settings-speech-max-down" type="button" aria-label="Decrease maximum speech chunk">−</button>
+              <input id="settings-speech-max" type="range" min="300" max="1200" step="50" aria-label="Maximum speech chunk">
+              <button id="settings-speech-max-up" type="button" aria-label="Increase maximum speech chunk">+</button>
+            </div>
+          </div>
+          <div class="settings-control">
+            <span class="settings-label"><label for="settings-speech-position">Spoken line position</label><output id="settings-speech-position-value"></output></span>
+            <div class="range-stepper">
+              <button id="settings-speech-position-down" type="button" aria-label="Move spoken line upward">−</button>
+              <input id="settings-speech-position" type="range" min="5" max="50" step="1" aria-label="Spoken line position">
+              <button id="settings-speech-position-up" type="button" aria-label="Move spoken line downward">+</button>
+            </div>
+          </div>
           <div class="settings-row settings-speech">
             <button id="settings-speech-start" type="button">READ FROM HERE</button>
             <button id="settings-speech-pause" type="button" disabled>PAUSE</button>
@@ -122,6 +177,7 @@
           </div>
           <button id="settings-open" class="settings-wide" type="button">OPEN ANOTHER EPUB</button>
           <button id="settings-reopen" class="settings-wide" type="button" disabled>REOPEN LAST EPUB</button>
+          <button id="settings-reset-all" class="settings-wide" type="button">RESET ALL SETTINGS</button>
         </div>
       </aside>
 
@@ -147,6 +203,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260903-contrast1"></script>
+    <script src="renderer-v36.js?v=20260903-controls1"></script>
   </body>
 </html>

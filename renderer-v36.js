@@ -15,6 +15,8 @@ const startPaletteNext = document.querySelector("#start-palette-next");
 const startPaletteSelect = document.querySelector("#start-palette");
 const startContrast = document.querySelector("#start-contrast");
 const startContrastValue = document.querySelector("#start-contrast-value");
+const startContrastDown = document.querySelector("#start-contrast-down");
+const startContrastUp = document.querySelector("#start-contrast-up");
 const startFontNext = document.querySelector("#start-font-next");
 const startFontSelect = document.querySelector("#start-font");
 const startFontSize = document.querySelector("#start-font-size");
@@ -23,17 +25,24 @@ const startFontSizeDown = document.querySelector("#start-font-size-down");
 const startFontSizeUp = document.querySelector("#start-font-size-up");
 const startLineHeight = document.querySelector("#start-line-height");
 const startLineHeightValue = document.querySelector("#start-line-height-value");
+const startLineHeightDown = document.querySelector("#start-line-height-down");
+const startLineHeightUp = document.querySelector("#start-line-height-up");
 const startTrackingDown = document.querySelector("#start-tracking-down");
 const startTrackingReset = document.querySelector("#start-tracking-reset");
 const startTrackingUp = document.querySelector("#start-tracking-up");
 const startWidth = document.querySelector("#start-width");
 const startWidthValue = document.querySelector("#start-width-value");
+const startWidthDown = document.querySelector("#start-width-down");
+const startWidthUp = document.querySelector("#start-width-up");
+const startResetAll = document.querySelector("#start-reset-all");
 const settingsMenu = document.querySelector("#settings-menu");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsPaletteSelect = document.querySelector("#settings-palette");
 const settingsContrast = document.querySelector("#settings-contrast");
 const settingsContrastValue = document.querySelector("#settings-contrast-value");
+const settingsContrastDown = document.querySelector("#settings-contrast-down");
+const settingsContrastUp = document.querySelector("#settings-contrast-up");
 const settingsFontSelect = document.querySelector("#settings-font");
 const settingsFontSize = document.querySelector("#settings-font-size");
 const settingsFontSizeValue = document.querySelector("#settings-font-size-value");
@@ -41,19 +50,29 @@ const settingsFontSizeDown = document.querySelector("#settings-font-size-down");
 const settingsFontSizeUp = document.querySelector("#settings-font-size-up");
 const settingsLineHeight = document.querySelector("#settings-line-height");
 const settingsLineHeightValue = document.querySelector("#settings-line-height-value");
+const settingsLineHeightDown = document.querySelector("#settings-line-height-down");
+const settingsLineHeightUp = document.querySelector("#settings-line-height-up");
 const settingsTrackingValue = document.querySelector("#settings-tracking-value");
 const settingsTrackingDown = document.querySelector("#settings-tracking-down");
 const settingsTrackingReset = document.querySelector("#settings-tracking-reset");
 const settingsTrackingUp = document.querySelector("#settings-tracking-up");
 const settingsWidth = document.querySelector("#settings-width");
 const settingsWidthValue = document.querySelector("#settings-width-value");
+const settingsWidthDown = document.querySelector("#settings-width-down");
+const settingsWidthUp = document.querySelector("#settings-width-up");
 const settingsSpeechVoice = document.querySelector("#settings-speech-voice");
 const settingsSpeechMin = document.querySelector("#settings-speech-min");
 const settingsSpeechMinValue = document.querySelector("#settings-speech-min-value");
+const settingsSpeechMinDown = document.querySelector("#settings-speech-min-down");
+const settingsSpeechMinUp = document.querySelector("#settings-speech-min-up");
 const settingsSpeechMax = document.querySelector("#settings-speech-max");
 const settingsSpeechMaxValue = document.querySelector("#settings-speech-max-value");
+const settingsSpeechMaxDown = document.querySelector("#settings-speech-max-down");
+const settingsSpeechMaxUp = document.querySelector("#settings-speech-max-up");
 const settingsSpeechPosition = document.querySelector("#settings-speech-position");
 const settingsSpeechPositionValue = document.querySelector("#settings-speech-position-value");
+const settingsSpeechPositionDown = document.querySelector("#settings-speech-position-down");
+const settingsSpeechPositionUp = document.querySelector("#settings-speech-position-up");
 const settingsSpeechStart = document.querySelector("#settings-speech-start");
 const settingsSpeechPause = document.querySelector("#settings-speech-pause");
 const settingsSpeechStop = document.querySelector("#settings-speech-stop");
@@ -65,6 +84,7 @@ const settingsPageUp = document.querySelector("#settings-page-up");
 const settingsPageDown = document.querySelector("#settings-page-down");
 const settingsOpen = document.querySelector("#settings-open");
 const settingsReopen = document.querySelector("#settings-reopen");
+const settingsResetAll = document.querySelector("#settings-reset-all");
 const readingProgress = document.querySelector("#reading-progress");
 const speechVoice = document.querySelector("#speech-voice");
 const speechProgress = document.querySelector("#speech-progress");
@@ -567,6 +587,10 @@ const syncSettingsControls = () => {
   settingsContrast.value = String(contrast);
   startContrastValue.textContent = contrastText;
   settingsContrastValue.textContent = contrastText;
+  startContrastDown.disabled = contrast <= MIN_CONTRAST;
+  settingsContrastDown.disabled = contrast <= MIN_CONTRAST;
+  startContrastUp.disabled = contrast >= MAX_CONTRAST;
+  settingsContrastUp.disabled = contrast >= MAX_CONTRAST;
   startFontSelect.value = fontId;
   settingsFontSelect.value = fontId;
   settingsTrackingValue.textContent = trackingText;
@@ -574,6 +598,10 @@ const syncSettingsControls = () => {
   settingsWidth.value = String(widthCh);
   startWidthValue.textContent = widthText;
   settingsWidthValue.textContent = widthText;
+  startWidthDown.disabled = widthCh <= MIN_WIDTH_CH;
+  settingsWidthDown.disabled = widthCh <= MIN_WIDTH_CH;
+  startWidthUp.disabled = widthCh >= MAX_WIDTH_CH;
+  settingsWidthUp.disabled = widthCh >= MAX_WIDTH_CH;
   startFontSize.value = String(fontSizePx);
   settingsFontSize.value = String(fontSizePx);
   startFontSizeValue.textContent = fontSizeText;
@@ -586,6 +614,10 @@ const syncSettingsControls = () => {
   settingsLineHeight.value = String(lineHeight);
   startLineHeightValue.textContent = lineHeightText;
   settingsLineHeightValue.textContent = lineHeightText;
+  startLineHeightDown.disabled = lineHeight <= MIN_LINE_HEIGHT;
+  settingsLineHeightDown.disabled = lineHeight <= MIN_LINE_HEIGHT;
+  startLineHeightUp.disabled = lineHeight >= MAX_LINE_HEIGHT;
+  settingsLineHeightUp.disabled = lineHeight >= MAX_LINE_HEIGHT;
 };
 
 const applyPalette = (nextIndex, announce = true) => {
@@ -695,6 +727,38 @@ const applyLineHeight = (nextLineHeight, announce = true) => {
   scheduleLayoutAnchorRestore(anchor);
 
   if (announce) showStatus(`LINE HEIGHT · ${lineHeight.toFixed(2)}`, 900);
+};
+
+const resetAllSettings = () => {
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith(BOOK_SETTINGS_PREFIX)) localStorage.removeItem(key);
+  }
+
+  const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
+  const defaultFontIndex = FONTS.findIndex((font) => font.id === "alegreya");
+  localStorage.setItem(FONT_KEY, "alegreya");
+  localStorage.setItem(FONT_SIZE_KEY, String(DEFAULT_FONT_SIZE_PX));
+  localStorage.setItem(LINE_HEIGHT_KEY, String(DEFAULT_LINE_HEIGHT));
+  localStorage.setItem(TRACKING_KEY, String(DEFAULT_TRACKING_EM));
+  localStorage.setItem(WIDTH_KEY, String(DEFAULT_WIDTH_CH));
+
+  applyPalette(defaultPaletteIndex, false);
+  applyContrast(DEFAULT_CONTRAST, false);
+  applyFont(defaultFontIndex, false);
+  applyFontSize(DEFAULT_FONT_SIZE_PX, false);
+  applyLineHeight(DEFAULT_LINE_HEIGHT, false);
+  applyTracking(DEFAULT_TRACKING_EM, false);
+  applyWidth(DEFAULT_WIDTH_CH, false);
+  speechVoicePreference = "";
+  settingsSpeechVoice.value = "";
+  applySpeechBounds(
+    DEFAULT_SPEECH_MIN_LENGTH,
+    DEFAULT_SPEECH_MAX_LENGTH
+  );
+  applySpeechPosition(DEFAULT_SPEECH_POSITION_PERCENT, Boolean(speechActiveJob));
+  saveCurrentReadingSettings();
+  showStatus("ALL SETTINGS RESET · BOOKS AND POSITIONS KEPT", 1800);
 };
 
 applyPalette(paletteIndex, false);
@@ -1063,6 +1127,10 @@ const applySpeechBounds = (nextMinimum, nextMaximum, changed = "", announce = fa
   settingsSpeechMax.value = String(maximum);
   settingsSpeechMinValue.textContent = `${minimum} chars`;
   settingsSpeechMaxValue.textContent = `${maximum} chars`;
+  settingsSpeechMinDown.disabled = minimum <= MIN_SPEECH_MIN_LENGTH;
+  settingsSpeechMinUp.disabled = minimum >= MAX_SPEECH_MIN_LENGTH;
+  settingsSpeechMaxDown.disabled = maximum <= MIN_SPEECH_MAX_LENGTH;
+  settingsSpeechMaxUp.disabled = maximum >= MAX_SPEECH_MAX_LENGTH;
 };
 
 applySpeechBounds(speechMinimumLength, speechMaximumLength);
@@ -1075,6 +1143,12 @@ const applySpeechPosition = (nextPosition, followCurrent = false) => {
   localStorage.setItem(SPEECH_POSITION_KEY, String(speechPositionPercent));
   settingsSpeechPosition.value = String(speechPositionPercent);
   settingsSpeechPositionValue.textContent = `${speechPositionPercent}%`;
+  settingsSpeechPositionDown.disabled = (
+    speechPositionPercent <= MIN_SPEECH_POSITION_PERCENT
+  );
+  settingsSpeechPositionUp.disabled = (
+    speechPositionPercent >= MAX_SPEECH_POSITION_PERCENT
+  );
   if (followCurrent && speechActiveJob) positionSpeechMarker(true);
 };
 
@@ -2073,6 +2147,44 @@ settingsSpeechMax.addEventListener("change", (event) => {
 settingsSpeechPosition.addEventListener("input", (event) => {
   applySpeechPosition(Number(event.target.value), true);
 });
+settingsSpeechMinDown.addEventListener("click", () => {
+  applySpeechBounds(
+    speechMinimumLength - 50,
+    speechMaximumLength,
+    "minimum",
+    true
+  );
+});
+settingsSpeechMinUp.addEventListener("click", () => {
+  applySpeechBounds(
+    speechMinimumLength + 50,
+    speechMaximumLength,
+    "minimum",
+    true
+  );
+});
+settingsSpeechMaxDown.addEventListener("click", () => {
+  applySpeechBounds(
+    speechMinimumLength,
+    speechMaximumLength - 50,
+    "maximum",
+    true
+  );
+});
+settingsSpeechMaxUp.addEventListener("click", () => {
+  applySpeechBounds(
+    speechMinimumLength,
+    speechMaximumLength + 50,
+    "maximum",
+    true
+  );
+});
+settingsSpeechPositionDown.addEventListener("click", () => {
+  applySpeechPosition(speechPositionPercent - 1, true);
+});
+settingsSpeechPositionUp.addEventListener("click", () => {
+  applySpeechPosition(speechPositionPercent + 1, true);
+});
 
 startPaletteNext.addEventListener("click", () => applyPalette(paletteIndex + 1));
 startFontNext.addEventListener("click", () => applyFont(fontIndex + 1));
@@ -2089,6 +2201,10 @@ startContrast.addEventListener("input", (event) => handleContrastInput(event));
 settingsContrast.addEventListener("input", (event) => handleContrastInput(event));
 startContrast.addEventListener("change", (event) => handleContrastInput(event, true));
 settingsContrast.addEventListener("change", (event) => handleContrastInput(event, true));
+startContrastDown.addEventListener("click", () => applyContrast(contrast - 1));
+settingsContrastDown.addEventListener("click", () => applyContrast(contrast - 1));
+startContrastUp.addEventListener("click", () => applyContrast(contrast + 1));
+settingsContrastUp.addEventListener("click", () => applyContrast(contrast + 1));
 startFontSelect.addEventListener("change", (event) => {
   applyFont(FONTS.findIndex((font) => font.id === event.target.value));
 });
@@ -2123,6 +2239,18 @@ startLineHeight.addEventListener("input", (event) => handleLineHeightInput(event
 settingsLineHeight.addEventListener("input", (event) => handleLineHeightInput(event));
 startLineHeight.addEventListener("change", (event) => handleLineHeightInput(event, true));
 settingsLineHeight.addEventListener("change", (event) => handleLineHeightInput(event, true));
+startLineHeightDown.addEventListener("click", () => {
+  applyLineHeight(lineHeight - LINE_HEIGHT_STEP);
+});
+settingsLineHeightDown.addEventListener("click", () => {
+  applyLineHeight(lineHeight - LINE_HEIGHT_STEP);
+});
+startLineHeightUp.addEventListener("click", () => {
+  applyLineHeight(lineHeight + LINE_HEIGHT_STEP);
+});
+settingsLineHeightUp.addEventListener("click", () => {
+  applyLineHeight(lineHeight + LINE_HEIGHT_STEP);
+});
 
 startTrackingDown.addEventListener("click", () => {
   applyTracking(trackingEm - TRACKING_STEP_EM);
@@ -2146,6 +2274,10 @@ startWidth.addEventListener("input", (event) => handleWidthInput(event));
 settingsWidth.addEventListener("input", (event) => handleWidthInput(event));
 startWidth.addEventListener("change", (event) => handleWidthInput(event, true));
 settingsWidth.addEventListener("change", (event) => handleWidthInput(event, true));
+startWidthDown.addEventListener("click", () => applyWidth(widthCh - 2));
+settingsWidthDown.addEventListener("click", () => applyWidth(widthCh - 2));
+startWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
+settingsWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
 
 settingsToggle.addEventListener("click", () => {
   setSettingsOpen(settingsPanel.hidden);
@@ -2153,6 +2285,8 @@ settingsToggle.addEventListener("click", () => {
 settingsHome.addEventListener("click", returnToHomeScreen);
 settingsPageUp.addEventListener("click", () => scrollOnePage(-1));
 settingsPageDown.addEventListener("click", () => scrollOnePage(1));
+startResetAll.addEventListener("click", resetAllSettings);
+settingsResetAll.addEventListener("click", resetAllSettings);
 
 window.addEventListener("click", (event) => {
   if (!settingsPanel.hidden && !event.target?.closest?.("#settings-menu")) {

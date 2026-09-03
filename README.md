@@ -60,9 +60,12 @@ font size, line height, approximate characters per line, page navigation, a
 `HOME` button back to the recent-books screen, and open/reopen actions.
 A phone-sized or coarse-pointer display makes the hamburger fully visible and
 larger, while the start screen and settings drawer use phone-sized type and
-48-pixel-or-larger touch targets. Font size also has dedicated minus/plus buttons, and all
-sliders use full-width touch targets so they remain adjustable inside the
+48-pixel-or-larger touch targets. Every slider has equal-size minus/plus buttons
+and a full-width touch target, so all settings remain adjustable inside the
 scrolling mobile drawer.
+A `RESET ALL SETTINGS` action appears at the bottom of both the opening screen
+and reader menu. It restores every global and per-book preference to its first-run
+default while preserving cached EPUBs, recent-book history, and reading positions.
 A small bottom-right stack shows playback controls while speech is active,
 followed by reading percentage, chunk progress, and the active voice name.
 

@@ -465,6 +465,11 @@ body.is-dragging #drop-zone::before {
   grid-column: 1 / -1;
 }
 
+.start-wide {
+  grid-column: 1 / -1;
+  text-align: center !important;
+}
+
 .start-range > span {
   display: flex;
   justify-content: space-between;
@@ -472,12 +477,23 @@ body.is-dragging #drop-zone::before {
 }
 
 .range-stepper {
+  --range-button-size: 44px;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-columns: var(--range-button-size) minmax(0, 1fr) var(--range-button-size);
   align-items: center;
   gap: 0.45rem;
   width: 100%;
   min-width: 0;
+}
+
+.range-stepper > button {
+  display: grid;
+  place-items: center;
+  width: var(--range-button-size);
+  min-width: var(--range-button-size);
+  height: var(--range-button-size);
+  min-height: var(--range-button-size);
+  padding: 0;
 }
 
 .start-range input[type="range"],
@@ -491,11 +507,6 @@ body.is-dragging #drop-zone::before {
 }
 
 #start-hotkeys .range-stepper button {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
   border: 1px solid var(--display-line);
   border-radius: 0.35rem;
   color: var(--display-text);
@@ -529,6 +540,10 @@ body.is-dragging #drop-zone::before {
 }
 
 @media (max-width: 620px) {
+  .range-stepper {
+    --range-button-size: 48px;
+  }
+
   #drop-zone {
     padding: 3.5rem 2.5rem;
   }
