@@ -482,10 +482,10 @@ vm.runInContext(rendererSource, context, {
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36-mobile6.css"), "utf8");
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36-mobile7.css"), "utf8");
 const fontsDirectory = path.join(__dirname, "..", "vendor", "fonts");
 const fontsSource = fs.readFileSync(path.join(fontsDirectory, "reader-fonts.css"), "utf8");
-assert.match(indexSource, /styles-v36-mobile6\.css/);
+assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /renderer-v36\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
@@ -533,7 +533,7 @@ for (const range of [
 }
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
-assert.match(indexSource, /styles-v36-mobile6\.css/);
+assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /renderer-v36\.js\?v=20260903-recent6/);
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 6);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
@@ -605,7 +605,8 @@ assert.match(stylesSource, /safe-area-inset-bottom/);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*height:\s*100dvh/);
 assert.match(stylesSource, /touch-action:\s*none/);
 assert.match(stylesSource, /\(pointer:\s*coarse\)/);
-assert.match(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*52px[^}]*opacity:\s*1/s);
+assert.match(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*44px[^}]*height:\s*44px[^}]*opacity:\s*0\.18/s);
+assert.doesNotMatch(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*52px/s);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#start-hotkeys[^{]*\{[^}]*font-size:\s*clamp\(1rem/s);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#settings-panel[^{]*\{[^}]*width:\s*min\(96vw, 28rem\)[^}]*font-size:\s*1rem/s);
 assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*min-height:\s*48px/s);

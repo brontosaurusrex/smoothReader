@@ -1099,22 +1099,6 @@ body.is-right-dragging * {
 }
 
 @media (max-width: 620px), (pointer: coarse) and (hover: none) {
-  #settings-toggle {
-    width: 52px;
-    height: 52px;
-    border-color: var(--display-line);
-    color: var(--display-text);
-    background: var(--display-panel);
-    box-shadow: 0 0.3rem 1rem rgb(0 0 0 / 28%);
-    opacity: 1;
-  }
-
-  #settings-toggle > span {
-    height: 3px;
-  }
-}
-
-@media (max-width: 620px), (pointer: coarse) and (hover: none) {
   #viewer {
     --reader-gutter: clamp(0.9rem, 4vw, 1.5rem);
     font-size: clamp(14px, calc(var(--reader-font-size) * 0.67), 54px);

@@ -59,8 +59,8 @@ While reading, use the faint hamburger button in the top-right corner to open
 the mouse/touch settings panel. It provides palette, contrast, and font selectors, letter spacing,
 font size, line height, approximate characters per line, page navigation, a
 `HOME` button back to the recent-books screen, and open/reopen actions.
-A phone-sized or coarse-pointer display makes the hamburger fully visible and
-larger, while the start screen and settings drawer use phone-sized type and
+A phone-sized or coarse-pointer display keeps the same restrained 44-pixel
+hamburger used on desktop, while the start screen and settings drawer use phone-sized type and
 48-pixel-or-larger touch targets. Every slider has equal-size minus/plus buttons
 and a full-width touch target, so all settings remain adjustable inside the
 scrolling mobile drawer.
@@ -247,7 +247,7 @@ Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
 The app files carry versioned names (`renderer-v36.js` and
-`styles-v36-mobile6.css`) so a
+`styles-v36-mobile7.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 The local bridge also serves the HTML, JavaScript, and CSS with `no-store` while
 retaining long-lived caching for generated Opus or compatibility WAV audio.
