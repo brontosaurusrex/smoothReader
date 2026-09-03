@@ -375,7 +375,11 @@ body.is-dragging #drop-zone::before {
 
 #recent-book-list .recent-book {
   overflow: hidden;
-  padding: 0.28rem 0.4rem;
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.72rem;
+  padding: 0.38rem 0.4rem;
   border: 0;
   color: var(--display-muted);
   background: transparent;
@@ -386,6 +390,28 @@ body.is-dragging #drop-zone::before {
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#recent-book-list .recent-book::before {
+  content: "EPUB";
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  aspect-ratio: 2 / 3;
+  border: 1px solid var(--display-line);
+  border-radius: 0.2rem;
+  color: var(--display-muted);
+  background: var(--display-panel);
+  background-position: center;
+  background-size: cover;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.48rem;
+  letter-spacing: 0.08em;
+}
+
+#recent-book-list .recent-book.has-cover::before {
+  content: "";
+  background-image: var(--recent-book-cover);
 }
 
 #recent-book-list .recent-book:is(:hover, :focus-visible) {
@@ -859,7 +885,8 @@ body.is-right-dragging * {
 }
 
 #speech-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 0.38rem;
   margin-bottom: 0.22rem;
   pointer-events: auto;
@@ -956,6 +983,10 @@ body.is-right-dragging * {
     padding: 0.65rem;
     font-size: 1.05rem;
     line-height: 1.4;
+  }
+
+  #recent-book-list .recent-book::before {
+    width: 3.25rem;
   }
 
   #start-hotkeys {
@@ -1071,9 +1102,9 @@ body.is-right-dragging * {
   #settings-toggle {
     width: 52px;
     height: 52px;
-    border-color: var(--display-heading);
-    color: var(--display-background);
-    background: var(--display-heading);
+    border-color: var(--display-line);
+    color: var(--display-text);
+    background: var(--display-panel);
     box-shadow: 0 0.3rem 1rem rgb(0 0 0 / 28%);
     opacity: 1;
   }

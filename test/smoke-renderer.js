@@ -20,7 +20,11 @@ const makeElement = () => {
     files: null,
     disabled: false,
     className: "",
-    style: {},
+    style: {
+      setProperty(name, value) {
+        this[name] = value;
+      }
+    },
     dataset: {},
     attributes: {},
     children: [],
@@ -176,6 +180,7 @@ const elements = {
   "#speech-controls": makeElement(),
   "#speech-overlay-pause": makeElement(),
   "#speech-overlay-stop": makeElement(),
+  "#speech-overlay-home": makeElement(),
   "#speech-audio": makeElement(),
   "#reading-progress": makeElement(),
   "#speech-marker": makeElement()
@@ -203,6 +208,7 @@ const indexedRecords = new Map([
   ["last-opened", {
     fileName: "previous.epub",
     title: "Previous Book",
+    thumbnail: "data:image/jpeg;base64,VEhVTUI=",
     bytes: new Uint8Array([9, 8, 7]).buffer
   }]
 ]);
@@ -214,6 +220,7 @@ let unloadedSections = 0;
 let anchorRectCalls = 0;
 const selectionRanges = [];
 const createdRanges = [];
+const fetchCalls = [];
 let speechRectLeft = 120;
 let speechBlockLeft = 80;
 const anchorTextNode = {
@@ -400,6 +407,19 @@ const context = vm.createContext({
     scrollY: 0,
     setTimeout,
     clearTimeout,
+    fetch(path) {
+      fetchCalls.push(path);
+      return Promise.resolve({
+        ok: true,
+        json: async () => path === "/api/piper/status"
+          ? {
+            ok: true,
+            available: true,
+            voices: ["voice-one.onnx", "voice-two.onnx"]
+          }
+          : { ok: true }
+      });
+    },
     requestAnimationFrame(callback) {
       return setTimeout(() => callback(Date.now()), 0);
     },
@@ -462,10 +482,10 @@ vm.runInContext(rendererSource, context, {
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36-mobile5.css"), "utf8");
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36-mobile6.css"), "utf8");
 const fontsDirectory = path.join(__dirname, "..", "vendor", "fonts");
 const fontsSource = fs.readFileSync(path.join(fontsDirectory, "reader-fonts.css"), "utf8");
-assert.match(indexSource, /styles-v36-mobile5\.css/);
+assert.match(indexSource, /styles-v36-mobile6\.css/);
 assert.match(indexSource, /renderer-v36\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
@@ -482,6 +502,7 @@ assert.match(indexSource, /id="speech-progress"/);
 assert.match(indexSource, /id="speech-controls"/);
 assert.match(indexSource, /id="speech-overlay-pause"/);
 assert.match(indexSource, /id="speech-overlay-stop"/);
+assert.match(indexSource, /id="speech-overlay-home"/);
 assert.match(indexSource, /id="speech-audio"[^>]*preload="auto"/);
 assert.match(indexSource, /id="settings-home"[^>]*>HOME</);
 assert.doesNotMatch(indexSource, /id="settings-end"/);
@@ -512,8 +533,9 @@ for (const range of [
 }
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
-assert.match(indexSource, /styles-v36-mobile5\.css/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260903-controls2/);
+assert.match(indexSource, /styles-v36-mobile6\.css/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260903-recent6/);
+assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 6);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
 assert.match(rendererSource, /sessionId:\s*speechSessionId/);
@@ -575,6 +597,10 @@ assert.match(stylesSource, /--reader-tracking:\s*0\.02em/);
 assert.match(stylesSource, /#settings-menu[^{]*\{[^}]*right:/s);
 assert.doesNotMatch(stylesSource, /#settings-menu[^{]*\{[^}]*left:\s*0\.8rem/s);
 assert.match(stylesSource, /#speech-controls/);
+assert.match(stylesSource, /#speech-controls[^{]*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*1fr/s);
+assert.match(stylesSource, /#recent-book-list \.recent-book::before[^{]*\{[^}]*content:\s*"EPUB"/s);
+assert.match(rendererSource, /const createCoverThumbnail = async/);
+assert.match(rendererSource, /void probePiperBridge\(\)/);
 assert.match(stylesSource, /safe-area-inset-bottom/);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*height:\s*100dvh/);
 assert.match(stylesSource, /touch-action:\s*none/);
@@ -584,6 +610,8 @@ assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#settings-panel[^{]*\{[^}]*width:\s*min\(96vw, 28rem\)[^}]*font-size:\s*1rem/s);
 assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*min-height:\s*48px/s);
 assert.ok(indexSource.indexOf('id="speech-controls"') < indexSource.indexOf('id="reading-progress"'));
+assert.ok(indexSource.indexOf('id="speech-overlay-pause"') < indexSource.indexOf('id="speech-overlay-stop"'));
+assert.ok(indexSource.indexOf('id="speech-overlay-stop"') < indexSource.indexOf('id="speech-overlay-home"'));
 assert.ok(indexSource.indexOf('id="reading-progress"') < indexSource.indexOf('id="speech-progress"'));
 assert.ok(indexSource.indexOf('id="speech-progress"') < indexSource.indexOf('id="speech-voice"'));
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*var\(--reader-font-size\)/s);
@@ -711,6 +739,9 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
 
 (async () => {
   await wait(20);
+  assert.equal(fetchCalls.filter((path) => path === "/api/piper/status").length, 1);
+  assert.equal(elements["#settings-speech-voice"].children.length, 3);
+  assert.equal(elements["#speech-controls"].hidden, true);
   assert.equal(elements["#recent-books"].hidden, false);
   assert.equal(elements["#recent-book-list"].children.length, 1);
   assert.equal(
@@ -718,6 +749,14 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     "Previous Book — previous.epub"
   );
   assert.equal(elements["#recent-book-list"].children[0].disabled, false);
+  assert.equal(
+    elements["#recent-book-list"].children[0].classList.contains("has-cover"),
+    true
+  );
+  assert.match(
+    elements["#recent-book-list"].children[0].style["--recent-book-cover"],
+    /^url\("data:image\/jpeg/
+  );
   assert.equal(elements["#start-reopen"].disabled, false);
   assert.equal(elements["#start-palette"].children.length, 10);
   assert.equal(elements["#start-font"].children.length, 12);
@@ -763,6 +802,19 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#drop-zone"].hidden, true);
   assert.equal(elements["#settings-menu"].hidden, false);
   assert.equal(elements["#reading-progress"].hidden, false);
+  assert.equal(elements["#speech-controls"].hidden, false);
+  assert.equal(elements["#speech-overlay-pause"].hidden, false);
+  assert.equal(elements["#speech-overlay-stop"].hidden, false);
+  assert.equal(elements["#speech-overlay-home"].hidden, false);
+  assert.equal(elements["#speech-overlay-pause"].disabled, false);
+  assert.equal(elements["#speech-overlay-pause"].textContent, "▶");
+  assert.equal(elements["#speech-overlay-stop"].disabled, true);
+  vm.runInContext("piperAvailable = false; syncSpeechControls();", context);
+  assert.equal(elements["#speech-overlay-pause"].hidden, true);
+  assert.equal(elements["#speech-overlay-stop"].hidden, true);
+  assert.equal(elements["#speech-controls"].hidden, false);
+  assert.equal(elements["#speech-overlay-home"].hidden, false);
+  vm.runInContext("piperAvailable = true; syncSpeechControls();", context);
   assert.equal(elements["#viewer"].children.length, 2);
   assert.deepEqual(renderedSections, [1, 2]);
   assert.equal(unloadedSections, 2);
@@ -1010,6 +1062,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#settings-speech-stop"].listeners.has("click"), true);
   assert.equal(elements["#speech-overlay-pause"].listeners.has("click"), true);
   assert.equal(elements["#speech-overlay-stop"].listeners.has("click"), true);
+  assert.equal(elements["#speech-overlay-home"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-voice"].listeners.has("change"), true);
   for (const button of [
     "#start-contrast-down", "#start-contrast-up",
@@ -1073,7 +1126,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   drop(thirdFile);
   await wait(80);
 
-  assert.equal(elements["#recent-book-list"].children.length, 3);
+  assert.equal(elements["#recent-book-list"].children.length, 4);
   assert.equal(
     elements["#recent-book-list"].children[0].textContent,
     "Test Book — third.epub"
@@ -1084,7 +1137,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   );
   assert.deepEqual(
     JSON.parse(stored.get("smooth-reader:recent-books")).map((book) => book.fileName),
-    ["third.epub", "second.epub", "test.epub"]
+    ["third.epub", "second.epub", "test.epub", "previous.epub"]
   );
 
   elements["#recent-book-list"].children[1].listeners.get("click")();
@@ -1128,7 +1181,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#reader"].hidden, true);
   assert.equal(elements["#settings-menu"].hidden, true);
   assert.equal(elements["#reading-progress"].hidden, true);
-  assert.equal(elements["#recent-book-list"].children.length, 3);
+  assert.equal(elements["#recent-book-list"].children.length, 5);
   assert.equal(context.document.title, "Smooth Reader");
 
   const rememberedLastBook = stored.get("smooth-reader:last-book");

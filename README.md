@@ -48,8 +48,9 @@ normal vertically scrolling page rather than a fixed, vertically centred
 overlay, so its heading and controls remain reachable at high browser zoom.
 Dropping an EPUB anywhere on it still opens the book.
 
-The initial drop screen shows up to three left-aligned recently opened books at
-the same width as the help panel. Each title is
+The initial drop screen shows up to six left-aligned recently opened books at
+the same width as the help panel. Each entry has its EPUB cover thumbnail when
+one is available, or a quiet EPUB placeholder otherwise. Each title is
 clickable and immediately opens its locally cached EPUB at its remembered
 position. Press `R` or click the `R` help row to reopen the newest one. Entries
 whose cached data was cleared remain visible but disabled until dropped again.
@@ -66,7 +67,8 @@ scrolling mobile drawer.
 A `RESET ALL SETTINGS` action appears at the bottom of both the opening screen
 and reader menu. It restores every global and per-book preference to its first-run
 default while preserving cached EPUBs, recent-book history, and reading positions.
-A small bottom-right stack shows playback controls while speech is active,
+A small bottom-right stack always provides a Home shortcut while a book is
+open. When the Piper bridge is available, Play/Pause and Stop appear above Home,
 followed by reading percentage, chunk progress, and the active voice name.
 
 Font, font-size, line-height, letter spacing, text width, and Piper voice are
@@ -188,9 +190,13 @@ position. No mpv process or IPC socket is used. The active voice name includes
 its zero-based internal speaker ID (for example, `model-name/3`) only when the
 ONNX model contains multiple speakers. Single-speaker models show only their
 voice name. A small `current/total` chunk counter appears beneath the bottom-right reading
-percentage, with the longer voice name on the lowest line. Play/pause and stop
-buttons appear above these values while Piper is active. Normal generation and
-playback show no central Piper overlay; actual Piper errors still appear there.
+percentage, with the longer voice name on the lowest line. The browser probes
+the bridge once at startup, populates the voice list, and shows the Play/Pause
+and Stop shortcuts whenever Piper is available. Play starts reading from the
+current view, then changes to Pause/Continue during playback; Stop is disabled
+while idle. A Home shortcut remains below them independently of Piper. Normal
+generation and playback show no central Piper overlay; actual Piper errors still
+appear there.
 
 Each browser tab has a session identifier. Cache hits and audio downloads can
 run concurrently, while uncached Piper jobs use a fair shared queue and one
@@ -213,7 +219,7 @@ loopback server forwarded by WSL.
 The default cache is `~/.cache/smooth-reader-piper` and is pruned least-recently
 used above 1024 MiB. At 48 kbps, Opus uses about 21.6 MB per hour of speech.
 
-Text width is measured in `ch` units and can be set from approximately 40 to 100
+Text width is measured in `ch` units and can be set from approximately 8 to 100
 characters per line. It is an estimate because proportional fonts have letters
 of different widths. The selected width is remembered.
 
@@ -241,7 +247,7 @@ Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
 The app files carry versioned names (`renderer-v36.js` and
-`styles-v36-mobile5.css`) so a
+`styles-v36-mobile6.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 The local bridge also serves the HTML, JavaScript, and CSS with `no-store` while
 retaining long-lived caching for generated Opus or compatibility WAV audio.
@@ -249,7 +255,7 @@ retaining long-lived caching for generated Opus or compatibility WAV audio.
 EPUB.js, JSZip, and every selectable web font are included directly in
 `vendor/`. Smooth Reader makes no external font requests, and the EPUB itself
 never leaves the browser.
-Up to three recently opened EPUBs can be cached in IndexedDB on this browser so
+Up to six recently opened EPUBs can be cached in IndexedDB on this browser so
 their titles can reopen them directly; clearing site data removes those cached
 copies and saved reading positions.
 

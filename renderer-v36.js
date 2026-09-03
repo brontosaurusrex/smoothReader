@@ -91,6 +91,7 @@ const speechProgress = document.querySelector("#speech-progress");
 const speechControls = document.querySelector("#speech-controls");
 const speechOverlayPause = document.querySelector("#speech-overlay-pause");
 const speechOverlayStop = document.querySelector("#speech-overlay-stop");
+const speechOverlayHome = document.querySelector("#speech-overlay-home");
 
 const POSITION_PREFIX = "smooth-reader:position:";
 const BOOK_SETTINGS_PREFIX = "smooth-reader:book-settings:";
@@ -112,7 +113,7 @@ const LAST_BOOK_DB = "smooth-reader-library";
 const LAST_BOOK_STORE = "books";
 const LAST_BOOK_RECORD = "last-opened";
 const RECENT_BOOKS_RECORD = "recent-books";
-const MAX_RECENT_BOOKS = 3;
+const MAX_RECENT_BOOKS = 6;
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
 const RIGHT_DRAG_SPEED = 1.35;
@@ -200,6 +201,7 @@ let speechMarkerFrame = null;
 let speechScrollFrame = null;
 let speechTextMaps = new WeakMap();
 let speechVoicePreference = "";
+let piperAvailable = false;
 let suppressSettingsPersistence = false;
 const chapterLookup = new Map();
 const savedPaletteIndex = PALETTES.findIndex(
@@ -321,6 +323,10 @@ const renderRecentBooks = () => {
     button.textContent = record.title && record.title !== record.fileName
       ? `${record.title} — ${record.fileName}`
       : record.fileName;
+    if (cached?.thumbnail) {
+      button.classList.add("has-cover");
+      button.style.setProperty("--recent-book-cover", `url("${cached.thumbnail}")`);
+    }
     button.title = cached?.bytes
       ? `Open ${record.title || record.fileName}`
       : "Cached copy unavailable; drop this EPUB again";
@@ -399,6 +405,66 @@ const readCachedBooks = async () => {
   return legacy?.fileName ? [legacy] : [];
 };
 
+const createCoverThumbnail = async (bookInstance) => {
+  if (
+    typeof bookInstance?.coverUrl !== "function" ||
+    typeof window.fetch !== "function" ||
+    typeof window.createImageBitmap !== "function"
+  ) return "";
+
+  try {
+    const coverUrl = await bookInstance.coverUrl();
+    if (!coverUrl) return "";
+    const response = await window.fetch(coverUrl);
+    if (!response.ok) return "";
+    const blob = await response.blob();
+    if (!blob?.type?.startsWith("image/")) return "";
+
+    const bitmap = await window.createImageBitmap(blob);
+    const scale = Math.min(1, 160 / bitmap.width, 240 / bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvasContext = canvas.getContext?.("2d");
+    if (!canvasContext) {
+      bitmap.close?.();
+      return "";
+    }
+    canvasContext.fillStyle = "#ffffff";
+    canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+    canvasContext.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    return canvas.toDataURL?.("image/jpeg", 0.78) || "";
+  } catch (error) {
+    console.warn("Could not create an EPUB cover thumbnail.", error);
+    return "";
+  }
+};
+
+const backfillRecentThumbnails = async () => {
+  let changed = false;
+  for (const cached of cachedRecentBooks) {
+    if (cached.thumbnail || !cached.bytes) continue;
+    let coverBook = null;
+    try {
+      coverBook = ePub(cached.bytes);
+      await coverBook.opened;
+      await coverBook.ready;
+      const thumbnail = await createCoverThumbnail(coverBook);
+      if (thumbnail) {
+        cached.thumbnail = thumbnail;
+        changed = true;
+        renderRecentBooks();
+      }
+    } catch (error) {
+      console.warn("Could not inspect a cached EPUB cover.", error);
+    } finally {
+      coverBook?.destroy?.();
+    }
+  }
+  if (changed) await writeCachedBooks(cachedRecentBooks);
+};
+
 const initializeRecentBooks = async () => {
   recentBookInfo = loadRecentBookInfo();
   renderRecentBooks();
@@ -410,6 +476,7 @@ const initializeRecentBooks = async () => {
       cachedRecentBooks.find((cached) => booksMatch(recentBookInfo[0], cached))?.bytes
     );
     renderRecentBooks();
+    void backfillRecentThumbnails();
   } catch (error) {
     console.warn("Could not inspect the cached EPUBs.", error);
   }
@@ -788,6 +855,7 @@ const setReadingMode = (isReading) => {
   settingsMenu.hidden = !isReading;
   readingProgress.hidden = !isReading;
   if (!isReading) setSettingsOpen(false);
+  syncSpeechControls();
 };
 
 const updateReadingProgress = () => {
@@ -1569,18 +1637,38 @@ const clearSpeechIndicators = () => {
 };
 
 const syncSpeechControls = () => {
+  const bookCanSpeak = !reader.hidden && viewer.children.length > 0 && !isBookLoading;
   const canPause = speechIsActive && Boolean(speechAudio.src);
   settingsSpeechStart.disabled = speechIsActive;
   settingsSpeechPause.disabled = !canPause;
   settingsSpeechPause.textContent = speechIsPaused ? "CONTINUE" : "PAUSE";
   settingsSpeechStop.disabled = !speechIsActive;
-  speechControls.hidden = !speechIsActive;
-  speechOverlayPause.disabled = !canPause;
-  speechOverlayPause.textContent = speechIsPaused ? "▶" : "Ⅱ";
+  speechControls.hidden = reader.hidden;
+  speechOverlayPause.hidden = !piperAvailable;
+  speechOverlayStop.hidden = !piperAvailable;
+  speechOverlayPause.disabled = speechIsActive ? !canPause : !bookCanSpeak;
+  speechOverlayStop.disabled = !speechIsActive;
+  speechOverlayHome.disabled = isBookLoading;
+  speechOverlayPause.textContent = speechIsActive && !speechIsPaused ? "Ⅱ" : "▶";
+  const primaryLabel = speechIsActive
+    ? (speechIsPaused ? "Continue speech" : "Pause speech")
+    : "Read aloud from here";
   speechOverlayPause.setAttribute(
-    "aria-label", speechIsPaused ? "Continue speech" : "Pause speech"
+    "aria-label", primaryLabel
   );
-  speechOverlayPause.title = speechIsPaused ? "Continue speech" : "Pause speech";
+  speechOverlayPause.title = primaryLabel;
+};
+
+const probePiperBridge = async () => {
+  try {
+    await inspectPiperBridge();
+    piperAvailable = true;
+  } catch {
+    piperAvailable = false;
+    settingsSpeechStatus.textContent = "Run piper_bridge.py to enable local speech.";
+  } finally {
+    syncSpeechControls();
+  }
 };
 
 const releaseSpeechAudio = () => {
@@ -1697,7 +1785,11 @@ const startSpeech = async () => {
   settingsSpeechStatus.textContent = "Connecting to local Piper…";
 
   try {
-    await inspectPiperBridge();
+    if (!piperAvailable) {
+      await inspectPiperBridge();
+      piperAvailable = true;
+      syncSpeechControls();
+    }
     if (generation !== speechGeneration) return;
 
     const currentSelection = window.getSelection?.();
@@ -1825,6 +1917,7 @@ const openBook = async (file) => {
     await book.opened;
     await book.ready;
     if (generation !== loadGeneration) return;
+    const coverThumbnailPromise = createCoverThumbnail(book);
 
     const sections = [];
     book.spine.each((section) => {
@@ -1845,7 +1938,10 @@ const openBook = async (file) => {
       2800
     );
 
-    const metadata = await book.loaded.metadata;
+    const [metadata, thumbnail] = await Promise.all([
+      book.loaded.metadata,
+      coverThumbnailPromise
+    ]);
     const lastBookInfo = {
       hash,
       fileName: file.name,
@@ -1860,7 +1956,14 @@ const openBook = async (file) => {
     localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
 
     try {
-      const cachedBook = { ...lastBookInfo, bytes };
+      const previousCachedBook = cachedRecentBooks.find((record) =>
+        booksMatch(lastBookInfo, record)
+      );
+      const cachedBook = {
+        ...lastBookInfo,
+        bytes,
+        thumbnail: thumbnail || previousCachedBook?.thumbnail || ""
+      };
       cachedRecentBooks = [
         cachedBook,
         ...cachedRecentBooks.filter((record) => !booksMatch(cachedBook, record))
@@ -1887,6 +1990,7 @@ const openBook = async (file) => {
       isBookLoading = false;
       renderRecentBooks();
       setReopenAvailability(lastBookCanReopen);
+      syncSpeechControls();
       schedulePositionSave();
     }
   }
@@ -2125,8 +2229,12 @@ settingsReopen.addEventListener("click", reopenLastBook);
 settingsSpeechStart.addEventListener("click", startSpeech);
 settingsSpeechPause.addEventListener("click", toggleSpeechPause);
 settingsSpeechStop.addEventListener("click", stopSpeech);
-speechOverlayPause.addEventListener("click", toggleSpeechPause);
+speechOverlayPause.addEventListener("click", () => {
+  if (speechIsActive) void toggleSpeechPause();
+  else void startSpeech();
+});
 speechOverlayStop.addEventListener("click", stopSpeech);
+speechOverlayHome.addEventListener("click", returnToHomeScreen);
 settingsSpeechVoice.addEventListener("change", (event) => {
   speechVoicePreference = event.target.value || "";
   saveCurrentReadingSettings();
@@ -2361,3 +2469,4 @@ if (typeof window.ResizeObserver === "function") {
 window.addEventListener("blur", () => stopRightDrag());
 window.addEventListener("beforeunload", savePositionNow);
 syncSpeechControls();
+void probePiperBridge();
