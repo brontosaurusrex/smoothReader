@@ -59,7 +59,8 @@ the mouse/touch settings panel. It provides palette and font selectors, letter s
 font size, line height, approximate characters per line, page navigation, a
 `HOME` button back to the recent-books screen, and open/reopen actions.
 A phone-sized or coarse-pointer display makes the hamburger fully visible and
-slightly larger. Font size also has dedicated minus/plus buttons, and all
+larger, while the start screen and settings drawer use phone-sized type and
+48-pixel-or-larger touch targets. Font size also has dedicated minus/plus buttons, and all
 sliders use full-width touch targets so they remain adjustable inside the
 scrolling mobile drawer.
 A small bottom-right stack shows playback controls while speech is active,

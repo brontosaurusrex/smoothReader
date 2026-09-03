@@ -105,6 +105,8 @@ const elements = {
   "#start-font": makeElement(),
   "#start-font-size": makeElement(),
   "#start-font-size-value": makeElement(),
+  "#start-font-size-down": makeElement(),
+  "#start-font-size-up": makeElement(),
   "#start-line-height": makeElement(),
   "#start-line-height-value": makeElement(),
   "#start-tracking-down": makeElement(),
@@ -119,6 +121,8 @@ const elements = {
   "#settings-font": makeElement(),
   "#settings-font-size": makeElement(),
   "#settings-font-size-value": makeElement(),
+  "#settings-font-size-down": makeElement(),
+  "#settings-font-size-up": makeElement(),
   "#settings-line-height": makeElement(),
   "#settings-line-height-value": makeElement(),
   "#settings-tracking-value": makeElement(),
@@ -456,6 +460,9 @@ assert.match(indexSource, /id="settings-speech-pause"/);
 assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(indexSource, /id="settings-toggle"[\s\S]*aria-label="Open reader settings"/);
 assert.match(indexSource, /id="settings-font-size"[^>]*max="80"[^>]*step="2"/);
+assert.match(indexSource, /id="settings-font-size-down"/);
+assert.match(indexSource, /id="settings-font-size-up"/);
+assert.match(indexSource, /styles-v36\.css\?v=20260903-mobile2/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
 assert.match(rendererSource, /sessionId:\s*speechSessionId/);
 assert.match(rendererSource, /audioFormat:\s*speechAudioFormat/);
@@ -503,6 +510,12 @@ assert.doesNotMatch(stylesSource, /#settings-menu[^{]*\{[^}]*left:\s*0\.8rem/s);
 assert.match(stylesSource, /#speech-controls/);
 assert.match(stylesSource, /safe-area-inset-bottom/);
 assert.match(stylesSource, /@media \(max-width: 620px\)[\s\S]*height:\s*100dvh/);
+assert.match(stylesSource, /touch-action:\s*none/);
+assert.match(stylesSource, /\(pointer:\s*coarse\)/);
+assert.match(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*52px[^}]*opacity:\s*1/s);
+assert.match(stylesSource, /@media \(max-width: 620px\)[\s\S]*#start-hotkeys[^{]*\{[^}]*font-size:\s*clamp\(1rem/s);
+assert.match(stylesSource, /@media \(max-width: 620px\)[\s\S]*#settings-panel[^{]*\{[^}]*width:\s*min\(96vw, 28rem\)[^}]*font-size:\s*1rem/s);
+assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*min-height:\s*48px/s);
 assert.ok(indexSource.indexOf('id="speech-controls"') < indexSource.indexOf('id="reading-progress"'));
 assert.ok(indexSource.indexOf('id="reading-progress"') < indexSource.indexOf('id="speech-progress"'));
 assert.ok(indexSource.indexOf('id="speech-progress"') < indexSource.indexOf('id="speech-voice"'));
@@ -863,6 +876,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.style["--reader-line-height"], "1.28");
 
   elements["#settings-font-size"].listeners.get("input")({ target: { value: "24" } });
+  assert.equal(context.document.documentElement.style["--reader-font-size"], "24px");
+  elements["#settings-font-size-down"].listeners.get("click")();
+  assert.equal(context.document.documentElement.style["--reader-font-size"], "22px");
+  elements["#settings-font-size-up"].listeners.get("click")();
   assert.equal(context.document.documentElement.style["--reader-font-size"], "24px");
   elements["#settings-line-height"].listeners.get("input")({ target: { value: "1.88" } });
   assert.equal(context.document.documentElement.style["--reader-line-height"], "1.88");
