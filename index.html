@@ -4,15 +4,12 @@
     <meta charset="UTF-8">
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' blob: data:; font-src 'self' blob: data: https://fonts.gstatic.com"
+      content="default-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob: data:"
     >
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smooth Reader</title>
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;1,400;1,700&amp;family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&amp;family=Crimson+Pro:ital,wght@0,400;0,700;1,400;1,700&amp;family=EB+Garamond:ital,wght@0,400;0,700;1,400;1,700&amp;family=Literata:ital,wght@0,400;0,700;1,400;1,700&amp;family=Lora:ital,wght@0,400;0,700;1,400;1,700&amp;family=Merriweather:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,400;0,700;1,400;1,700&amp;family=Source+Serif+4:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap"
-    >
-    <link rel="stylesheet" href="styles-v36.css?v=20260903-mobile2">
+    <link rel="stylesheet" href="vendor/fonts/reader-fonts.css?v=20260903-fonts1">
+    <link rel="stylesheet" href="styles-v36.css?v=20260903-contrast2">
   </head>
   <body>
     <main id="app">
@@ -34,6 +31,10 @@
           <span><kbd>PgUp</kbd> / <kbd>PgDn</kbd> move one screen</span>
           <button id="start-palette-next" type="button"><kbd>P</kbd> / <kbd>Shift+P</kbd> cycle palette</button>
           <label class="start-select"><span><kbd>Alt+1…9/0</kbd> palette</span><select id="start-palette" aria-label="Color palette"></select></label>
+          <label class="start-range start-contrast">
+            <span>Contrast <output id="start-contrast-value"></output></span>
+            <input id="start-contrast" type="range" min="-30" max="30" step="1" aria-label="Palette contrast">
+          </label>
           <button id="start-font-next" type="button"><kbd>F</kbd> / <kbd>Shift+F</kbd> cycle font</button>
           <label class="start-select"><span><kbd>Alt+Shift+1…9/0</kbd> font · <kbd>Alt+Shift+M</kbd> mono</span><select id="start-font" aria-label="Reading font"></select></label>
           <div class="start-range">
@@ -84,6 +85,7 @@
         <div id="settings-panel" hidden>
           <strong>READER</strong>
           <label>Palette<select id="settings-palette"></select></label>
+          <label>Contrast <output id="settings-contrast-value"></output><input id="settings-contrast" type="range" min="-30" max="30" step="1" aria-label="Palette contrast"></label>
           <label>Font<select id="settings-font"></select></label>
           <div class="settings-control">
             <span class="settings-label"><label for="settings-font-size">Font size</label><output id="settings-font-size-value"></output></span>
@@ -145,6 +147,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260903-mobile1"></script>
+    <script src="renderer-v36.js?v=20260903-contrast1"></script>
   </body>
 </html>

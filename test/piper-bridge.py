@@ -221,6 +221,15 @@ with tempfile.TemporaryDirectory() as temporary_directory:
             assert response.status == 200
             assert response.headers["Cache-Control"] == "no-store"
             assert b"styles-v36.css" in response.read()
+        font_request = urllib.request.Request(
+            base_url + "/vendor/fonts/EnvyCodeRNerdFont-Regular-v3.5.1.ttf"
+        )
+        with urllib.request.urlopen(font_request, timeout=2) as response:
+            assert response.status == 200
+            assert response.headers["Cache-Control"] == (
+                "public, max-age=31536000, immutable"
+            )
+            assert response.read().startswith(b"\x00\x01\x00\x00")
     finally:
         server.shutdown()
         server.server_close()

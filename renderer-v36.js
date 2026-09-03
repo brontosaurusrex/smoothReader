@@ -13,6 +13,8 @@ const startOpen = document.querySelector("#start-open");
 const startReopen = document.querySelector("#start-reopen");
 const startPaletteNext = document.querySelector("#start-palette-next");
 const startPaletteSelect = document.querySelector("#start-palette");
+const startContrast = document.querySelector("#start-contrast");
+const startContrastValue = document.querySelector("#start-contrast-value");
 const startFontNext = document.querySelector("#start-font-next");
 const startFontSelect = document.querySelector("#start-font");
 const startFontSize = document.querySelector("#start-font-size");
@@ -30,6 +32,8 @@ const settingsMenu = document.querySelector("#settings-menu");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsPaletteSelect = document.querySelector("#settings-palette");
+const settingsContrast = document.querySelector("#settings-contrast");
+const settingsContrastValue = document.querySelector("#settings-contrast-value");
 const settingsFontSelect = document.querySelector("#settings-font");
 const settingsFontSize = document.querySelector("#settings-font-size");
 const settingsFontSizeValue = document.querySelector("#settings-font-size-value");
@@ -71,6 +75,7 @@ const speechOverlayStop = document.querySelector("#speech-overlay-stop");
 const POSITION_PREFIX = "smooth-reader:position:";
 const BOOK_SETTINGS_PREFIX = "smooth-reader:book-settings:";
 const PALETTE_KEY = "smooth-reader:palette";
+const CONTRAST_KEY = "smooth-reader:contrast";
 const FONT_KEY = "smooth-reader:font";
 const FONT_SIZE_KEY = "smooth-reader:font-size";
 const LINE_HEIGHT_KEY = "smooth-reader:line-height";
@@ -92,6 +97,9 @@ const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
 const RIGHT_DRAG_SPEED = 1.35;
 const DEFAULT_TRACKING_EM = 0.02;
+const DEFAULT_CONTRAST = 0;
+const MIN_CONTRAST = -30;
+const MAX_CONTRAST = 30;
 const TRACKING_STEP_EM = 0.01;
 const MIN_TRACKING_EM = -0.03;
 const MAX_TRACKING_EM = 0.12;
@@ -140,6 +148,7 @@ const FONTS = [
   { id: "alegreya", name: "ALEGREYA" },
   { id: "eb-garamond", name: "EB GARAMOND" },
   { id: "merriweather", name: "MERRIWEATHER" },
+  { id: "envy-code-r-nerd", name: "ENVY CODE R NERD" },
   { id: "system-mono", name: "SYSTEM MONO" }
 ];
 
@@ -179,6 +188,10 @@ const savedPaletteIndex = PALETTES.findIndex(
 let paletteIndex = savedPaletteIndex >= 0
   ? savedPaletteIndex
   : PALETTES.findIndex((palette) => palette.id === "nord");
+const savedContrast = Number.parseInt(localStorage.getItem(CONTRAST_KEY), 10);
+let contrast = Number.isFinite(savedContrast)
+  ? Math.max(MIN_CONTRAST, Math.min(MAX_CONTRAST, savedContrast))
+  : DEFAULT_CONTRAST;
 const savedFontIndex = FONTS.findIndex(
   (font) => font.id === localStorage.getItem(FONT_KEY)
 );
@@ -546,9 +559,14 @@ const syncSettingsControls = () => {
   const widthText = `≈ ${widthCh} chars`;
   const fontSizeText = `${fontSizePx}px`;
   const lineHeightText = lineHeight.toFixed(2);
+  const contrastText = `${contrast > 0 ? "+" : ""}${contrast}%`;
 
   startPaletteSelect.value = paletteId;
   settingsPaletteSelect.value = paletteId;
+  startContrast.value = String(contrast);
+  settingsContrast.value = String(contrast);
+  startContrastValue.textContent = contrastText;
+  settingsContrastValue.textContent = contrastText;
   startFontSelect.value = fontId;
   settingsFontSelect.value = fontId;
   settingsTrackingValue.textContent = trackingText;
@@ -579,6 +597,26 @@ const applyPalette = (nextIndex, announce = true) => {
 
   if (announce) {
     showStatus(`PALETTE ${paletteIndex + 1}/${PALETTES.length} · ${palette.name}`, 900);
+  }
+};
+
+const applyContrast = (nextContrast, announce = true) => {
+  contrast = Math.round(
+    Math.max(MIN_CONTRAST, Math.min(MAX_CONTRAST, nextContrast))
+  );
+  document.documentElement.style.setProperty(
+    "--contrast-strength",
+    `${Math.max(0, contrast)}%`
+  );
+  document.documentElement.style.setProperty(
+    "--contrast-soften",
+    `${Math.max(0, -contrast)}%`
+  );
+  localStorage.setItem(CONTRAST_KEY, String(contrast));
+  syncSettingsControls();
+
+  if (announce) {
+    showStatus(`CONTRAST · ${contrast > 0 ? "+" : ""}${contrast}%`, 900);
   }
 };
 
@@ -660,6 +698,7 @@ const applyLineHeight = (nextLineHeight, announce = true) => {
 };
 
 applyPalette(paletteIndex, false);
+applyContrast(contrast, false);
 applyFont(fontIndex, false);
 applyTracking(trackingEm, false);
 applyWidth(widthCh, false);
@@ -2043,6 +2082,13 @@ startPaletteSelect.addEventListener("change", (event) => {
 settingsPaletteSelect.addEventListener("change", (event) => {
   applyPalette(PALETTES.findIndex((palette) => palette.id === event.target.value));
 });
+const handleContrastInput = (event, announce = false) => {
+  applyContrast(Number(event.target.value), announce);
+};
+startContrast.addEventListener("input", (event) => handleContrastInput(event));
+settingsContrast.addEventListener("input", (event) => handleContrastInput(event));
+startContrast.addEventListener("change", (event) => handleContrastInput(event, true));
+settingsContrast.addEventListener("change", (event) => handleContrastInput(event, true));
 startFontSelect.addEventListener("change", (event) => {
   applyFont(FONTS.findIndex((font) => font.id === event.target.value));
 });

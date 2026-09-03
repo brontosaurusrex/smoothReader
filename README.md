@@ -40,7 +40,7 @@ password protection, and Piper voices, see
 
 Click the drop surface to choose a file.
 All keyboard shortcuts and mouse scrolling controls are listed unobtrusively on
-that initial screen. Open, reopen, palette, font, letter-spacing, and text-width
+that initial screen. Open, reopen, palette, contrast, font, letter-spacing, and text-width
 controls on that screen are also clickable.
 The opening screen uses the selected book font and scales gently with the book
 font-size setting, with readable minimum and maximum interface sizes. It is a
@@ -55,7 +55,7 @@ position. Press `R` or click the `R` help row to reopen the newest one. Entries
 whose cached data was cleared remain visible but disabled until dropped again.
 
 While reading, use the faint hamburger button in the top-right corner to open
-the mouse/touch settings panel. It provides palette and font selectors, letter spacing,
+the mouse/touch settings panel. It provides palette, contrast, and font selectors, letter spacing,
 font size, line height, approximate characters per line, page navigation, a
 `HOME` button back to the recent-books screen, and open/reopen actions.
 A phone-sized or coarse-pointer display makes the hamburger fully visible and
@@ -67,8 +67,9 @@ A small bottom-right stack shows playback controls while speech is active,
 followed by reading percentage, chunk progress, and the active voice name.
 
 Font, font-size, line-height, letter spacing, text width, and Piper voice are
-remembered per book. Palette, speech chunk limits, and spoken-line position are
-global. A newly opened book inherits the current reading settings. Changes preserve an
+remembered per book. Palette, contrast, speech chunk limits, and spoken-line position are
+global. Contrast ranges from `-30%` (softer) through `0%` (the palette's exact
+colors) to `+30%` (stronger). A newly opened book inherits the current reading settings. Changes preserve an
 exact text anchor near the upper-middle of the viewport. The document can
 reflow, but the sentence you were reading should remain in the same place.
 Repeated `R` presses and recent-book clicks are locked while an EPUB is loading,
@@ -102,10 +103,14 @@ background and muted teal-green accents. The palette choice is remembered and
 is available from both the keyboard and mouse settings.
 
 Font order: System Sans, Noto Serif, Literata, Source Serif 4, Lora, Atkinson
-Hyperlegible, Crimson Pro, Alegreya, EB Garamond, Merriweather, System Mono. The
-nine named web families are loaded through the Google Fonts CSS API; System Mono
-uses the best locally installed monospace font. Font and letter-spacing choices
-are remembered.
+Hyperlegible, Crimson Pro, Alegreya, EB Garamond, Merriweather, Envy Code R Nerd
+Font, System Mono. All nine Google Fonts families and Envy Code R are self-hosted
+in `vendor/fonts`; the reader makes no requests to Google Fonts. Regular, bold,
+italic, and bold-italic faces are included for every Google family. Envy Code R
+uses the original Nerd Fonts v3.5.1 regular TTF, while System Mono uses the best
+locally installed monospace font. The bundled `*-OFL.txt` and
+`EnvyCodeR-LICENCE.md` files contain their licenses. Font and letter-spacing
+choices are remembered.
 
 Book font size and line height are separate from browser zoom. Browser zoom
 scales the entire app, while these two settings reflow only the book text and
@@ -113,8 +118,8 @@ leave the menu, progress indicator, and other interface elements unchanged.
 Font size ranges from 14 to 80 pixels in two-pixel steps; line height ranges
 from 1.20 to 2.20.
 
-On a first run with no saved preferences, the defaults are Nord, Alegreya,
-36 px text, 1.28 line height, +0.02 em letter spacing, approximately 44
+On a first run with no saved preferences, the defaults are Nord, `0%` contrast,
+Alegreya, 36 px text, 1.28 line height, +0.02 em letter spacing, approximately 44
 characters per line, random voice, 150–350 character speech chunks, and a 22%
 spoken-line position.
 
@@ -232,8 +237,9 @@ GitHub Pages deployment cannot combine this renderer with an older cached layout
 The local bridge also serves the HTML, JavaScript, and CSS with `no-store` while
 retaining long-lived caching for generated Opus or compatibility WAV audio.
 
-EPUB.js and JSZip are included directly in `vendor/`. Only Google Fonts CSS and
-font files are requested externally; the EPUB itself never leaves the browser.
+EPUB.js, JSZip, and every selectable web font are included directly in
+`vendor/`. Smooth Reader makes no external font requests, and the EPUB itself
+never leaves the browser.
 Up to three recently opened EPUBs can be cached in IndexedDB on this browser so
 their titles can reopen them directly; clearing site data removes those cached
 copies and saved reading positions.

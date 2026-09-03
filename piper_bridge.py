@@ -470,7 +470,9 @@ class SmoothReaderHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         request_path = self.path.split("?", 1)[0]
-        if not request_path.startswith("/api/"):
+        if request_path.startswith("/vendor/fonts/"):
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        elif not request_path.startswith("/api/"):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
 

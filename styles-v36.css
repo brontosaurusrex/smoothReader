@@ -10,12 +10,30 @@
   --hover: #353c4a;
   --cover: rgb(46 52 64 / 94%);
   --scrollbar: #607089;
+  --contrast-strength: 0%;
+  --contrast-soften: 0%;
+  --contrast-foreground: #fff;
+  --contrast-background: #000;
+  --display-background: var(--background);
+  --display-text: var(--text);
+  --display-muted: var(--muted);
+  --display-line: var(--line);
+  --display-heading: var(--heading);
+  --display-link: var(--link);
+  --display-panel: var(--panel);
+  --display-hover: var(--hover);
+  --display-cover: var(--cover);
+  --display-scrollbar: var(--scrollbar);
   --reader-font: "Alegreya", Georgia, serif;
   --reader-tracking: 0.02em;
   --reader-width: 44ch;
   --reader-font-size: 36px;
   --reader-line-height: 1.28;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+:root[data-font="system-sans"] {
+  --reader-font: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 :root[data-font="noto-serif"] {
@@ -52,6 +70,10 @@
 
 :root[data-font="merriweather"] {
   --reader-font: "Merriweather", Georgia, serif;
+}
+
+:root[data-font="envy-code-r-nerd"] {
+  --reader-font: "EnvyCodeR Nerd Font", ui-monospace, monospace;
 }
 
 :root[data-font="system-mono"] {
@@ -112,6 +134,8 @@
 
 :root[data-palette="paper"] {
   color-scheme: light;
+  --contrast-foreground: #000;
+  --contrast-background: #fff;
   --background: #e8e1d3;
   --text: #302d28;
   --muted: #746c60;
@@ -176,6 +200,61 @@
   --scrollbar: #66536c;
 }
 
+@supports (color: color-mix(in srgb, white, black)) {
+  :root {
+    --display-background: color-mix(
+      in srgb,
+      var(--background),
+      var(--contrast-background) var(--contrast-strength)
+    );
+    --display-text: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--text), var(--background) var(--contrast-soften)),
+      var(--contrast-foreground) var(--contrast-strength)
+    );
+    --display-muted: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--muted), var(--background) var(--contrast-soften)),
+      var(--contrast-foreground) var(--contrast-strength)
+    );
+    --display-line: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--line), var(--background) var(--contrast-soften)),
+      var(--contrast-foreground) var(--contrast-strength)
+    );
+    --display-heading: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--heading), var(--background) var(--contrast-soften)),
+      var(--contrast-foreground) var(--contrast-strength)
+    );
+    --display-link: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--link), var(--background) var(--contrast-soften)),
+      var(--contrast-foreground) var(--contrast-strength)
+    );
+    --display-panel: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--panel), var(--background) var(--contrast-soften)),
+      var(--contrast-background) var(--contrast-strength)
+    );
+    --display-hover: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--hover), var(--background) var(--contrast-soften)),
+      var(--contrast-background) var(--contrast-strength)
+    );
+    --display-cover: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--cover), var(--background) var(--contrast-soften)),
+      var(--contrast-background) var(--contrast-strength)
+    );
+    --display-scrollbar: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--scrollbar), var(--background) var(--contrast-soften)),
+      var(--contrast-foreground) var(--contrast-strength)
+    );
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -186,16 +265,16 @@ body,
   width: 100%;
   min-height: 100%;
   margin: 0;
-  background: var(--background);
+  background: var(--display-background);
 }
 
 body {
-  color: var(--text);
+  color: var(--display-text);
   user-select: text;
 }
 
 html {
-  scrollbar-color: var(--scrollbar) transparent;
+  scrollbar-color: var(--display-scrollbar) transparent;
   scrollbar-width: thin;
 }
 
@@ -210,8 +289,8 @@ html {
   min-height: 100dvh;
   overflow: visible;
   padding: clamp(3rem, 8vh, 7rem) 3rem 3rem;
-  color: var(--text);
-  background: var(--background);
+  color: var(--display-text);
+  background: var(--display-background);
   cursor: default;
   font-family: var(--reader-font);
   font-size: var(--reader-font-size);
@@ -222,7 +301,7 @@ html {
   content: "";
   position: absolute;
   inset: 2rem;
-  border: 1px dashed var(--line);
+  border: 1px dashed var(--display-line);
   border-radius: 1.25rem;
   transition: border-color 120ms ease, background-color 120ms ease;
   pointer-events: none;
@@ -230,8 +309,8 @@ html {
 
 #drop-zone:has(:focus-visible)::before,
 body.is-dragging #drop-zone::before {
-  border-color: var(--muted);
-  background: var(--hover);
+  border-color: var(--display-muted);
+  background: var(--display-hover);
 }
 
 #drop-picker {
@@ -240,7 +319,7 @@ body.is-dragging #drop-zone::before {
   place-items: center;
   gap: 0.65rem;
   border: 0;
-  color: var(--text);
+  color: var(--display-text);
   background: transparent;
   cursor: pointer;
   font: inherit;
@@ -253,7 +332,7 @@ body.is-dragging #drop-zone::before {
 }
 
 #drop-picker small {
-  color: var(--muted);
+  color: var(--display-muted);
   font-size: clamp(0.72rem, 0.62em, 0.9rem);
   letter-spacing: 0.14em;
 }
@@ -268,7 +347,7 @@ body.is-dragging #drop-zone::before {
 
 #recent-books > small {
   padding-inline: 0.4rem;
-  color: var(--muted);
+  color: var(--display-muted);
   font-size: clamp(0.7rem, 0.62em, 0.82rem);
   letter-spacing: 0.12em;
   text-align: left;
@@ -283,7 +362,7 @@ body.is-dragging #drop-zone::before {
   overflow: hidden;
   padding: 0.28rem 0.4rem;
   border: 0;
-  color: var(--muted);
+  color: var(--display-muted);
   background: transparent;
   cursor: pointer;
   font-family: inherit;
@@ -295,8 +374,8 @@ body.is-dragging #drop-zone::before {
 }
 
 #recent-book-list .recent-book:is(:hover, :focus-visible) {
-  color: var(--text);
-  background: var(--hover);
+  color: var(--display-text);
+  background: var(--display-hover);
 }
 
 #recent-book-list .recent-book:disabled {
@@ -311,7 +390,7 @@ body.is-dragging #drop-zone::before {
   gap: 0.72rem 2rem;
   width: min(50rem, calc(100vw - 6rem));
   margin-top: 1.2rem;
-  color: var(--muted);
+  color: var(--display-muted);
   font-size: clamp(0.82rem, 0.72em, 1rem);
   letter-spacing: 0.015em;
   line-height: 1.7;
@@ -328,7 +407,7 @@ body.is-dragging #drop-zone::before {
 #start-hotkeys .start-tracking button {
   padding: 0;
   border: 0;
-  color: var(--muted);
+  color: var(--display-muted);
   background: transparent;
   cursor: pointer;
   font: inherit;
@@ -338,7 +417,7 @@ body.is-dragging #drop-zone::before {
 
 #start-hotkeys > button:is(:hover, :focus-visible),
 #start-hotkeys .start-tracking button:is(:hover, :focus-visible) {
-  color: var(--text);
+  color: var(--display-text);
 }
 
 #start-hotkeys > button:disabled {
@@ -348,10 +427,10 @@ body.is-dragging #drop-zone::before {
 
 #start-hotkeys kbd {
   padding: 0.12rem 0.34rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--display-line);
   border-radius: 0.3rem;
-  color: var(--text);
-  background: var(--panel);
+  color: var(--display-text);
+  background: var(--display-panel);
   font: inherit;
   font-size: 0.88em;
   white-space: nowrap;
@@ -367,6 +446,10 @@ body.is-dragging #drop-zone::before {
 .start-range {
   display: grid;
   gap: 0.25rem;
+}
+
+.start-contrast {
+  grid-column: 1 / -1;
 }
 
 .start-range > span {
@@ -390,7 +473,7 @@ body.is-dragging #drop-zone::before {
   min-width: 0;
   min-height: 44px;
   margin: 0;
-  accent-color: var(--link);
+  accent-color: var(--display-link);
   touch-action: none;
 }
 
@@ -400,16 +483,16 @@ body.is-dragging #drop-zone::before {
   width: 44px;
   height: 44px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--display-line);
   border-radius: 0.35rem;
-  color: var(--text);
-  background: var(--panel);
+  color: var(--display-text);
+  background: var(--display-panel);
   cursor: pointer;
   font: inherit;
 }
 
 #start-hotkeys .range-stepper button:is(:hover, :focus-visible) {
-  background: var(--hover);
+  background: var(--display-hover);
 }
 
 #start-hotkeys .range-stepper button:disabled {
@@ -420,10 +503,10 @@ body.is-dragging #drop-zone::before {
 .start-select select,
 #settings-panel select {
   min-width: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--display-line);
   border-radius: 0.35rem;
-  color: var(--text);
-  background: var(--panel);
+  color: var(--display-text);
+  background: var(--display-panel);
   font: inherit;
 }
 
@@ -465,8 +548,8 @@ body.is-dragging #drop-zone::before {
   padding: 10px;
   border: 1px solid transparent;
   border-radius: 0.4rem;
-  color: var(--text);
-  background: var(--panel);
+  color: var(--display-text);
+  background: var(--display-panel);
   cursor: pointer;
   font: inherit;
   opacity: 0.18;
@@ -483,7 +566,7 @@ body.is-dragging #drop-zone::before {
 
 #settings-menu:is(:hover, :focus-within) #settings-toggle,
 #settings-toggle[aria-expanded="true"] {
-  border-color: var(--line);
+  border-color: var(--display-line);
   opacity: 1;
 }
 
@@ -497,10 +580,10 @@ body.is-dragging #drop-zone::before {
   max-height: calc(100dvh - 4rem - env(safe-area-inset-top, 0px));
   overflow-y: auto;
   padding: 1rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--display-line);
   border-radius: 0.65rem;
-  color: var(--text);
-  background: var(--cover);
+  color: var(--display-text);
+  background: var(--display-cover);
   box-shadow: 0 0.8rem 2.5rem rgb(0 0 0 / 24%);
   font-size: 0.78rem;
   backdrop-filter: blur(10px);
@@ -514,7 +597,7 @@ body.is-dragging #drop-zone::before {
 #settings-panel label {
   display: grid;
   gap: 0.3rem;
-  color: var(--muted);
+  color: var(--display-muted);
 }
 
 #settings-panel label,
@@ -528,7 +611,7 @@ body.is-dragging #drop-zone::before {
 }
 
 #settings-panel output {
-  color: var(--text);
+  color: var(--display-text);
 }
 
 #settings-panel select {
@@ -539,7 +622,7 @@ body.is-dragging #drop-zone::before {
 .settings-label {
   display: flex;
   justify-content: space-between;
-  color: var(--muted);
+  color: var(--display-muted);
 }
 
 .settings-row {
@@ -557,23 +640,23 @@ body.is-dragging #drop-zone::before {
 }
 
 #settings-speech-status {
-  color: var(--muted);
+  color: var(--display-muted);
   line-height: 1.45;
 }
 
 #settings-panel button {
   padding: 0.42rem 0.5rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--display-line);
   border-radius: 0.35rem;
-  color: var(--text);
-  background: var(--panel);
+  color: var(--display-text);
+  background: var(--display-panel);
   cursor: pointer;
   font: inherit;
   font-size: 0.72rem;
 }
 
 #settings-panel button:is(:hover, :focus-visible) {
-  background: var(--hover);
+  background: var(--display-hover);
 }
 
 #settings-panel button:disabled {
@@ -594,7 +677,7 @@ body.is-right-dragging * {
 #reader {
   width: 100%;
   min-height: 100vh;
-  background: var(--background);
+  background: var(--display-background);
 }
 
 #viewer {
@@ -603,7 +686,7 @@ body.is-right-dragging * {
   min-height: 100vh;
   margin: 0 auto;
   padding: 3rem var(--reader-gutter) 24vh;
-  color: var(--text);
+  color: var(--display-text);
   font-family: var(--reader-font);
   font-size: var(--reader-font-size);
   font-weight: 400;
@@ -630,16 +713,16 @@ body.is-right-dragging * {
 #viewer h4,
 #viewer h5,
 #viewer h6 {
-  color: var(--heading);
+  color: var(--display-heading);
   line-height: 1.25 !important;
 }
 
 #viewer a {
-  color: var(--link);
+  color: var(--display-link);
 }
 
 #viewer .speech-active {
-  box-shadow: inset 2px 0 var(--link);
+  box-shadow: inset 2px 0 var(--display-link);
 }
 
 #speech-marker {
@@ -648,7 +731,7 @@ body.is-right-dragging * {
   width: 2px;
   min-height: 18px;
   border-radius: 999px;
-  background: var(--link);
+  background: var(--display-link);
   pointer-events: none;
   opacity: 0.78;
 }
@@ -698,10 +781,10 @@ body.is-right-dragging * {
   inset: 1.25rem;
   display: grid;
   place-items: center;
-  border: 1px dashed var(--muted);
+  border: 1px dashed var(--display-muted);
   border-radius: 1rem;
-  color: var(--text);
-  background: var(--cover);
+  color: var(--display-text);
+  background: var(--display-cover);
   font-size: 1rem;
   font-weight: 500;
   letter-spacing: 0.14em;
@@ -716,10 +799,10 @@ body.is-right-dragging * {
   bottom: 2rem;
   max-width: min(34rem, calc(100vw - 4rem));
   padding: 0.7rem 1rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--display-line);
   border-radius: 999px;
-  color: var(--text);
-  background: var(--panel);
+  color: var(--display-text);
+  background: var(--display-panel);
   font-size: 0.8rem;
   transform: translateX(-50%);
 }
@@ -748,10 +831,10 @@ body.is-right-dragging * {
   width: 42px;
   height: 42px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--display-line);
   border-radius: 999px;
-  color: var(--text);
-  background: var(--panel);
+  color: var(--display-text);
+  background: var(--display-panel);
   cursor: pointer;
   font-family: ui-sans-serif, system-ui, sans-serif;
   font-size: 0.9rem;
@@ -760,7 +843,7 @@ body.is-right-dragging * {
 }
 
 #speech-controls button:is(:hover, :focus-visible) {
-  background: var(--hover);
+  background: var(--display-hover);
   opacity: 1;
 }
 
@@ -772,7 +855,7 @@ body.is-right-dragging * {
 #reading-progress,
 #speech-voice,
 #speech-progress {
-  color: var(--muted);
+  color: var(--display-muted);
   font-family: var(--reader-font);
   font-size: 0.72rem;
   letter-spacing: var(--reader-tracking);
@@ -844,9 +927,9 @@ body.is-right-dragging * {
   #start-hotkeys > button {
     min-height: 48px;
     padding: 0.55rem 0.65rem;
-    border: 1px solid var(--line);
+    border: 1px solid var(--display-line);
     border-radius: 0.4rem;
-    background: var(--panel);
+    background: var(--display-panel);
   }
 
   #start-hotkeys .start-tracking button,
@@ -948,9 +1031,9 @@ body.is-right-dragging * {
   #settings-toggle {
     width: 52px;
     height: 52px;
-    border-color: var(--heading);
-    color: var(--background);
-    background: var(--heading);
+    border-color: var(--display-heading);
+    color: var(--display-background);
+    background: var(--display-heading);
     box-shadow: 0 0.3rem 1rem rgb(0 0 0 / 28%);
     opacity: 1;
   }

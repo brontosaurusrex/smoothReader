@@ -101,6 +101,8 @@ const elements = {
   "#start-reopen": makeElement(),
   "#start-palette-next": makeElement(),
   "#start-palette": makeElement(),
+  "#start-contrast": makeElement(),
+  "#start-contrast-value": makeElement(),
   "#start-font-next": makeElement(),
   "#start-font": makeElement(),
   "#start-font-size": makeElement(),
@@ -118,6 +120,8 @@ const elements = {
   "#settings-toggle": makeElement(),
   "#settings-panel": makeElement(),
   "#settings-palette": makeElement(),
+  "#settings-contrast": makeElement(),
+  "#settings-contrast-value": makeElement(),
   "#settings-font": makeElement(),
   "#settings-font-size": makeElement(),
   "#settings-font-size-value": makeElement(),
@@ -430,6 +434,8 @@ vm.runInContext(rendererSource, context, {
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
 const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36.css"), "utf8");
+const fontsDirectory = path.join(__dirname, "..", "vendor", "fonts");
+const fontsSource = fs.readFileSync(path.join(fontsDirectory, "reader-fonts.css"), "utf8");
 assert.match(indexSource, /styles-v36\.css/);
 assert.match(indexSource, /renderer-v36\.js/);
 assert.match(indexSource, /id="recent-books"/);
@@ -451,6 +457,8 @@ assert.match(indexSource, /id="speech-audio"[^>]*preload="auto"/);
 assert.match(indexSource, /id="settings-home"[^>]*>HOME</);
 assert.doesNotMatch(indexSource, /id="settings-end"/);
 assert.match(indexSource, /id="settings-font-size"/);
+assert.match(indexSource, /id="settings-contrast"[^>]*min="-30"[^>]*max="30"/);
+assert.match(indexSource, /id="start-contrast"[^>]*min="-30"[^>]*max="30"/);
 assert.match(indexSource, /id="settings-line-height"/);
 assert.match(indexSource, /id="settings-speech-start"/);
 assert.match(indexSource, /id="settings-speech-min"/);
@@ -462,7 +470,8 @@ assert.match(indexSource, /id="settings-toggle"[\s\S]*aria-label="Open reader se
 assert.match(indexSource, /id="settings-font-size"[^>]*max="80"[^>]*step="2"/);
 assert.match(indexSource, /id="settings-font-size-down"/);
 assert.match(indexSource, /id="settings-font-size-up"/);
-assert.match(indexSource, /styles-v36\.css\?v=20260903-mobile2/);
+assert.match(indexSource, /styles-v36\.css\?v=20260903-contrast2/);
+assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
 assert.match(rendererSource, /sessionId:\s*speechSessionId/);
 assert.match(rendererSource, /audioFormat:\s*speechAudioFormat/);
@@ -494,11 +503,21 @@ assert.equal((rendererSource.match(/speechPositionPercent \/ 100/g) || []).lengt
 assert.doesNotMatch(rendererSource, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
 assert.match(indexSource, /id="speech-marker"/);
 assert.match(stylesSource, /#speech-marker/);
-assert.match(indexSource, /fonts\.googleapis\.com/);
-assert.match(indexSource, /fonts\.gstatic\.com/);
+assert.doesNotMatch(indexSource, /fonts\.(?:googleapis|gstatic)\.com/);
+assert.doesNotMatch(fontsSource, /https?:\/\//);
+assert.equal((fontsSource.match(/@font-face/g) || []).length, 37);
+for (const match of fontsSource.matchAll(/src: url\("([^"]+)"\)/g)) {
+  assert.equal(fs.existsSync(path.join(fontsDirectory, match[1])), true, match[1]);
+}
+assert.match(fontsSource, /EnvyCodeRNerdFont-Regular-v3\.5\.1\.ttf/);
 assert.match(stylesSource, /"Noto Serif"/);
 assert.match(stylesSource, /"EB Garamond"/);
+assert.match(stylesSource, /"EnvyCodeR Nerd Font"/);
+assert.match(stylesSource, /data-font="system-sans"[\s\S]*--reader-font:\s*system-ui, -apple-system, "Segoe UI", sans-serif/);
 assert.match(stylesSource, /"Cascadia Mono"/);
+assert.match(stylesSource, /@supports \(color: color-mix\(in srgb, white, black\)\)/);
+assert.match(stylesSource, /--contrast-strength/);
+assert.match(stylesSource, /--contrast-soften/);
 assert.match(stylesSource, /font-family:\s*var\(--reader-font\)/);
 assert.match(stylesSource, /--reader-width:\s*44ch/);
 assert.match(stylesSource, /--reader-font-size:\s*36px/);
@@ -645,7 +664,11 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#recent-book-list"].children[0].disabled, false);
   assert.equal(elements["#start-reopen"].disabled, false);
   assert.equal(elements["#start-palette"].children.length, 10);
-  assert.equal(elements["#start-font"].children.length, 11);
+  assert.equal(elements["#start-font"].children.length, 12);
+  assert.equal(elements["#start-contrast-value"].textContent, "0%");
+  assert.equal(elements["#settings-contrast-value"].textContent, "0%");
+  assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
+  assert.equal(context.document.documentElement.style["--contrast-soften"], "0%");
   assert.equal(elements["#start-width-value"].textContent, "≈ 44 chars");
   assert.equal(elements["#start-font-size-value"].textContent, "36px");
   assert.equal(elements["#start-line-height-value"].textContent, "1.28");
@@ -897,6 +920,16 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     target: { value: "nord" }
   });
   assert.equal(context.document.documentElement.dataset.palette, "nord");
+
+  elements["#start-contrast"].listeners.get("input")({ target: { value: "-15" } });
+  assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
+  assert.equal(context.document.documentElement.style["--contrast-soften"], "15%");
+  assert.equal(elements["#settings-contrast-value"].textContent, "-15%");
+  elements["#settings-contrast"].listeners.get("change")({ target: { value: "20" } });
+  assert.equal(context.document.documentElement.style["--contrast-strength"], "20%");
+  assert.equal(context.document.documentElement.style["--contrast-soften"], "0%");
+  assert.equal(elements["#start-contrast-value"].textContent, "+20%");
+  assert.equal(stored.get("smooth-reader:contrast"), "20");
 
   assert.equal(elements["#recent-book-list"].children[0].listeners.has("click"), true);
   assert.equal(elements["#start-open"].listeners.has("click"), true);
