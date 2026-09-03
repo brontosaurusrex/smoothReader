@@ -220,7 +220,7 @@ with tempfile.TemporaryDirectory() as temporary_directory:
         with urllib.request.urlopen(index_request, timeout=2) as response:
             assert response.status == 200
             assert response.headers["Cache-Control"] == "no-store"
-            assert b"styles-v36.css" in response.read()
+            assert b"styles-v36-mobile5.css" in response.read()
         font_request = urllib.request.Request(
             base_url + "/vendor/fonts/EnvyCodeRNerdFont-Regular-v3.5.1.ttf"
         )

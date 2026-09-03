@@ -121,7 +121,10 @@ leave the menu, progress indicator, and other interface elements unchanged.
 Font size ranges from 14 to 80 pixels in two-pixel steps; line height ranges
 from 1.20 to 2.20. Text width ranges from approximately 8 to 100 characters;
 the lower values are useful on narrow phone screens, where larger values are
-naturally capped by the viewport.
+naturally capped by the viewport. On touch phones the book font is responsively
+scaled to roughly two thirds of its desktop value (with a 14–54 px effective
+limit), while the stored slider value remains unchanged. This keeps per-book
+settings compatible across screen sizes without requiring browser zoom.
 
 On a first run with no saved preferences, the defaults are Nord, `0%` contrast,
 Alegreya, 36 px text, 1.28 line height, +0.02 em letter spacing, approximately 44
@@ -237,7 +240,8 @@ parsing code and are not simple browser additions.
 Because the whole book is loaded at once, very large or image-heavy EPUBs use
 more memory than a paginated reader.
 
-The app files carry versioned names (`renderer-v36.js` and `styles-v36.css`) so a
+The app files carry versioned names (`renderer-v36.js` and
+`styles-v36-mobile5.css`) so a
 GitHub Pages deployment cannot combine this renderer with an older cached layout.
 The local bridge also serves the HTML, JavaScript, and CSS with `no-store` while
 retaining long-lived caching for generated Opus or compatibility WAV audio.

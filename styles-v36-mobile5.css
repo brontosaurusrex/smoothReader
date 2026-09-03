@@ -276,8 +276,10 @@ html,
 body,
 #app {
   width: 100%;
+  max-width: 100%;
   min-height: 100%;
   margin: 0;
+  overflow-x: clip;
   background: var(--display-background);
 }
 
@@ -539,7 +541,7 @@ body.is-dragging #drop-zone::before {
   padding: 0.2rem 0.35rem;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 620px), (pointer: coarse) and (hover: none) {
   .range-stepper {
     --range-button-size: 48px;
   }
@@ -704,13 +706,16 @@ body.is-right-dragging * {
 
 #reader {
   width: 100%;
+  max-width: 100%;
   min-height: 100vh;
+  overflow-x: clip;
   background: var(--display-background);
 }
 
 #viewer {
   --reader-gutter: clamp(1.4rem, 6vw, 4rem);
   width: min(100%, calc(var(--reader-width) + var(--reader-gutter) + var(--reader-gutter)));
+  max-width: 100%;
   min-height: 100vh;
   margin: 0 auto;
   padding: 3rem var(--reader-gutter) 24vh;
@@ -784,6 +789,8 @@ body.is-right-dragging * {
 
 .book-section {
   display: flow-root;
+  width: 100%;
+  max-width: 100%;
   margin: 0 0 4rem;
   position: static !important;
   height: auto !important;
@@ -801,6 +808,11 @@ body.is-right-dragging * {
   overflow: visible !important;
   transform: none !important;
   clip: auto !important;
+}
+
+.book-section * {
+  max-width: 100% !important;
+  overflow-wrap: anywhere;
 }
 
 #drag-cover {
@@ -904,7 +916,7 @@ body.is-right-dragging * {
   white-space: nowrap;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 620px), (pointer: coarse) and (hover: none) {
   body.settings-open {
     overflow: hidden;
   }
@@ -1055,7 +1067,7 @@ body.is-right-dragging * {
   }
 }
 
-@media (max-width: 620px), (pointer: coarse), (hover: none) {
+@media (max-width: 620px), (pointer: coarse) and (hover: none) {
   #settings-toggle {
     width: 52px;
     height: 52px;
@@ -1068,6 +1080,13 @@ body.is-right-dragging * {
 
   #settings-toggle > span {
     height: 3px;
+  }
+}
+
+@media (max-width: 620px), (pointer: coarse) and (hover: none) {
+  #viewer {
+    --reader-gutter: clamp(0.9rem, 4vw, 1.5rem);
+    font-size: clamp(14px, calc(var(--reader-font-size) * 0.67), 54px);
   }
 }
 

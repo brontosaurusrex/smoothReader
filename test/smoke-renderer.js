@@ -462,10 +462,10 @@ vm.runInContext(rendererSource, context, {
 });
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36.css"), "utf8");
+const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36-mobile5.css"), "utf8");
 const fontsDirectory = path.join(__dirname, "..", "vendor", "fonts");
 const fontsSource = fs.readFileSync(path.join(fontsDirectory, "reader-fonts.css"), "utf8");
-assert.match(indexSource, /styles-v36\.css/);
+assert.match(indexSource, /styles-v36-mobile5\.css/);
 assert.match(indexSource, /renderer-v36\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
@@ -512,7 +512,7 @@ for (const range of [
 }
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
-assert.match(indexSource, /styles-v36\.css\?v=20260903-controls2/);
+assert.match(indexSource, /styles-v36-mobile5\.css/);
 assert.match(indexSource, /renderer-v36\.js\?v=20260903-controls2/);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
@@ -562,7 +562,10 @@ assert.match(stylesSource, /@supports \(color: color-mix\(in srgb, white, black\
 assert.match(stylesSource, /--contrast-strength/);
 assert.match(stylesSource, /--contrast-soften/);
 assert.match(stylesSource, /--range-button-size:\s*44px/);
-assert.match(stylesSource, /@media \(max-width: 620px\)[\s\S]*--range-button-size:\s*48px/);
+assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*--range-button-size:\s*48px/);
+assert.match(stylesSource, /overflow-x:\s*clip/);
+assert.match(stylesSource, /\.book-section \*[^{]*\{[^}]*max-width:\s*100%\s*!important[^}]*overflow-wrap:\s*anywhere/s);
+assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*font-size:\s*clamp\(14px, calc\(var\(--reader-font-size\) \* 0\.67\), 54px\)/s);
 assert.match(stylesSource, /font-family:\s*var\(--reader-font\)/);
 assert.match(stylesSource, /--reader-width:\s*44ch/);
 assert.match(stylesSource, /--reader-font-size:\s*36px/);
@@ -573,12 +576,12 @@ assert.match(stylesSource, /#settings-menu[^{]*\{[^}]*right:/s);
 assert.doesNotMatch(stylesSource, /#settings-menu[^{]*\{[^}]*left:\s*0\.8rem/s);
 assert.match(stylesSource, /#speech-controls/);
 assert.match(stylesSource, /safe-area-inset-bottom/);
-assert.match(stylesSource, /@media \(max-width: 620px\)[\s\S]*height:\s*100dvh/);
+assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*height:\s*100dvh/);
 assert.match(stylesSource, /touch-action:\s*none/);
 assert.match(stylesSource, /\(pointer:\s*coarse\)/);
 assert.match(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*52px[^}]*opacity:\s*1/s);
-assert.match(stylesSource, /@media \(max-width: 620px\)[\s\S]*#start-hotkeys[^{]*\{[^}]*font-size:\s*clamp\(1rem/s);
-assert.match(stylesSource, /@media \(max-width: 620px\)[\s\S]*#settings-panel[^{]*\{[^}]*width:\s*min\(96vw, 28rem\)[^}]*font-size:\s*1rem/s);
+assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#start-hotkeys[^{]*\{[^}]*font-size:\s*clamp\(1rem/s);
+assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#settings-panel[^{]*\{[^}]*width:\s*min\(96vw, 28rem\)[^}]*font-size:\s*1rem/s);
 assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*min-height:\s*48px/s);
 assert.ok(indexSource.indexOf('id="speech-controls"') < indexSource.indexOf('id="reading-progress"'));
 assert.ok(indexSource.indexOf('id="reading-progress"') < indexSource.indexOf('id="speech-progress"'));
