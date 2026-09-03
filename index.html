@@ -9,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smooth Reader</title>
     <link rel="stylesheet" href="vendor/fonts/reader-fonts.css?v=20260903-fonts1">
-    <link rel="stylesheet" href="styles-v36.css?v=20260903-controls1">
+    <link rel="stylesheet" href="styles-v36.css?v=20260903-controls2">
   </head>
   <body>
     <main id="app">
@@ -70,7 +70,7 @@
             <span><label for="start-width">Text width</label> <output id="start-width-value"></output></span>
             <div class="range-stepper">
               <button id="start-width-down" type="button" aria-label="Decrease text width">−</button>
-              <input id="start-width" type="range" min="40" max="100" step="2" aria-label="Approximate characters per line">
+              <input id="start-width" type="range" min="8" max="100" step="2" aria-label="Approximate characters per line">
               <button id="start-width-up" type="button" aria-label="Increase text width">+</button>
             </div>
           </div>
@@ -133,7 +133,7 @@
             <span class="settings-label"><label for="settings-width">Text width</label><output id="settings-width-value"></output></span>
             <div class="range-stepper">
               <button id="settings-width-down" type="button" aria-label="Decrease text width">−</button>
-              <input id="settings-width" type="range" min="40" max="100" step="2" aria-label="Approximate characters per line">
+              <input id="settings-width" type="range" min="8" max="100" step="2" aria-label="Approximate characters per line">
               <button id="settings-width-up" type="button" aria-label="Increase text width">+</button>
             </div>
           </div>
@@ -203,6 +203,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260903-controls1"></script>
+    <script src="renderer-v36.js?v=20260903-controls2"></script>
   </body>
 </html>

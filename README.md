@@ -119,7 +119,9 @@ Book font size and line height are separate from browser zoom. Browser zoom
 scales the entire app, while these two settings reflow only the book text and
 leave the menu, progress indicator, and other interface elements unchanged.
 Font size ranges from 14 to 80 pixels in two-pixel steps; line height ranges
-from 1.20 to 2.20.
+from 1.20 to 2.20. Text width ranges from approximately 8 to 100 characters;
+the lower values are useful on narrow phone screens, where larger values are
+naturally capped by the viewport.
 
 On a first run with no saved preferences, the defaults are Nord, `0%` contrast,
 Alegreya, 36 px text, 1.28 line height, +0.02 em letter spacing, approximately 44

@@ -497,6 +497,8 @@ assert.match(indexSource, /id="settings-speech-pause"/);
 assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(indexSource, /id="settings-toggle"[\s\S]*aria-label="Open reader settings"/);
 assert.match(indexSource, /id="settings-font-size"[^>]*max="80"[^>]*step="2"/);
+assert.match(indexSource, /id="settings-width"[^>]*min="8"[^>]*max="100"[^>]*step="2"/);
+assert.match(indexSource, /id="start-width"[^>]*min="8"[^>]*max="100"[^>]*step="2"/);
 assert.match(indexSource, /id="settings-font-size-down"/);
 assert.match(indexSource, /id="settings-font-size-up"/);
 for (const range of [
@@ -510,8 +512,8 @@ for (const range of [
 }
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
-assert.match(indexSource, /styles-v36\.css\?v=20260903-controls1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260903-controls1/);
+assert.match(indexSource, /styles-v36\.css\?v=20260903-controls2/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260903-controls2/);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
 assert.match(rendererSource, /sessionId:\s*speechSessionId/);
@@ -968,6 +970,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.style["--reader-width"], "82ch");
   elements["#settings-width-up"].listeners.get("click")();
   assert.equal(context.document.documentElement.style["--reader-width"], "84ch");
+  elements["#settings-width"].listeners.get("input")({ target: { value: "8" } });
+  assert.equal(context.document.documentElement.style["--reader-width"], "8ch");
+  assert.equal(elements["#settings-width-down"].disabled, true);
+  elements["#settings-width"].listeners.get("input")({ target: { value: "84" } });
   assert.equal(elements["#start-width-value"].textContent, "≈ 84 chars");
   assert.equal(currentBookSettings().width, 84);
 
