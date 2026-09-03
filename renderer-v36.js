@@ -17,6 +17,8 @@ const startFontNext = document.querySelector("#start-font-next");
 const startFontSelect = document.querySelector("#start-font");
 const startFontSize = document.querySelector("#start-font-size");
 const startFontSizeValue = document.querySelector("#start-font-size-value");
+const startFontSizeDown = document.querySelector("#start-font-size-down");
+const startFontSizeUp = document.querySelector("#start-font-size-up");
 const startLineHeight = document.querySelector("#start-line-height");
 const startLineHeightValue = document.querySelector("#start-line-height-value");
 const startTrackingDown = document.querySelector("#start-tracking-down");
@@ -31,6 +33,8 @@ const settingsPaletteSelect = document.querySelector("#settings-palette");
 const settingsFontSelect = document.querySelector("#settings-font");
 const settingsFontSize = document.querySelector("#settings-font-size");
 const settingsFontSizeValue = document.querySelector("#settings-font-size-value");
+const settingsFontSizeDown = document.querySelector("#settings-font-size-down");
+const settingsFontSizeUp = document.querySelector("#settings-font-size-up");
 const settingsLineHeight = document.querySelector("#settings-line-height");
 const settingsLineHeightValue = document.querySelector("#settings-line-height-value");
 const settingsTrackingValue = document.querySelector("#settings-tracking-value");
@@ -556,6 +560,10 @@ const syncSettingsControls = () => {
   settingsFontSize.value = String(fontSizePx);
   startFontSizeValue.textContent = fontSizeText;
   settingsFontSizeValue.textContent = fontSizeText;
+  startFontSizeDown.disabled = fontSizePx <= MIN_FONT_SIZE_PX;
+  settingsFontSizeDown.disabled = fontSizePx <= MIN_FONT_SIZE_PX;
+  startFontSizeUp.disabled = fontSizePx >= MAX_FONT_SIZE_PX;
+  settingsFontSizeUp.disabled = fontSizePx >= MAX_FONT_SIZE_PX;
   startLineHeight.value = String(lineHeight);
   settingsLineHeight.value = String(lineHeight);
   startLineHeightValue.textContent = lineHeightText;
@@ -2049,6 +2057,18 @@ startFontSize.addEventListener("input", (event) => handleFontSizeInput(event));
 settingsFontSize.addEventListener("input", (event) => handleFontSizeInput(event));
 startFontSize.addEventListener("change", (event) => handleFontSizeInput(event, true));
 settingsFontSize.addEventListener("change", (event) => handleFontSizeInput(event, true));
+startFontSizeDown.addEventListener("click", () => {
+  applyFontSize(fontSizePx - FONT_SIZE_STEP_PX);
+});
+settingsFontSizeDown.addEventListener("click", () => {
+  applyFontSize(fontSizePx - FONT_SIZE_STEP_PX);
+});
+startFontSizeUp.addEventListener("click", () => {
+  applyFontSize(fontSizePx + FONT_SIZE_STEP_PX);
+});
+settingsFontSizeUp.addEventListener("click", () => {
+  applyFontSize(fontSizePx + FONT_SIZE_STEP_PX);
+});
 
 const handleLineHeightInput = (event, announce = false) => {
   applyLineHeight(Number(event.target.value), announce);

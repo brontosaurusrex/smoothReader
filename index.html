@@ -12,7 +12,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;1,400;1,700&amp;family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&amp;family=Crimson+Pro:ital,wght@0,400;0,700;1,400;1,700&amp;family=EB+Garamond:ital,wght@0,400;0,700;1,400;1,700&amp;family=Literata:ital,wght@0,400;0,700;1,400;1,700&amp;family=Lora:ital,wght@0,400;0,700;1,400;1,700&amp;family=Merriweather:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,400;0,700;1,400;1,700&amp;family=Source+Serif+4:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap"
     >
-    <link rel="stylesheet" href="styles-v36.css?v=20260901">
+    <link rel="stylesheet" href="styles-v36.css?v=20260903-mobile1">
   </head>
   <body>
     <main id="app">
@@ -25,7 +25,7 @@
           <small>RECENT BOOKS</small>
           <div id="recent-book-list"></div>
         </div>
-        <span id="start-hotkeys" aria-label="Keyboard shortcuts">
+        <div id="start-hotkeys" aria-label="Keyboard shortcuts">
           <button id="start-open" type="button"><kbd>O</kbd> open another book</button>
           <button id="start-reopen" type="button" disabled><kbd>R</kbd> reopen last book</button>
           <span><kbd>Middle-click</kbd> native browser autoscroll</span>
@@ -36,10 +36,14 @@
           <label class="start-select"><span><kbd>Alt+1…9/0</kbd> palette</span><select id="start-palette" aria-label="Color palette"></select></label>
           <button id="start-font-next" type="button"><kbd>F</kbd> / <kbd>Shift+F</kbd> cycle font</button>
           <label class="start-select"><span><kbd>Alt+Shift+1…9/0</kbd> font · <kbd>Alt+Shift+M</kbd> mono</span><select id="start-font" aria-label="Reading font"></select></label>
-          <label class="start-range">
-            <span>Font size <kbd>[</kbd> / <kbd>]</kbd> <output id="start-font-size-value"></output></span>
-            <input id="start-font-size" type="range" min="14" max="80" step="2" aria-label="Book font size">
-          </label>
+          <div class="start-range">
+            <span><label for="start-font-size">Font size <kbd>[</kbd> / <kbd>]</kbd></label> <output id="start-font-size-value"></output></span>
+            <div class="range-stepper">
+              <button id="start-font-size-down" type="button" aria-label="Decrease book font size">−</button>
+              <input id="start-font-size" type="range" min="14" max="80" step="2" aria-label="Book font size">
+              <button id="start-font-size-up" type="button" aria-label="Increase book font size">+</button>
+            </div>
+          </div>
           <label class="start-range">
             <span>Line height <kbd>{</kbd> / <kbd>}</kbd> <output id="start-line-height-value"></output></span>
             <input id="start-line-height" type="range" min="1.20" max="2.20" step="0.04" aria-label="Book line height">
@@ -57,7 +61,7 @@
             <span>Text width <output id="start-width-value"></output></span>
             <input id="start-width" type="range" min="40" max="100" step="2" aria-label="Approximate characters per line">
           </label>
-        </span>
+        </div>
       </section>
 
       <section id="reader" aria-label="Ebook reader" hidden>
@@ -81,7 +85,14 @@
           <strong>READER</strong>
           <label>Palette<select id="settings-palette"></select></label>
           <label>Font<select id="settings-font"></select></label>
-          <label>Font size <output id="settings-font-size-value"></output><input id="settings-font-size" type="range" min="14" max="80" step="2"></label>
+          <div class="settings-control">
+            <span class="settings-label"><label for="settings-font-size">Font size</label><output id="settings-font-size-value"></output></span>
+            <div class="range-stepper">
+              <button id="settings-font-size-down" type="button" aria-label="Decrease book font size">−</button>
+              <input id="settings-font-size" type="range" min="14" max="80" step="2" aria-label="Book font size">
+              <button id="settings-font-size-up" type="button" aria-label="Increase book font size">+</button>
+            </div>
+          </div>
           <label>Line height <output id="settings-line-height-value"></output><input id="settings-line-height" type="range" min="1.20" max="2.20" step="0.04"></label>
           <span class="settings-label">Letter spacing <output id="settings-tracking-value"></output></span>
           <div class="settings-row">
@@ -134,6 +145,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260901"></script>
+    <script src="renderer-v36.js?v=20260903-mobile1"></script>
   </body>
 </html>

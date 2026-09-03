@@ -358,25 +358,63 @@ body.is-dragging #drop-zone::before {
 }
 
 .start-select,
-.start-tracking,
-.start-range {
+.start-tracking {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
 .start-range {
-  justify-content: space-between;
+  display: grid;
+  gap: 0.25rem;
 }
 
 .start-range > span {
-  white-space: nowrap;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-.start-range input,
+.range-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.start-range input[type="range"],
 #settings-panel input[type="range"] {
-  min-width: 7rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
   accent-color: var(--link);
+  touch-action: none;
+}
+
+#start-hotkeys .range-stepper button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.35rem;
+  color: var(--text);
+  background: var(--panel);
+  cursor: pointer;
+  font: inherit;
+}
+
+#start-hotkeys .range-stepper button:is(:hover, :focus-visible) {
+  background: var(--hover);
+}
+
+#start-hotkeys .range-stepper button:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
 .start-select select,
@@ -477,6 +515,16 @@ body.is-dragging #drop-zone::before {
   display: grid;
   gap: 0.3rem;
   color: var(--muted);
+}
+
+#settings-panel label,
+#settings-panel .settings-control {
+  min-width: 0;
+}
+
+.settings-control {
+  display: grid;
+  gap: 0.3rem;
 }
 
 #settings-panel output {
@@ -793,11 +841,13 @@ body.is-right-dragging * {
     height: 100dvh;
     max-height: none;
     padding:
-      calc(1.2rem + env(safe-area-inset-top, 0px))
+      calc(4.4rem + env(safe-area-inset-top, 0px))
       calc(1rem + env(safe-area-inset-right, 0px))
       calc(1.2rem + env(safe-area-inset-bottom, 0px))
       1rem;
     border-radius: 0.75rem 0 0 0.75rem;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   #settings-panel button,
@@ -831,9 +881,17 @@ body.is-right-dragging * {
   }
 }
 
-@media (hover: none) {
+@media (max-width: 620px), (pointer: coarse), (hover: none) {
   #settings-toggle {
-    opacity: 0.78;
+    width: 48px;
+    height: 48px;
+    border-color: var(--line);
+    box-shadow: 0 0.3rem 1rem rgb(0 0 0 / 28%);
+    opacity: 0.94;
+  }
+
+  #settings-toggle > span {
+    height: 3px;
   }
 }
 

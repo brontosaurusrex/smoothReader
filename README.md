@@ -58,6 +58,10 @@ While reading, use the faint hamburger button in the top-right corner to open
 the mouse/touch settings panel. It provides palette and font selectors, letter spacing,
 font size, line height, approximate characters per line, page navigation, a
 `HOME` button back to the recent-books screen, and open/reopen actions.
+A phone-sized or coarse-pointer display makes the hamburger fully visible and
+slightly larger. Font size also has dedicated minus/plus buttons, and all
+sliders use full-width touch targets so they remain adjustable inside the
+scrolling mobile drawer.
 A small bottom-right stack shows playback controls while speech is active,
 followed by reading percentage, chunk progress, and the active voice name.
 
