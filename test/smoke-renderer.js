@@ -199,6 +199,7 @@ elements["#speech-controls"].hidden = true;
 elements["#speech-marker"].hidden = true;
 
 const windowListeners = new Map();
+const documentListeners = new Map();
 const stored = new Map();
 stored.set("smooth-reader:last-book", JSON.stringify({
   fileName: "previous.epub",
@@ -333,7 +334,12 @@ const context = vm.createContext({
   },
   document: {
     title: "Smooth Reader",
+    hidden: false,
+    visibilityState: "visible",
     fonts: { ready: Promise.resolve() },
+    addEventListener(name, callback) {
+      documentListeners.set(name, callback);
+    },
     documentElement: {
       scrollHeight: 3000,
       dataset: {},
@@ -537,7 +543,7 @@ for (const range of [
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260906-viewport3/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260906-background1/);
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 6);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
@@ -552,6 +558,7 @@ assert.match(rendererSource, /await scrollDownAfterSpeechJob\(currentJob\)/);
 assert.match(rendererSource, /const plan = nextSpeechViewport\(futureCursor\)/);
 assert.match(rendererSource, /firstPreparation:\s*settlePreparation\(futureJobs\[0\]\)/);
 assert.match(rendererSource, /await ensureSpeechJobVisible\(currentJob\)/);
+assert.match(rendererSource, /document\.addEventListener\?\.\("visibilitychange"/);
 assert.match(rendererSource, /const eased = 1 - \(\(1 - progress\) \*\* 3\)/);
 assert.doesNotMatch(rendererSource, /await animateSpeechScrollBy/);
 assert.match(rendererSource, /unlockSpeechAudio\(\);\s*const generation/);
@@ -851,6 +858,20 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   await vm.runInContext("scrollDownAfterSpeechJob(testSpeechJobs[0])", context);
   assert.equal(scrollCalls.length > speechScrollCallCount, true);
   assert.equal(context.window.scrollY > 0, true);
+  context.window.scrollY = 0;
+  context.document.hidden = true;
+  context.document.visibilityState = "hidden";
+  const hiddenScrollCallCount = scrollCalls.length;
+  vm.runInContext("animateSpeechScrollBy(240)", context);
+  assert.equal(scrollCalls.length, hiddenScrollCallCount + 1);
+  assert.equal(vm.runInContext("speechScrollFrame === null", context), true);
+  assert.equal(
+    await vm.runInContext("ensureSpeechJobVisible(testSpeechJobs[0])", context),
+    true
+  );
+  context.document.hidden = false;
+  context.document.visibilityState = "visible";
+  documentListeners.get("visibilitychange")();
   context.window.scrollY = 0;
   assert.equal(fetchCalls.filter((path) => path === "/api/piper/status").length, 1);
   assert.equal(elements["#settings-speech-voice"].children.length, 3);

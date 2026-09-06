@@ -199,6 +199,7 @@ let speechAudioFinish = null;
 let speechAudioUnlockPromise = Promise.resolve();
 let speechMarkerFrame = null;
 let speechScrollFrame = null;
+let speechScrollTargetY = null;
 let speechTextMaps = new WeakMap();
 let speechVoicePreference = "";
 let piperAvailable = false;
@@ -1458,10 +1459,14 @@ const clearSpeechVisuals = () => {
   speechMarker.hidden = true;
 };
 
+const pageIsVisible = () => (
+  document.hidden !== true && document.visibilityState !== "hidden"
+);
+
 const cancelSpeechScroll = () => {
-  if (speechScrollFrame === null) return;
-  window.cancelAnimationFrame(speechScrollFrame);
+  if (speechScrollFrame !== null) window.cancelAnimationFrame(speechScrollFrame);
   speechScrollFrame = null;
+  speechScrollTargetY = null;
 };
 
 const animateSpeechScrollBy = (offset) => {
@@ -1476,9 +1481,22 @@ const animateSpeechScrollBy = (offset) => {
   const targetY = Math.max(0, Math.min(scrollLimit, startY + offset));
   const distance = targetY - startY;
   if (Math.abs(distance) <= 1) return;
+  speechScrollTargetY = targetY;
+
+  if (!pageIsVisible()) {
+    window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
+    speechScrollTargetY = null;
+    return;
+  }
 
   let startTime = null;
   const step = (time) => {
+    if (!pageIsVisible()) {
+      window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
+      speechScrollFrame = null;
+      speechScrollTargetY = null;
+      return;
+    }
     if (startTime === null) startTime = time;
     const progress = Math.min(1, (time - startTime) / SPEECH_SCROLL_DURATION_MS);
     const eased = 1 - ((1 - progress) ** 3);
@@ -1491,6 +1509,7 @@ const animateSpeechScrollBy = (offset) => {
       speechScrollFrame = window.requestAnimationFrame(step);
     } else {
       speechScrollFrame = null;
+      speechScrollTargetY = null;
     }
   };
 
@@ -1781,6 +1800,10 @@ const speechCursorFromJob = (job) => {
 };
 
 const waitForSpeechScroll = () => new Promise((resolve) => {
+  if (!pageIsVisible()) {
+    resolve();
+    return;
+  }
   window.setTimeout(resolve, SPEECH_SCROLL_DURATION_MS + 40);
 });
 
@@ -1792,6 +1815,7 @@ const scrollBySpeechOffset = async (offset) => {
 };
 
 const ensureSpeechJobVisible = async (job) => {
+  if (!pageIsVisible()) return true;
   const visibleBounds = { top: 8, bottom: Math.max(8, window.innerHeight - 8) };
   const firstRenderedRect = () => [...(createSpeechRange(job)?.getClientRects?.() || [])]
     .find((rect) => rect.height > 0 && rect.width > 0);
@@ -1803,6 +1827,7 @@ const ensureSpeechJobVisible = async (job) => {
 
   const targetY = window.innerHeight * (speechPositionPercent / 100);
   await scrollBySpeechOffset(firstRect.top - targetY);
+  if (!pageIsVisible()) return true;
   firstRect = firstRenderedRect();
   return Boolean(
     firstRect &&
@@ -2741,6 +2766,18 @@ window.addEventListener("scroll", () => {
   updateReadingProgress();
 }, { passive: true });
 window.addEventListener("resize", scheduleSpeechMarkerRefresh, { passive: true });
+document.addEventListener?.("visibilitychange", () => {
+  if (!pageIsVisible()) {
+    if (speechScrollTargetY !== null) {
+      const targetY = speechScrollTargetY;
+      cancelSpeechScroll();
+      window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
+      updateReadingProgress();
+    }
+    return;
+  }
+  scheduleSpeechMarkerRefresh();
+});
 if (typeof window.ResizeObserver === "function") {
   const speechLayoutObserver = new window.ResizeObserver(scheduleSpeechMarkerRefresh);
   speechLayoutObserver.observe(viewer);

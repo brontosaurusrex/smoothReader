@@ -204,6 +204,13 @@ while idle. A Home shortcut remains below them independently of Piper. Normal
 generation and playback show no central Piper overlay; actual Piper errors still
 appear there.
 
+When the browser tab is hidden, its foreground animation and visual visibility
+gate are suspended: page advancement is applied immediately and playback does
+not raise a false off-screen error. Returning to the tab refreshes the marker at
+the current spoken range. This supports normal background-tab listening, though
+a mobile operating system can still suspend the browser itself under aggressive
+battery-saving or memory pressure.
+
 Each browser tab has a session identifier. Cache hits and audio downloads can
 run concurrently, while uncached Piper jobs use a fair shared queue and one
 generator at a time to avoid overloading a small server. Pause remains local to
