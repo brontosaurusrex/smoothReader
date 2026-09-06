@@ -543,7 +543,7 @@ for (const range of [
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260906-background1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260906-sentences1/);
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 6);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
@@ -777,6 +777,35 @@ assert.equal(
     context
   ),
   true
+);
+context.viewportSentenceEntries = [{
+  element: null,
+  text: "This sentence is complete. This sentence continues below the viewport"
+}];
+assert.equal(
+  vm.runInContext(
+    "speechSourceFromEntries(sentenceBoundedViewportEntries(viewportSentenceEntries)).text",
+    context
+  ),
+  "This sentence is complete."
+);
+context.viewportLongSentenceEntries = [{
+  element: null,
+  text: "This unusually long sentence has no visible ending and must use the fallback"
+}];
+assert.equal(
+  vm.runInContext(
+    "speechSourceFromEntries(sentenceBoundedViewportEntries(viewportLongSentenceEntries)).text",
+    context
+  ),
+  context.viewportLongSentenceEntries[0].text
+);
+assert.equal(
+  vm.runInContext(
+    "buildSpeechJobs(viewportLongSentenceEntries, 1, 200, false)[0].text.endsWith('.')",
+    context
+  ),
+  false
 );
 vm.runInContext(`
   globalThis.visibleSpeechJob = buildSpeechJobs(visibleSpeechEntries, 1, 80)[0];

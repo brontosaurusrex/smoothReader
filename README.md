@@ -139,10 +139,15 @@ The reading menu contains a Piper voice selector, remembered minimum and
 maximum chunk controls, `READ FROM HERE`, `PAUSE` / `CONTINUE`, and `STOP`. If
 text is selected, only that selection is read. Otherwise the reader captures
 only text lines whose complete rendered line height is inside the current
-viewport; a line clipped at either edge waits for the next scroll. While one chunk plays, Piper
-may generate the next planned screen in the background from the already loaded
-DOM. After the spoken chunk finishes, the page scrolls downward in 10 ms and
-audio waits until JavaScript verifies that the next chunk has become visible.
+viewport; a line clipped at either edge waits for the next scroll. When the
+bottom of the viewport cuts through a sentence, the batch ends at the last
+fully visible `.`, `!`, or `?` and carries the unfinished sentence into the
+next screen. A sentence longer than the viewport or maximum chunk size still
+falls back to a whole-word split, but viewport cuts no longer receive an
+artificial full stop. While one chunk plays, Piper may generate the next
+planned screen in the background from the already loaded DOM. After the spoken
+chunk finishes, the page scrolls downward in 10 ms and audio waits until
+JavaScript verifies that the next chunk has become visible.
 Text beyond a large image, empty area, or screen edge is therefore never spoken
 off-screen. If playback starts where no readable text is visible, the reader
 asks you to scroll to some text. Text is normalized and split near the

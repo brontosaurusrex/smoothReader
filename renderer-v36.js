@@ -1246,7 +1246,8 @@ const speechSourceFromEntries = (entries) => {
 const buildSpeechJobs = (
   entries,
   minimumLength = speechMinimumLength,
-  maximumLength = speechMaximumLength
+  maximumLength = speechMaximumLength,
+  appendTerminalPunctuation = true
 ) => {
   const source = speechSourceFromEntries(entries);
   const totalLength = source.text.length;
@@ -1299,7 +1300,11 @@ const buildSpeechJobs = (
 
   const jobs = groups.map(({ start, end }) => {
     let text = source.text.slice(start, end).trim();
-    if (!/[.!?,;:]["'’”)]*$/.test(text) && text.length < maximum) text += ".";
+    if (
+      appendTerminalPunctuation &&
+      !/[.!?,;:]["'’”)]*$/.test(text) &&
+      text.length < maximum
+    ) text += ".";
     const segments = source.segments.filter((segment) => (
       segment.end > start && segment.start < end
     ));
@@ -1788,6 +1793,34 @@ const speechEntriesFromViewport = (afterCursor = null) => speechEntriesInViewpor
   afterCursor
 );
 
+const clipSpeechEntriesAtSourceOffset = (entries, sourceEnd) => {
+  const source = speechSourceFromEntries(entries);
+  return source.segments.flatMap((segment) => {
+    if (segment.start >= sourceEnd) return [];
+    const segmentEnd = Math.min(segment.end, sourceEnd);
+    const text = source.text.slice(segment.start, segmentEnd).trimEnd();
+    if (!text) return [];
+    return [{
+      element: segment.element,
+      text,
+      selectedRange: segment.selectedRange,
+      mapBaseOffset: segment.mapBaseOffset
+    }];
+  });
+};
+
+const sentenceBoundedViewportEntries = (entries) => {
+  const source = speechSourceFromEntries(entries);
+  if (!source.text || /[.!?]+["'’”)]*$/.test(source.text)) return entries;
+
+  let sentenceEnd = -1;
+  for (const match of source.text.matchAll(/[.!?]+["'’”)]*(?=\s|$)/g)) {
+    sentenceEnd = match.index + match[0].length;
+  }
+  if (sentenceEnd <= 0) return entries;
+  return clipSpeechEntriesAtSourceOffset(entries, sentenceEnd);
+};
+
 const speechCursorFromJob = (job) => {
   const segment = [...(job?.segments || [])].reverse().find((candidate) => (
     candidate.element && candidate.end > job.sourceStart && candidate.start < job.sourceEnd
@@ -1866,11 +1899,11 @@ const nextSpeechViewport = (cursor) => {
 
     const targetY = window.innerHeight * (speechPositionPercent / 100);
     const offset = Math.max(0, firstRect.top - targetY);
-    const entries = speechEntriesInViewport(
+    const entries = sentenceBoundedViewportEntries(speechEntriesInViewport(
       8 + offset,
       Math.max(8 + offset, window.innerHeight - 8 + offset),
       cursor
-    );
+    ));
     if (entries.length > 0) return { entries, offset };
   }
   return null;
@@ -2058,7 +2091,7 @@ const startSpeech = async () => {
         selectedRange,
         mapBaseOffset: Math.max(0, selectedMapOffset)
       }]
-      : speechEntriesFromViewport();
+      : sentenceBoundedViewportEntries(speechEntriesFromViewport());
     if (entries.length === 0) {
       throw new Error(selectedText
         ? "No readable text was found in the selection."
@@ -2083,7 +2116,12 @@ const startSpeech = async () => {
     let firstBatch = true;
     let queuedBatch = null;
     while (entries.length > 0) {
-      const jobs = queuedBatch?.jobs || buildSpeechJobs(entries);
+      const jobs = queuedBatch?.jobs || buildSpeechJobs(
+        entries,
+        speechMinimumLength,
+        speechMaximumLength,
+        !viewportReading
+      );
       if (jobs.length === 0) break;
       if (viewportReading) jobs.forEach((job) => { job.followText = false; });
       speechProgress.textContent = `1/${jobs.length}`;
@@ -2116,7 +2154,12 @@ const startSpeech = async () => {
           const futureCursor = speechCursorFromJob(currentJob) || viewportCursor;
           const plan = nextSpeechViewport(futureCursor);
           if (plan) {
-            const futureJobs = buildSpeechJobs(plan.entries);
+            const futureJobs = buildSpeechJobs(
+              plan.entries,
+              speechMinimumLength,
+              speechMaximumLength,
+              false
+            );
             futureJobs.forEach((job) => { job.followText = false; });
             if (futureJobs.length > 0) {
               futureBatch = {
