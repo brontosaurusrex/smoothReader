@@ -392,6 +392,9 @@ const context = vm.createContext({
           return { top: anchorRectCalls === 1 ? 200 : 260 };
         },
         getClientRects() {
+          if (typeof this.startNode?.rectForOffsets === "function") {
+            return this.startNode.rectForOffsets(this.startOffset, this.endOffset);
+          }
           const top = this.startNode === speechNodeOne ? 650 : 520;
           return [{ left: speechRectLeft, top, bottom: top + 80, width: 240, height: 20 }];
         }
@@ -534,7 +537,7 @@ for (const range of [
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260903-recent6/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260906-viewport2/);
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 6);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
@@ -544,7 +547,11 @@ assert.match(rendererSource, /\/api\/piper\/stop[\s\S]*JSON\.stringify\(\{ sessi
 assert.match(rendererSource, /BOOK_SETTINGS_PREFIX/);
 assert.doesNotMatch(rendererSource, /\/api\/piper\/(?:play|pause|resume)/);
 assert.match(rendererSource, /await speechAudio\.play\(\)/);
-assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 5/);
+assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 10/);
+assert.match(rendererSource, /await scrollDownAfterSpeechJob\(currentJob\)/);
+assert.match(rendererSource, /const plan = nextSpeechViewport\(futureCursor\)/);
+assert.match(rendererSource, /firstPreparation:\s*settlePreparation\(futureJobs\[0\]\)/);
+assert.match(rendererSource, /await ensureSpeechJobVisible\(currentJob\)/);
 assert.match(rendererSource, /const eased = 1 - \(\(1 - progress\) \*\* 3\)/);
 assert.doesNotMatch(rendererSource, /await animateSpeechScrollBy/);
 assert.match(rendererSource, /unlockSpeechAudio\(\);\s*const generation/);
@@ -564,7 +571,7 @@ assert.equal((rendererSource.match(/showStatus\(`PIPER ERROR/g) || []).length, 2
 assert.match(rendererSource, /createSpeechRange/);
 assert.match(rendererSource, /addEventListener\("resize", scheduleSpeechMarkerRefresh/);
 assert.match(rendererSource, /ResizeObserver\(scheduleSpeechMarkerRefresh\)/);
-assert.equal((rendererSource.match(/speechPositionPercent \/ 100/g) || []).length, 2);
+assert.equal((rendererSource.match(/speechPositionPercent \/ 100/g) || []).length, 5);
 assert.doesNotMatch(rendererSource, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
 assert.match(indexSource, /id="speech-marker"/);
 assert.match(stylesSource, /#speech-marker/);
@@ -674,6 +681,99 @@ const punctuationPriorityChunks = JSON.parse(vm.runInContext(
 assert.equal(punctuationPriorityChunks[0].endsWith(";"), true);
 assert.equal(punctuationPriorityChunks.every((chunk) => chunk.length <= 100), true);
 
+const makeViewportSpeechElement = (text, blockTop, blockBottom, rectForOffsets) => {
+  const element = makeElement();
+  const node = {
+    nodeType: 3,
+    nodeValue: text,
+    parentElement: element,
+    rectForOffsets
+  };
+  element.textContent = text;
+  element.textNodes = [node];
+  element.getBoundingClientRect = () => ({
+    left: 100,
+    right: 500,
+    top: blockTop,
+    bottom: blockBottom
+  });
+  return element;
+};
+const aboveViewportSpeechElement = makeViewportSpeechElement(
+  "This text is above the screen.",
+  -100,
+  -20,
+  () => []
+);
+const partialViewportSpeechElement = makeViewportSpeechElement(
+  "hidden visible words below",
+  -40,
+  840,
+  (start) => {
+    const top = start < 7 ? -30 : start < 21 ? 120 + start : 810;
+    return [{ left: 100, right: 300, top, bottom: top + 20, width: 200, height: 20 }];
+  }
+);
+const fullViewportSpeechElement = makeViewportSpeechElement(
+  "Fully visible text.",
+  300,
+  350,
+  () => []
+);
+const imageHeavySpeechElement = makeViewportSpeechElement(
+  "Text placed below a tall image.",
+  -100,
+  920,
+  () => [{ left: 100, right: 300, top: 850, bottom: 870, width: 200, height: 20 }]
+);
+elements["#viewer"].querySelectorAll = () => [
+  aboveViewportSpeechElement,
+  partialViewportSpeechElement,
+  fullViewportSpeechElement,
+  imageHeavySpeechElement
+];
+const visibleSpeechEntries = vm.runInContext("speechEntriesFromViewport()", context);
+assert.equal(
+  JSON.stringify(visibleSpeechEntries.map((entry) => entry.text)),
+  JSON.stringify(["visible words", "Fully visible text."])
+);
+assert.equal(visibleSpeechEntries[0].mapBaseOffset, 7);
+context.partialViewportSpeechElement = partialViewportSpeechElement;
+context.fullViewportSpeechElement = fullViewportSpeechElement;
+assert.equal(
+  vm.runInContext(
+    "speechEntriesFromViewport({ element: partialViewportSpeechElement, offset: 15 })[0].text",
+    context
+  ),
+  "words"
+);
+const plannedSpeechViewport = vm.runInContext(
+  "nextSpeechViewport({ element: fullViewportSpeechElement, offset: createSpeechTextMap(fullViewportSpeechElement).text.length })",
+  context
+);
+assert.equal(plannedSpeechViewport.offset > 0, true);
+assert.equal(
+  plannedSpeechViewport.entries.some((entry) => entry.text.includes("Text placed below")),
+  true
+);
+context.visibleSpeechEntries = visibleSpeechEntries;
+assert.equal(
+  vm.runInContext(
+    "buildSpeechJobs(visibleSpeechEntries, 1, 12).every((job) => job.text.length <= 12)",
+    context
+  ),
+  true
+);
+vm.runInContext(`
+  globalThis.visibleSpeechJob = buildSpeechJobs(visibleSpeechEntries, 1, 80)[0];
+  visibleSpeechJob.followText = false;
+  setSpeechActiveJob(visibleSpeechJob);
+`, context);
+assert.equal(vm.runInContext("speechScrollFrame === null", context), true);
+assert.equal(elements["#speech-marker"].hidden, false);
+vm.runInContext("clearSpeechSelection()", context);
+elements["#viewer"].querySelectorAll = () => [];
+
 const speechElementOne = makeElement();
 const speechElementTwo = makeElement();
 const speechNodeOne = {
@@ -740,6 +840,11 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
 
 (async () => {
   await wait(20);
+  const speechScrollCallCount = scrollCalls.length;
+  await vm.runInContext("scrollDownAfterSpeechJob(testSpeechJobs[0])", context);
+  assert.equal(scrollCalls.length > speechScrollCallCount, true);
+  assert.equal(context.window.scrollY > 0, true);
+  context.window.scrollY = 0;
   assert.equal(fetchCalls.filter((path) => path === "/api/piper/status").length, 1);
   assert.equal(elements["#settings-speech-voice"].children.length, 3);
   assert.equal(elements["#speech-controls"].hidden, true);

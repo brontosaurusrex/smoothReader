@@ -144,7 +144,7 @@ const MAX_SPEECH_MAX_LENGTH = 1200;
 const DEFAULT_SPEECH_POSITION_PERCENT = 22;
 const MIN_SPEECH_POSITION_PERCENT = 5;
 const MAX_SPEECH_POSITION_PERCENT = 50;
-const SPEECH_SCROLL_DURATION_MS = 5;
+const SPEECH_SCROLL_DURATION_MS = 10;
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
   { id: "charcoal", name: "CHARCOAL" },
@@ -1558,7 +1558,7 @@ const clearSpeechSelection = () => {
 const setSpeechActiveJob = (job) => {
   clearSpeechSelection();
   speechActiveJob = job;
-  positionSpeechMarker(true);
+  positionSpeechMarker(job?.followText !== false);
 };
 
 const updateSpeechVoices = (voices) => {
@@ -1614,19 +1614,241 @@ const formatSpeechVoice = (prepared) => {
     : voiceName;
 };
 
-const speechBlocksFromViewport = () => {
-  const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)]
-    .filter((element) => normalizeSpeechText(element.textContent));
-  if (blocks.length === 0) return [];
+const mappedSpeechRangeRects = (mapped, startOffset, endOffset) => {
+  if (!mapped?.map.length || !document.createRange || endOffset <= startOffset) return [];
+  const startBoundary = domBoundaryForOffset(mapped, startOffset, false);
+  const endBoundary = domBoundaryForOffset(mapped, endOffset, true);
+  if (!startBoundary || !endBoundary) return [];
 
-  const x = window.innerWidth / 2;
-  const y = Math.max(64, Math.min(window.innerHeight - 64, window.innerHeight * 0.32));
-  const pointedBlock = document.elementFromPoint?.(x, y)?.closest?.(SPEECH_BLOCK_SELECTOR);
-  let startIndex = pointedBlock ? blocks.indexOf(pointedBlock) : -1;
-  if (startIndex < 0) {
-    startIndex = blocks.findIndex((element) => element.getBoundingClientRect().bottom > 60);
+  try {
+    const range = document.createRange();
+    range.setStart(startBoundary.node, startBoundary.offset);
+    range.setEnd(endBoundary.node, endBoundary.offset);
+    return [...(range.getClientRects?.() || [])]
+      .filter((rect) => rect.height > 0 && rect.width > 0);
+  } catch {
+    return [];
   }
-  return blocks.slice(Math.max(0, startIndex));
+};
+
+const visibleSpeechEntry = (element, viewportTop, viewportBottom) => {
+  const blockRect = element.getBoundingClientRect?.();
+  if (
+    !blockRect ||
+    blockRect.bottom <= viewportTop ||
+    blockRect.top >= viewportBottom
+  ) return null;
+
+  const mapped = createSpeechTextMap(element);
+  if (!mapped?.text) return null;
+  if (blockRect.top >= viewportTop && blockRect.bottom <= viewportBottom) {
+    return { element, text: mapped.text, mapBaseOffset: 0 };
+  }
+
+  const words = [...mapped.text.matchAll(/\S+/g)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length
+  }));
+  if (words.length === 0) return null;
+
+  const rectCache = new Map();
+  const wordRect = (index) => {
+    if (rectCache.has(index)) return rectCache.get(index);
+    const rects = mappedSpeechRangeRects(mapped, words[index].start, words[index].end);
+    const rect = rects.length > 0
+      ? {
+        top: Math.min(...rects.map((item) => item.top)),
+        bottom: Math.max(...rects.map((item) => item.bottom)),
+        left: Math.min(...rects.map((item) => item.left)),
+        right: Math.max(...rects.map((item) => item.right))
+      }
+      : null;
+    rectCache.set(index, rect);
+    return rect;
+  };
+
+  let low = 0;
+  let high = words.length - 1;
+  let firstCandidate = words.length;
+  let lastCandidate = words.length - 1;
+  let binarySearchFailed = false;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const rect = wordRect(middle);
+    if (!rect) {
+      binarySearchFailed = true;
+      break;
+    }
+    if (rect.bottom > viewportTop) {
+      firstCandidate = middle;
+      high = middle - 1;
+    } else {
+      low = middle + 1;
+    }
+  }
+
+  if (!binarySearchFailed) {
+    low = firstCandidate;
+    high = words.length - 1;
+    lastCandidate = -1;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const rect = wordRect(middle);
+      if (!rect) {
+        binarySearchFailed = true;
+        break;
+      }
+      if (rect.top < viewportBottom) {
+        lastCandidate = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+  }
+
+  if (binarySearchFailed) {
+    firstCandidate = 0;
+    lastCandidate = words.length - 1;
+  }
+  const isVisible = (index) => {
+    const rect = wordRect(index);
+    return Boolean(
+      rect &&
+      rect.bottom > viewportTop &&
+      rect.top < viewportBottom &&
+      rect.right > 0 &&
+      rect.left < window.innerWidth
+    );
+  };
+  while (firstCandidate <= lastCandidate && !isVisible(firstCandidate)) {
+    firstCandidate += 1;
+  }
+  while (lastCandidate >= firstCandidate && !isVisible(lastCandidate)) {
+    lastCandidate -= 1;
+  }
+  if (firstCandidate > lastCandidate) return null;
+
+  const start = words[firstCandidate].start;
+  const end = words[lastCandidate].end;
+  return {
+    element,
+    text: mapped.text.slice(start, end),
+    mapBaseOffset: start
+  };
+};
+
+const speechEntriesInViewport = (viewportTop, viewportBottom, afterCursor = null) => {
+  const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)];
+  const cursorIndex = afterCursor?.element
+    ? blocks.indexOf(afterCursor.element)
+    : -1;
+  return blocks
+    .map((element, index) => {
+      if (cursorIndex >= 0 && index < cursorIndex) return null;
+      const entry = visibleSpeechEntry(element, viewportTop, viewportBottom);
+      if (!entry || index !== cursorIndex) return entry;
+
+      const mapped = createSpeechTextMap(element);
+      const entryEnd = entry.mapBaseOffset + entry.text.length;
+      let start = Math.max(entry.mapBaseOffset, afterCursor.offset);
+      while (start < entryEnd && /\s/.test(mapped.text[start])) start += 1;
+      if (start >= entryEnd) return null;
+      return {
+        element,
+        text: mapped.text.slice(start, entryEnd),
+        mapBaseOffset: start
+      };
+    })
+    .filter(Boolean);
+};
+
+const speechEntriesFromViewport = (afterCursor = null) => speechEntriesInViewport(
+  8,
+  Math.max(8, window.innerHeight - 8),
+  afterCursor
+);
+
+const speechCursorFromJob = (job) => {
+  const segment = [...(job?.segments || [])].reverse().find((candidate) => (
+    candidate.element && candidate.end > job.sourceStart && candidate.start < job.sourceEnd
+  ));
+  if (!segment) return null;
+  return {
+    element: segment.element,
+    offset: segment.mapBaseOffset + Math.min(segment.end, job.sourceEnd) - segment.start
+  };
+};
+
+const waitForSpeechScroll = () => new Promise((resolve) => {
+  window.setTimeout(resolve, SPEECH_SCROLL_DURATION_MS + 40);
+});
+
+const scrollBySpeechOffset = async (offset) => {
+  if (!Number.isFinite(offset) || Math.abs(offset) <= 1) return false;
+  animateSpeechScrollBy(offset);
+  await waitForSpeechScroll();
+  return true;
+};
+
+const ensureSpeechJobVisible = async (job) => {
+  const visibleBounds = { top: 8, bottom: Math.max(8, window.innerHeight - 8) };
+  const firstRenderedRect = () => [...(createSpeechRange(job)?.getClientRects?.() || [])]
+    .find((rect) => rect.height > 0 && rect.width > 0);
+  let firstRect = firstRenderedRect();
+  if (!firstRect) return false;
+  if (firstRect.bottom > visibleBounds.top && firstRect.top < visibleBounds.bottom) {
+    return true;
+  }
+
+  const targetY = window.innerHeight * (speechPositionPercent / 100);
+  await scrollBySpeechOffset(firstRect.top - targetY);
+  firstRect = firstRenderedRect();
+  return Boolean(
+    firstRect &&
+    firstRect.bottom > visibleBounds.top &&
+    firstRect.top < visibleBounds.bottom
+  );
+};
+
+const scrollDownAfterSpeechJob = async (job) => {
+  const rects = [...(createSpeechRange(job)?.getClientRects?.() || [])]
+    .filter((rect) => rect.height > 0 && rect.width > 0);
+  const lastRect = rects.at(-1);
+  if (!lastRect) return false;
+  const targetY = window.innerHeight * (speechPositionPercent / 100);
+  const offset = Math.max(0, lastRect.bottom - targetY);
+  return scrollBySpeechOffset(offset);
+};
+
+const nextSpeechViewport = (cursor) => {
+  if (!cursor?.element) return null;
+  const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)];
+  const cursorIndex = blocks.indexOf(cursor.element);
+  if (cursorIndex < 0) return false;
+
+  for (let index = cursorIndex; index < blocks.length; index += 1) {
+    const element = blocks[index];
+    const mapped = createSpeechTextMap(element);
+    if (!mapped?.text) continue;
+    let start = index === cursorIndex ? cursor.offset : 0;
+    while (start < mapped.text.length && /\s/.test(mapped.text[start])) start += 1;
+    if (start >= mapped.text.length) continue;
+    let end = start + 1;
+    while (end < mapped.text.length && !/\s/.test(mapped.text[end])) end += 1;
+    const firstRect = mappedSpeechRangeRects(mapped, start, end)[0];
+    if (!firstRect) continue;
+
+    const targetY = window.innerHeight * (speechPositionPercent / 100);
+    const offset = Math.max(0, firstRect.top - targetY);
+    const entries = speechEntriesInViewport(
+      8 + offset,
+      Math.max(8 + offset, window.innerHeight - 8 + offset),
+      cursor
+    );
+    if (entries.length > 0) return { entries, offset };
+  }
+  return null;
 };
 
 const clearSpeechIndicators = () => {
@@ -1804,23 +2026,19 @@ const startSpeech = async () => {
     const selectedMap = selectedElement ? createSpeechTextMap(selectedElement) : null;
     const selectedMapOffset = selectedMap?.text.indexOf(selectedText) ?? -1;
     if (selectedText) currentSelection?.removeAllRanges();
-    const entries = selectedText
+    let entries = selectedText
       ? [{
         element: selectedMapOffset >= 0 ? selectedElement : null,
         text: selectedText,
         selectedRange,
         mapBaseOffset: Math.max(0, selectedMapOffset)
       }]
-      : speechBlocksFromViewport().map((element) => ({
-        element,
-        text: normalizeSpeechText(element.textContent)
-      }));
-    if (entries.length === 0) throw new Error("No readable text was found here.");
-    const jobs = buildSpeechJobs(entries);
-    if (jobs.length === 0) throw new Error("No readable text was found here.");
-    speechProgress.textContent = `1/${jobs.length}`;
-    speechProgress.hidden = false;
-
+      : speechEntriesFromViewport();
+    if (entries.length === 0) {
+      throw new Error(selectedText
+        ? "No readable text was found in the selection."
+        : "No readable text is visible. Scroll to some text and try again.");
+    }
     const requestedVoice = speechVoicePreference || null;
     const prepareJob = (job) => requestPiper("/api/piper/prepare", {
       method: "POST",
@@ -1835,34 +2053,95 @@ const startSpeech = async () => {
     const settlePreparation = (job) => prepareJob(job)
       .then((value) => ({ value }), (error) => ({ error }));
 
-    settingsSpeechStatus.textContent = "Generating first chunk…";
-    let prepared = await prepareJob(jobs[0]);
-
-    for (let index = 0; index < jobs.length; index += 1) {
-      if (generation !== speechGeneration) return;
-      speechProgress.textContent = `${index + 1}/${jobs.length}`;
-      const nextPreparation = index + 1 < jobs.length
-        ? settlePreparation(jobs[index + 1])
-        : null;
-      const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
-      speechVoice.textContent = formatSpeechVoice(prepared);
-      speechVoice.hidden = false;
-      setSpeechActiveJob(jobs[index]);
-      settingsSpeechStatus.textContent = nextPreparation
-        ? `Playing with ${voiceName}; generating next…`
-        : `Playing with ${voiceName}…`;
-      syncSpeechControls();
-
-      await playPreparedAudio(prepared);
-      speechIsPaused = false;
-      syncSpeechControls();
-      if (generation !== speechGeneration) return;
-
-      if (nextPreparation) {
-        const settled = await nextPreparation;
+    const viewportReading = !selectedText;
+    let viewportCursor = null;
+    let firstBatch = true;
+    let queuedBatch = null;
+    while (entries.length > 0) {
+      const jobs = queuedBatch?.jobs || buildSpeechJobs(entries);
+      if (jobs.length === 0) break;
+      if (viewportReading) jobs.forEach((job) => { job.followText = false; });
+      speechProgress.textContent = `1/${jobs.length}`;
+      speechProgress.hidden = false;
+      settingsSpeechStatus.textContent = queuedBatch
+        ? "Next visible text is ready."
+        : firstBatch
+          ? "Generating first chunk…"
+          : "Generating newly visible text…";
+      firstBatch = false;
+      let prepared;
+      if (queuedBatch) {
+        const settled = await queuedBatch.firstPreparation;
         if (settled.error) throw settled.error;
         prepared = settled.value;
+        queuedBatch = null;
+      } else {
+        prepared = await prepareJob(jobs[0]);
       }
+      let futureBatch = null;
+
+      for (let index = 0; index < jobs.length; index += 1) {
+        if (generation !== speechGeneration) return;
+        const currentJob = jobs[index];
+        speechProgress.textContent = `${index + 1}/${jobs.length}`;
+        let nextPreparation = index + 1 < jobs.length
+          ? settlePreparation(jobs[index + 1])
+          : null;
+        if (viewportReading && !nextPreparation) {
+          const futureCursor = speechCursorFromJob(currentJob) || viewportCursor;
+          const plan = nextSpeechViewport(futureCursor);
+          if (plan) {
+            const futureJobs = buildSpeechJobs(plan.entries);
+            futureJobs.forEach((job) => { job.followText = false; });
+            if (futureJobs.length > 0) {
+              futureBatch = {
+                entries: plan.entries,
+                jobs: futureJobs,
+                offset: plan.offset,
+                cursor: futureCursor,
+                firstPreparation: settlePreparation(futureJobs[0])
+              };
+            }
+          }
+        }
+        const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
+        speechVoice.textContent = formatSpeechVoice(prepared);
+        speechVoice.hidden = false;
+        setSpeechActiveJob(currentJob);
+        const backgroundGeneration = nextPreparation || futureBatch?.firstPreparation;
+        settingsSpeechStatus.textContent = backgroundGeneration
+          ? `Playing with ${voiceName}; generating next…`
+          : `Playing with ${voiceName}…`;
+        syncSpeechControls();
+
+        const visible = await ensureSpeechJobVisible(currentJob);
+        if (!visible) throw new Error("The next spoken text could not be brought into view.");
+        await playPreparedAudio(prepared);
+        speechIsPaused = false;
+        syncSpeechControls();
+        if (generation !== speechGeneration) return;
+
+        if (viewportReading) {
+          viewportCursor = speechCursorFromJob(currentJob) || viewportCursor;
+          if (futureBatch && index === jobs.length - 1) {
+            await scrollBySpeechOffset(futureBatch.offset);
+          } else {
+            await scrollDownAfterSpeechJob(currentJob);
+          }
+          if (generation !== speechGeneration) return;
+        }
+
+        if (nextPreparation) {
+          const settled = await nextPreparation;
+          if (settled.error) throw settled.error;
+          prepared = settled.value;
+        }
+      }
+
+      if (!viewportReading || !viewportCursor) break;
+      if (!futureBatch) break;
+      entries = futureBatch.entries;
+      queuedBatch = futureBatch;
     }
 
     if (generation !== speechGeneration) return;

@@ -13,39 +13,66 @@ const startOpen = document.querySelector("#start-open");
 const startReopen = document.querySelector("#start-reopen");
 const startPaletteNext = document.querySelector("#start-palette-next");
 const startPaletteSelect = document.querySelector("#start-palette");
+const startContrast = document.querySelector("#start-contrast");
+const startContrastValue = document.querySelector("#start-contrast-value");
+const startContrastDown = document.querySelector("#start-contrast-down");
+const startContrastUp = document.querySelector("#start-contrast-up");
 const startFontNext = document.querySelector("#start-font-next");
 const startFontSelect = document.querySelector("#start-font");
 const startFontSize = document.querySelector("#start-font-size");
 const startFontSizeValue = document.querySelector("#start-font-size-value");
+const startFontSizeDown = document.querySelector("#start-font-size-down");
+const startFontSizeUp = document.querySelector("#start-font-size-up");
 const startLineHeight = document.querySelector("#start-line-height");
 const startLineHeightValue = document.querySelector("#start-line-height-value");
+const startLineHeightDown = document.querySelector("#start-line-height-down");
+const startLineHeightUp = document.querySelector("#start-line-height-up");
 const startTrackingDown = document.querySelector("#start-tracking-down");
 const startTrackingReset = document.querySelector("#start-tracking-reset");
 const startTrackingUp = document.querySelector("#start-tracking-up");
 const startWidth = document.querySelector("#start-width");
 const startWidthValue = document.querySelector("#start-width-value");
+const startWidthDown = document.querySelector("#start-width-down");
+const startWidthUp = document.querySelector("#start-width-up");
+const startResetAll = document.querySelector("#start-reset-all");
 const settingsMenu = document.querySelector("#settings-menu");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsPaletteSelect = document.querySelector("#settings-palette");
+const settingsContrast = document.querySelector("#settings-contrast");
+const settingsContrastValue = document.querySelector("#settings-contrast-value");
+const settingsContrastDown = document.querySelector("#settings-contrast-down");
+const settingsContrastUp = document.querySelector("#settings-contrast-up");
 const settingsFontSelect = document.querySelector("#settings-font");
 const settingsFontSize = document.querySelector("#settings-font-size");
 const settingsFontSizeValue = document.querySelector("#settings-font-size-value");
+const settingsFontSizeDown = document.querySelector("#settings-font-size-down");
+const settingsFontSizeUp = document.querySelector("#settings-font-size-up");
 const settingsLineHeight = document.querySelector("#settings-line-height");
 const settingsLineHeightValue = document.querySelector("#settings-line-height-value");
+const settingsLineHeightDown = document.querySelector("#settings-line-height-down");
+const settingsLineHeightUp = document.querySelector("#settings-line-height-up");
 const settingsTrackingValue = document.querySelector("#settings-tracking-value");
 const settingsTrackingDown = document.querySelector("#settings-tracking-down");
 const settingsTrackingReset = document.querySelector("#settings-tracking-reset");
 const settingsTrackingUp = document.querySelector("#settings-tracking-up");
 const settingsWidth = document.querySelector("#settings-width");
 const settingsWidthValue = document.querySelector("#settings-width-value");
+const settingsWidthDown = document.querySelector("#settings-width-down");
+const settingsWidthUp = document.querySelector("#settings-width-up");
 const settingsSpeechVoice = document.querySelector("#settings-speech-voice");
 const settingsSpeechMin = document.querySelector("#settings-speech-min");
 const settingsSpeechMinValue = document.querySelector("#settings-speech-min-value");
+const settingsSpeechMinDown = document.querySelector("#settings-speech-min-down");
+const settingsSpeechMinUp = document.querySelector("#settings-speech-min-up");
 const settingsSpeechMax = document.querySelector("#settings-speech-max");
 const settingsSpeechMaxValue = document.querySelector("#settings-speech-max-value");
+const settingsSpeechMaxDown = document.querySelector("#settings-speech-max-down");
+const settingsSpeechMaxUp = document.querySelector("#settings-speech-max-up");
 const settingsSpeechPosition = document.querySelector("#settings-speech-position");
 const settingsSpeechPositionValue = document.querySelector("#settings-speech-position-value");
+const settingsSpeechPositionDown = document.querySelector("#settings-speech-position-down");
+const settingsSpeechPositionUp = document.querySelector("#settings-speech-position-up");
 const settingsSpeechStart = document.querySelector("#settings-speech-start");
 const settingsSpeechPause = document.querySelector("#settings-speech-pause");
 const settingsSpeechStop = document.querySelector("#settings-speech-stop");
@@ -57,12 +84,19 @@ const settingsPageUp = document.querySelector("#settings-page-up");
 const settingsPageDown = document.querySelector("#settings-page-down");
 const settingsOpen = document.querySelector("#settings-open");
 const settingsReopen = document.querySelector("#settings-reopen");
+const settingsResetAll = document.querySelector("#settings-reset-all");
 const readingProgress = document.querySelector("#reading-progress");
 const speechVoice = document.querySelector("#speech-voice");
 const speechProgress = document.querySelector("#speech-progress");
+const speechControls = document.querySelector("#speech-controls");
+const speechOverlayPause = document.querySelector("#speech-overlay-pause");
+const speechOverlayStop = document.querySelector("#speech-overlay-stop");
+const speechOverlayHome = document.querySelector("#speech-overlay-home");
 
 const POSITION_PREFIX = "smooth-reader:position:";
+const BOOK_SETTINGS_PREFIX = "smooth-reader:book-settings:";
 const PALETTE_KEY = "smooth-reader:palette";
+const CONTRAST_KEY = "smooth-reader:contrast";
 const FONT_KEY = "smooth-reader:font";
 const FONT_SIZE_KEY = "smooth-reader:font-size";
 const LINE_HEIGHT_KEY = "smooth-reader:line-height";
@@ -71,6 +105,7 @@ const WIDTH_KEY = "smooth-reader:text-width";
 const SPEECH_MIN_KEY = "smooth-reader:speech-minimum";
 const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
 const SPEECH_POSITION_KEY = "smooth-reader:speech-position";
+const SPEECH_SESSION_KEY = "smooth-reader:speech-session";
 const SILENT_WAV_DATA_URL = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
 const RECENT_BOOKS_KEY = "smooth-reader:recent-books";
@@ -78,32 +113,35 @@ const LAST_BOOK_DB = "smooth-reader-library";
 const LAST_BOOK_STORE = "books";
 const LAST_BOOK_RECORD = "last-opened";
 const RECENT_BOOKS_RECORD = "recent-books";
-const MAX_RECENT_BOOKS = 3;
+const MAX_RECENT_BOOKS = 6;
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
 const RIGHT_DRAG_SPEED = 1.35;
-const DEFAULT_TRACKING_EM = 0.01;
+const DEFAULT_TRACKING_EM = 0.02;
+const DEFAULT_CONTRAST = 0;
+const MIN_CONTRAST = -30;
+const MAX_CONTRAST = 30;
 const TRACKING_STEP_EM = 0.01;
 const MIN_TRACKING_EM = -0.03;
 const MAX_TRACKING_EM = 0.12;
-const DEFAULT_WIDTH_CH = 72;
-const MIN_WIDTH_CH = 40;
+const DEFAULT_WIDTH_CH = 44;
+const MIN_WIDTH_CH = 8;
 const MAX_WIDTH_CH = 100;
-const DEFAULT_FONT_SIZE_PX = 20;
+const DEFAULT_FONT_SIZE_PX = 36;
 const MIN_FONT_SIZE_PX = 14;
-const MAX_FONT_SIZE_PX = 36;
-const FONT_SIZE_STEP_PX = 1;
-const DEFAULT_LINE_HEIGHT = 1.72;
+const MAX_FONT_SIZE_PX = 80;
+const FONT_SIZE_STEP_PX = 2;
+const DEFAULT_LINE_HEIGHT = 1.28;
 const MIN_LINE_HEIGHT = 1.2;
 const MAX_LINE_HEIGHT = 2.2;
 const LINE_HEIGHT_STEP = 0.04;
-const DEFAULT_SPEECH_MIN_LENGTH = 350;
-const DEFAULT_SPEECH_MAX_LENGTH = 550;
+const DEFAULT_SPEECH_MIN_LENGTH = 150;
+const DEFAULT_SPEECH_MAX_LENGTH = 350;
 const MIN_SPEECH_MIN_LENGTH = 100;
 const MAX_SPEECH_MIN_LENGTH = 500;
 const MIN_SPEECH_MAX_LENGTH = 300;
 const MAX_SPEECH_MAX_LENGTH = 1200;
-const DEFAULT_SPEECH_POSITION_PERCENT = 15;
+const DEFAULT_SPEECH_POSITION_PERCENT = 22;
 const MIN_SPEECH_POSITION_PERCENT = 5;
 const MAX_SPEECH_POSITION_PERCENT = 50;
 const SPEECH_SCROLL_DURATION_MS = 5;
@@ -131,6 +169,7 @@ const FONTS = [
   { id: "alegreya", name: "ALEGREYA" },
   { id: "eb-garamond", name: "EB GARAMOND" },
   { id: "merriweather", name: "MERRIWEATHER" },
+  { id: "envy-code-r-nerd", name: "ENVY CODE R NERD" },
   { id: "system-mono", name: "SYSTEM MONO" }
 ];
 
@@ -139,10 +178,13 @@ let activeBookKey = null;
 let saveTimer = null;
 let statusTimer = null;
 let loadGeneration = 0;
+let isBookLoading = false;
+let positionPersistenceSuspended = false;
 let dragDepth = 0;
 let rightDrag = null;
 let rightDragFrame = null;
 let pendingRightDragScroll = 0;
+let lastPointerType = "mouse";
 let lastBookCanReopen = false;
 let recentBookInfo = [];
 let cachedRecentBooks = [];
@@ -158,15 +200,26 @@ let speechAudioUnlockPromise = Promise.resolve();
 let speechMarkerFrame = null;
 let speechScrollFrame = null;
 let speechTextMaps = new WeakMap();
+let speechVoicePreference = "";
+let piperAvailable = false;
+let suppressSettingsPersistence = false;
 const chapterLookup = new Map();
-let paletteIndex = Math.max(
-  0,
-  PALETTES.findIndex((palette) => palette.id === localStorage.getItem(PALETTE_KEY))
+const savedPaletteIndex = PALETTES.findIndex(
+  (palette) => palette.id === localStorage.getItem(PALETTE_KEY)
 );
-let fontIndex = Math.max(
-  0,
-  FONTS.findIndex((font) => font.id === localStorage.getItem(FONT_KEY))
+let paletteIndex = savedPaletteIndex >= 0
+  ? savedPaletteIndex
+  : PALETTES.findIndex((palette) => palette.id === "nord");
+const savedContrast = Number.parseInt(localStorage.getItem(CONTRAST_KEY), 10);
+let contrast = Number.isFinite(savedContrast)
+  ? Math.max(MIN_CONTRAST, Math.min(MAX_CONTRAST, savedContrast))
+  : DEFAULT_CONTRAST;
+const savedFontIndex = FONTS.findIndex(
+  (font) => font.id === localStorage.getItem(FONT_KEY)
 );
+let fontIndex = savedFontIndex >= 0
+  ? savedFontIndex
+  : FONTS.findIndex((font) => font.id === "alegreya");
 const savedTracking = Number.parseFloat(localStorage.getItem(TRACKING_KEY));
 let trackingEm = Number.isFinite(savedTracking)
   ? Math.max(MIN_TRACKING_EM, Math.min(MAX_TRACKING_EM, savedTracking))
@@ -202,6 +255,23 @@ if (speechMinimumLength > speechMaximumLength) {
   speechMinimumLength = Math.min(DEFAULT_SPEECH_MIN_LENGTH, speechMaximumLength);
 }
 
+const speechSessionId = (() => {
+  const makeId = () => crypto.randomUUID?.().replaceAll("-", "") ||
+    `session_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+  try {
+    const existing = window.sessionStorage?.getItem(SPEECH_SESSION_KEY);
+    if (existing) return existing;
+    const created = makeId();
+    window.sessionStorage?.setItem(SPEECH_SESSION_KEY, created);
+    return created;
+  } catch {
+    return makeId();
+  }
+})();
+const speechAudioFormat = speechAudio.canPlayType?.('audio/ogg; codecs="opus"')
+  ? "opus"
+  : "wav";
+
 const showStatus = (message, hideAfter = 0) => {
   window.clearTimeout(statusTimer);
   status.textContent = message;
@@ -219,8 +289,8 @@ const clearStatus = () => {
 };
 
 const setReopenAvailability = (canReopen) => {
-  startReopen.disabled = !canReopen;
-  settingsReopen.disabled = !canReopen;
+  startReopen.disabled = isBookLoading || !canReopen;
+  settingsReopen.disabled = isBookLoading || !canReopen;
 };
 
 const loadRecentBookInfo = () => {
@@ -249,10 +319,14 @@ const renderRecentBooks = () => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "recent-book";
-    button.disabled = !cached?.bytes;
+    button.disabled = isBookLoading || !cached?.bytes;
     button.textContent = record.title && record.title !== record.fileName
       ? `${record.title} — ${record.fileName}`
       : record.fileName;
+    if (cached?.thumbnail) {
+      button.classList.add("has-cover");
+      button.style.setProperty("--recent-book-cover", `url("${cached.thumbnail}")`);
+    }
     button.title = cached?.bytes
       ? `Open ${record.title || record.fileName}`
       : "Cached copy unavailable; drop this EPUB again";
@@ -331,6 +405,66 @@ const readCachedBooks = async () => {
   return legacy?.fileName ? [legacy] : [];
 };
 
+const createCoverThumbnail = async (bookInstance) => {
+  if (
+    typeof bookInstance?.coverUrl !== "function" ||
+    typeof window.fetch !== "function" ||
+    typeof window.createImageBitmap !== "function"
+  ) return "";
+
+  try {
+    const coverUrl = await bookInstance.coverUrl();
+    if (!coverUrl) return "";
+    const response = await window.fetch(coverUrl);
+    if (!response.ok) return "";
+    const blob = await response.blob();
+    if (!blob?.type?.startsWith("image/")) return "";
+
+    const bitmap = await window.createImageBitmap(blob);
+    const scale = Math.min(1, 160 / bitmap.width, 240 / bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvasContext = canvas.getContext?.("2d");
+    if (!canvasContext) {
+      bitmap.close?.();
+      return "";
+    }
+    canvasContext.fillStyle = "#ffffff";
+    canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+    canvasContext.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    return canvas.toDataURL?.("image/jpeg", 0.78) || "";
+  } catch (error) {
+    console.warn("Could not create an EPUB cover thumbnail.", error);
+    return "";
+  }
+};
+
+const backfillRecentThumbnails = async () => {
+  let changed = false;
+  for (const cached of cachedRecentBooks) {
+    if (cached.thumbnail || !cached.bytes) continue;
+    let coverBook = null;
+    try {
+      coverBook = ePub(cached.bytes);
+      await coverBook.opened;
+      await coverBook.ready;
+      const thumbnail = await createCoverThumbnail(coverBook);
+      if (thumbnail) {
+        cached.thumbnail = thumbnail;
+        changed = true;
+        renderRecentBooks();
+      }
+    } catch (error) {
+      console.warn("Could not inspect a cached EPUB cover.", error);
+    } finally {
+      coverBook?.destroy?.();
+    }
+  }
+  if (changed) await writeCachedBooks(cachedRecentBooks);
+};
+
 const initializeRecentBooks = async () => {
   recentBookInfo = loadRecentBookInfo();
   renderRecentBooks();
@@ -342,6 +476,7 @@ const initializeRecentBooks = async () => {
       cachedRecentBooks.find((cached) => booksMatch(recentBookInfo[0], cached))?.bytes
     );
     renderRecentBooks();
+    void backfillRecentThumbnails();
   } catch (error) {
     console.warn("Could not inspect the cached EPUBs.", error);
   }
@@ -442,6 +577,68 @@ const scheduleLayoutAnchorRestore = (anchor) => {
     });
 };
 
+const bookSettingsKey = (hash) => `${BOOK_SETTINGS_PREFIX}${hash}`;
+
+const captureReadingSettings = () => ({
+  font: FONTS[fontIndex].id,
+  fontSize: fontSizePx,
+  lineHeight,
+  tracking: trackingEm,
+  width: widthCh,
+  voice: speechVoicePreference
+});
+
+const saveCurrentReadingSettings = (globalKey = "", globalValue = "") => {
+  if (suppressSettingsPersistence) return;
+  if (activeBookKey) {
+    localStorage.setItem(
+      bookSettingsKey(activeBookKey),
+      JSON.stringify(captureReadingSettings())
+    );
+  } else if (globalKey) {
+    localStorage.setItem(globalKey, String(globalValue));
+  }
+};
+
+const readBookSettings = (hash) => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(bookSettingsKey(hash)) || "null");
+    return stored && typeof stored === "object" ? stored : null;
+  } catch {
+    return null;
+  }
+};
+
+const applyStoredBookSettings = (hash) => {
+  const stored = readBookSettings(hash);
+  if (!stored) {
+    saveCurrentReadingSettings();
+    return;
+  }
+
+  suppressSettingsPersistence = true;
+  try {
+    const storedFont = FONTS.findIndex((font) => font.id === stored.font);
+    if (storedFont >= 0) applyFont(storedFont, false);
+    if (Number.isFinite(Number(stored.fontSize))) {
+      applyFontSize(Number(stored.fontSize), false);
+    }
+    if (Number.isFinite(Number(stored.lineHeight))) {
+      applyLineHeight(Number(stored.lineHeight), false);
+    }
+    if (Number.isFinite(Number(stored.tracking))) {
+      applyTracking(Number(stored.tracking), false);
+    }
+    if (Number.isFinite(Number(stored.width))) {
+      applyWidth(Number(stored.width), false);
+    }
+    speechVoicePreference = typeof stored.voice === "string" ? stored.voice : "";
+    settingsSpeechVoice.value = speechVoicePreference;
+  } finally {
+    suppressSettingsPersistence = false;
+  }
+};
+
 const syncSettingsControls = () => {
   const paletteId = PALETTES[paletteIndex].id;
   const fontId = FONTS[fontIndex].id;
@@ -449,9 +646,18 @@ const syncSettingsControls = () => {
   const widthText = `≈ ${widthCh} chars`;
   const fontSizeText = `${fontSizePx}px`;
   const lineHeightText = lineHeight.toFixed(2);
+  const contrastText = `${contrast > 0 ? "+" : ""}${contrast}%`;
 
   startPaletteSelect.value = paletteId;
   settingsPaletteSelect.value = paletteId;
+  startContrast.value = String(contrast);
+  settingsContrast.value = String(contrast);
+  startContrastValue.textContent = contrastText;
+  settingsContrastValue.textContent = contrastText;
+  startContrastDown.disabled = contrast <= MIN_CONTRAST;
+  settingsContrastDown.disabled = contrast <= MIN_CONTRAST;
+  startContrastUp.disabled = contrast >= MAX_CONTRAST;
+  settingsContrastUp.disabled = contrast >= MAX_CONTRAST;
   startFontSelect.value = fontId;
   settingsFontSelect.value = fontId;
   settingsTrackingValue.textContent = trackingText;
@@ -459,14 +665,26 @@ const syncSettingsControls = () => {
   settingsWidth.value = String(widthCh);
   startWidthValue.textContent = widthText;
   settingsWidthValue.textContent = widthText;
+  startWidthDown.disabled = widthCh <= MIN_WIDTH_CH;
+  settingsWidthDown.disabled = widthCh <= MIN_WIDTH_CH;
+  startWidthUp.disabled = widthCh >= MAX_WIDTH_CH;
+  settingsWidthUp.disabled = widthCh >= MAX_WIDTH_CH;
   startFontSize.value = String(fontSizePx);
   settingsFontSize.value = String(fontSizePx);
   startFontSizeValue.textContent = fontSizeText;
   settingsFontSizeValue.textContent = fontSizeText;
+  startFontSizeDown.disabled = fontSizePx <= MIN_FONT_SIZE_PX;
+  settingsFontSizeDown.disabled = fontSizePx <= MIN_FONT_SIZE_PX;
+  startFontSizeUp.disabled = fontSizePx >= MAX_FONT_SIZE_PX;
+  settingsFontSizeUp.disabled = fontSizePx >= MAX_FONT_SIZE_PX;
   startLineHeight.value = String(lineHeight);
   settingsLineHeight.value = String(lineHeight);
   startLineHeightValue.textContent = lineHeightText;
   settingsLineHeightValue.textContent = lineHeightText;
+  startLineHeightDown.disabled = lineHeight <= MIN_LINE_HEIGHT;
+  settingsLineHeightDown.disabled = lineHeight <= MIN_LINE_HEIGHT;
+  startLineHeightUp.disabled = lineHeight >= MAX_LINE_HEIGHT;
+  settingsLineHeightUp.disabled = lineHeight >= MAX_LINE_HEIGHT;
 };
 
 const applyPalette = (nextIndex, announce = true) => {
@@ -481,12 +699,32 @@ const applyPalette = (nextIndex, announce = true) => {
   }
 };
 
+const applyContrast = (nextContrast, announce = true) => {
+  contrast = Math.round(
+    Math.max(MIN_CONTRAST, Math.min(MAX_CONTRAST, nextContrast))
+  );
+  document.documentElement.style.setProperty(
+    "--contrast-strength",
+    `${Math.max(0, contrast)}%`
+  );
+  document.documentElement.style.setProperty(
+    "--contrast-soften",
+    `${Math.max(0, -contrast)}%`
+  );
+  localStorage.setItem(CONTRAST_KEY, String(contrast));
+  syncSettingsControls();
+
+  if (announce) {
+    showStatus(`CONTRAST · ${contrast > 0 ? "+" : ""}${contrast}%`, 900);
+  }
+};
+
 const applyFont = (nextIndex, announce = true) => {
   const anchor = beginLayoutChange();
   fontIndex = (nextIndex + FONTS.length) % FONTS.length;
   const font = FONTS[fontIndex];
   document.documentElement.dataset.font = font.id;
-  localStorage.setItem(FONT_KEY, font.id);
+  saveCurrentReadingSettings(FONT_KEY, font.id);
   syncSettingsControls();
   scheduleLayoutAnchorRestore(anchor);
 
@@ -506,7 +744,7 @@ const applyTracking = (nextTracking, announce = true) => {
     "--reader-tracking",
     `${trackingEm.toFixed(2)}em`
   );
-  localStorage.setItem(TRACKING_KEY, String(trackingEm));
+  saveCurrentReadingSettings(TRACKING_KEY, trackingEm);
   syncSettingsControls();
   scheduleLayoutAnchorRestore(anchor);
 
@@ -520,7 +758,7 @@ const applyWidth = (nextWidth, announce = true) => {
   const anchor = beginLayoutChange();
   widthCh = Math.round(Math.max(MIN_WIDTH_CH, Math.min(MAX_WIDTH_CH, nextWidth)));
   document.documentElement.style.setProperty("--reader-width", `${widthCh}ch`);
-  localStorage.setItem(WIDTH_KEY, String(widthCh));
+  saveCurrentReadingSettings(WIDTH_KEY, widthCh);
   syncSettingsControls();
   scheduleLayoutAnchorRestore(anchor);
 
@@ -535,7 +773,7 @@ const applyFontSize = (nextSize, announce = true) => {
     Math.max(MIN_FONT_SIZE_PX, Math.min(MAX_FONT_SIZE_PX, nextSize))
   );
   document.documentElement.style.setProperty("--reader-font-size", `${fontSizePx}px`);
-  localStorage.setItem(FONT_SIZE_KEY, String(fontSizePx));
+  saveCurrentReadingSettings(FONT_SIZE_KEY, fontSizePx);
   syncSettingsControls();
   scheduleLayoutAnchorRestore(anchor);
 
@@ -551,23 +789,64 @@ const applyLineHeight = (nextLineHeight, announce = true) => {
     "--reader-line-height",
     lineHeight.toFixed(2)
   );
-  localStorage.setItem(LINE_HEIGHT_KEY, String(lineHeight));
+  saveCurrentReadingSettings(LINE_HEIGHT_KEY, lineHeight);
   syncSettingsControls();
   scheduleLayoutAnchorRestore(anchor);
 
   if (announce) showStatus(`LINE HEIGHT · ${lineHeight.toFixed(2)}`, 900);
 };
 
+const resetAllSettings = () => {
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith(BOOK_SETTINGS_PREFIX)) localStorage.removeItem(key);
+  }
+
+  const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
+  const defaultFontIndex = FONTS.findIndex((font) => font.id === "alegreya");
+  localStorage.setItem(FONT_KEY, "alegreya");
+  localStorage.setItem(FONT_SIZE_KEY, String(DEFAULT_FONT_SIZE_PX));
+  localStorage.setItem(LINE_HEIGHT_KEY, String(DEFAULT_LINE_HEIGHT));
+  localStorage.setItem(TRACKING_KEY, String(DEFAULT_TRACKING_EM));
+  localStorage.setItem(WIDTH_KEY, String(DEFAULT_WIDTH_CH));
+
+  applyPalette(defaultPaletteIndex, false);
+  applyContrast(DEFAULT_CONTRAST, false);
+  applyFont(defaultFontIndex, false);
+  applyFontSize(DEFAULT_FONT_SIZE_PX, false);
+  applyLineHeight(DEFAULT_LINE_HEIGHT, false);
+  applyTracking(DEFAULT_TRACKING_EM, false);
+  applyWidth(DEFAULT_WIDTH_CH, false);
+  speechVoicePreference = "";
+  settingsSpeechVoice.value = "";
+  applySpeechBounds(
+    DEFAULT_SPEECH_MIN_LENGTH,
+    DEFAULT_SPEECH_MAX_LENGTH
+  );
+  applySpeechPosition(DEFAULT_SPEECH_POSITION_PERCENT, Boolean(speechActiveJob));
+  saveCurrentReadingSettings();
+  showStatus("ALL SETTINGS RESET · BOOKS AND POSITIONS KEPT", 1800);
+};
+
 applyPalette(paletteIndex, false);
+applyContrast(contrast, false);
 applyFont(fontIndex, false);
 applyTracking(trackingEm, false);
 applyWidth(widthCh, false);
 applyFontSize(fontSizePx, false);
 applyLineHeight(lineHeight, false);
+if (recentBookInfo[0]?.hash && readBookSettings(recentBookInfo[0].hash)) {
+  applyStoredBookSettings(recentBookInfo[0].hash);
+}
 
 const setSettingsOpen = (isOpen) => {
   settingsPanel.hidden = !isOpen;
+  document.body.classList[isOpen ? "add" : "remove"]("settings-open");
   settingsToggle.setAttribute("aria-expanded", String(isOpen));
+  settingsToggle.setAttribute(
+    "aria-label", isOpen ? "Close reader settings" : "Open reader settings"
+  );
+  settingsToggle.title = isOpen ? "Close reader settings" : "Reader settings";
 };
 
 const setReadingMode = (isReading) => {
@@ -576,6 +855,7 @@ const setReadingMode = (isReading) => {
   settingsMenu.hidden = !isReading;
   readingProgress.hidden = !isReading;
   if (!isReading) setSettingsOpen(false);
+  syncSpeechControls();
 };
 
 const updateReadingProgress = () => {
@@ -602,7 +882,7 @@ const loadPosition = (hash) => {
 };
 
 const savePositionNow = () => {
-  if (!activeBookKey || reader.hidden) return;
+  if (positionPersistenceSuspended || !activeBookKey || reader.hidden) return;
 
   const scrollRange = Math.max(
     0,
@@ -618,6 +898,7 @@ const savePositionNow = () => {
 
 const schedulePositionSave = () => {
   window.clearTimeout(saveTimer);
+  if (positionPersistenceSuspended) return;
   saveTimer = window.setTimeout(savePositionNow, SAVE_DELAY_MS);
 };
 
@@ -811,11 +1092,12 @@ const stopRightDrag = (event) => {
 };
 
 const handleRightDragStart = (event) => {
+  lastPointerType = event.pointerType || "mouse";
   cancelSpeechScroll();
   if (
     event.button !== 2 ||
     reader.hidden ||
-    event.target?.closest?.("#settings-menu")
+    event.target?.closest?.("#settings-menu, #speech-controls")
   ) return;
 
   event.preventDefault();
@@ -859,28 +1141,29 @@ const waitForImages = async () => {
 const restorePosition = async (savedPosition) => {
   await document.fonts?.ready;
   await waitForImages();
-
-  window.requestAnimationFrame(() => {
-    const scrollRange = Math.max(
-      0,
-      document.documentElement.scrollHeight - window.innerHeight
-    );
-    const legacyRatio = Number(savedPosition?.percentage);
-    const storedRatio = Number(savedPosition?.ratio);
-    const storedY = Number(savedPosition?.scrollY);
-
-    let target = 0;
-    if (Number.isFinite(storedY)) {
-      target = storedY;
-    } else if (Number.isFinite(storedRatio)) {
-      target = storedRatio * scrollRange;
-    } else if (Number.isFinite(legacyRatio)) {
-      target = legacyRatio * scrollRange;
-    }
-
-    window.scrollTo(0, Math.max(0, Math.min(scrollRange, target)));
-    updateReadingProgress();
+  await new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
   });
+
+  const scrollRange = Math.max(
+    0,
+    document.documentElement.scrollHeight - window.innerHeight
+  );
+  const legacyRatio = Number(savedPosition?.percentage);
+  const storedRatio = Number(savedPosition?.ratio);
+  const storedY = Number(savedPosition?.scrollY);
+
+  let target = 0;
+  if (Number.isFinite(storedY)) {
+    target = storedY;
+  } else if (Number.isFinite(storedRatio)) {
+    target = storedRatio * scrollRange;
+  } else if (Number.isFinite(legacyRatio)) {
+    target = legacyRatio * scrollRange;
+  }
+
+  window.scrollTo(0, Math.max(0, Math.min(scrollRange, target)));
+  updateReadingProgress();
 };
 
 const normalizeSpeechText = (text) => String(text || "")
@@ -912,6 +1195,10 @@ const applySpeechBounds = (nextMinimum, nextMaximum, changed = "", announce = fa
   settingsSpeechMax.value = String(maximum);
   settingsSpeechMinValue.textContent = `${minimum} chars`;
   settingsSpeechMaxValue.textContent = `${maximum} chars`;
+  settingsSpeechMinDown.disabled = minimum <= MIN_SPEECH_MIN_LENGTH;
+  settingsSpeechMinUp.disabled = minimum >= MAX_SPEECH_MIN_LENGTH;
+  settingsSpeechMaxDown.disabled = maximum <= MIN_SPEECH_MAX_LENGTH;
+  settingsSpeechMaxUp.disabled = maximum >= MAX_SPEECH_MAX_LENGTH;
 };
 
 applySpeechBounds(speechMinimumLength, speechMaximumLength);
@@ -924,6 +1211,12 @@ const applySpeechPosition = (nextPosition, followCurrent = false) => {
   localStorage.setItem(SPEECH_POSITION_KEY, String(speechPositionPercent));
   settingsSpeechPosition.value = String(speechPositionPercent);
   settingsSpeechPositionValue.textContent = `${speechPositionPercent}%`;
+  settingsSpeechPositionDown.disabled = (
+    speechPositionPercent <= MIN_SPEECH_POSITION_PERCENT
+  );
+  settingsSpeechPositionUp.disabled = (
+    speechPositionPercent >= MAX_SPEECH_POSITION_PERCENT
+  );
   if (followCurrent && speechActiveJob) positionSpeechMarker(true);
 };
 
@@ -1269,7 +1562,7 @@ const setSpeechActiveJob = (job) => {
 };
 
 const updateSpeechVoices = (voices) => {
-  const selected = settingsSpeechVoice.value;
+  const selected = speechVoicePreference;
   settingsSpeechVoice.replaceChildren();
   const randomOption = document.createElement("option");
   randomOption.value = "";
@@ -1282,7 +1575,9 @@ const updateSpeechVoices = (voices) => {
     option.textContent = voice.replace(/\.onnx$/i, "").toUpperCase();
     settingsSpeechVoice.appendChild(option);
   });
-  settingsSpeechVoice.value = voices.includes(selected) ? selected : "";
+  speechVoicePreference = voices.includes(selected) ? selected : "";
+  settingsSpeechVoice.value = speechVoicePreference;
+  if (selected && !speechVoicePreference) saveCurrentReadingSettings();
 };
 
 const requestPiper = async (path, options = {}) => {
@@ -1306,7 +1601,8 @@ const inspectPiperBridge = async () => {
   const bridge = await requestPiper("/api/piper/status");
   if (!bridge.available) throw new Error(bridge.error || "Piper or FFmpeg was not found.");
   updateSpeechVoices(bridge.voices || []);
-  settingsSpeechStatus.textContent = `${bridge.voices.length} local voice${bridge.voices.length === 1 ? "" : "s"} ready.`;
+  const format = speechAudioFormat === "opus" ? "Opus 48 kbps" : "WAV compatibility mode";
+  settingsSpeechStatus.textContent = `${bridge.voices.length} local voice${bridge.voices.length === 1 ? "" : "s"} ready · ${format}.`;
   return bridge;
 };
 
@@ -1340,6 +1636,41 @@ const clearSpeechIndicators = () => {
   speechProgress.textContent = "";
 };
 
+const syncSpeechControls = () => {
+  const bookCanSpeak = !reader.hidden && viewer.children.length > 0 && !isBookLoading;
+  const canPause = speechIsActive && Boolean(speechAudio.src);
+  settingsSpeechStart.disabled = speechIsActive;
+  settingsSpeechPause.disabled = !canPause;
+  settingsSpeechPause.textContent = speechIsPaused ? "CONTINUE" : "PAUSE";
+  settingsSpeechStop.disabled = !speechIsActive;
+  speechControls.hidden = reader.hidden;
+  speechOverlayPause.hidden = !piperAvailable;
+  speechOverlayStop.hidden = !piperAvailable;
+  speechOverlayPause.disabled = speechIsActive ? !canPause : !bookCanSpeak;
+  speechOverlayStop.disabled = !speechIsActive;
+  speechOverlayHome.disabled = isBookLoading;
+  speechOverlayPause.textContent = speechIsActive && !speechIsPaused ? "Ⅱ" : "▶";
+  const primaryLabel = speechIsActive
+    ? (speechIsPaused ? "Continue speech" : "Pause speech")
+    : "Read aloud from here";
+  speechOverlayPause.setAttribute(
+    "aria-label", primaryLabel
+  );
+  speechOverlayPause.title = primaryLabel;
+};
+
+const probePiperBridge = async () => {
+  try {
+    await inspectPiperBridge();
+    piperAvailable = true;
+  } catch {
+    piperAvailable = false;
+    settingsSpeechStatus.textContent = "Run piper_bridge.py to enable local speech.";
+  } finally {
+    syncSpeechControls();
+  }
+};
+
 const releaseSpeechAudio = () => {
   speechAudioFinish?.();
   speechAudioFinish = null;
@@ -1348,6 +1679,7 @@ const releaseSpeechAudio = () => {
   speechAudio.onerror = null;
   speechAudio.removeAttribute("src");
   speechAudio.load();
+  syncSpeechControls();
 };
 
 const unlockSpeechAudio = () => {
@@ -1372,6 +1704,7 @@ const playPreparedAudio = async (prepared) => {
   speechAudio.muted = false;
   speechAudio.src = prepared.audioUrl;
   speechAudio.load();
+  syncSpeechControls();
 
   let finishPlayback;
   const finished = new Promise((resolve, reject) => {
@@ -1383,7 +1716,7 @@ const playPreparedAudio = async (prepared) => {
       else resolve();
     };
     speechAudio.onended = () => finishPlayback();
-    speechAudio.onerror = () => finishPlayback(new Error("Browser WAV playback failed."));
+    speechAudio.onerror = () => finishPlayback(new Error("Browser audio playback failed."));
   });
   speechAudioFinish = () => finishPlayback();
 
@@ -1408,16 +1741,18 @@ const stopSpeech = () => {
   speechGeneration += 1;
   speechIsActive = false;
   speechIsPaused = false;
-  settingsSpeechStart.disabled = false;
-  settingsSpeechPause.disabled = true;
-  settingsSpeechPause.textContent = "PAUSE";
-  settingsSpeechStop.disabled = true;
   clearSpeechIndicators();
   releaseSpeechAudio();
   clearSpeechSelection();
+  syncSpeechControls();
 
   if (wasActive && typeof window.fetch === "function") {
-    window.fetch("/api/piper/stop", { method: "POST", keepalive: true }).catch(() => {});
+    window.fetch("/api/piper/stop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: speechSessionId }),
+      keepalive: true
+    }).catch(() => {});
     settingsSpeechStatus.textContent = "Stopped.";
   }
 };
@@ -1429,7 +1764,7 @@ const toggleSpeechPause = async () => {
     if (nextPaused) speechAudio.pause();
     else await speechAudio.play();
     speechIsPaused = nextPaused;
-    settingsSpeechPause.textContent = speechIsPaused ? "CONTINUE" : "PAUSE";
+    syncSpeechControls();
     settingsSpeechStatus.textContent = speechIsPaused
       ? "Playback paused; background generation may continue."
       : "Playback continuing…";
@@ -1446,14 +1781,15 @@ const startSpeech = async () => {
   const generation = ++speechGeneration;
   speechIsActive = true;
   speechIsPaused = false;
-  settingsSpeechStart.disabled = true;
-  settingsSpeechPause.disabled = true;
-  settingsSpeechPause.textContent = "PAUSE";
-  settingsSpeechStop.disabled = false;
+  syncSpeechControls();
   settingsSpeechStatus.textContent = "Connecting to local Piper…";
 
   try {
-    await inspectPiperBridge();
+    if (!piperAvailable) {
+      await inspectPiperBridge();
+      piperAvailable = true;
+      syncSpeechControls();
+    }
     if (generation !== speechGeneration) return;
 
     const currentSelection = window.getSelection?.();
@@ -1485,11 +1821,16 @@ const startSpeech = async () => {
     speechProgress.textContent = `1/${jobs.length}`;
     speechProgress.hidden = false;
 
-    const requestedVoice = settingsSpeechVoice.value || null;
+    const requestedVoice = speechVoicePreference || null;
     const prepareJob = (job) => requestPiper("/api/piper/prepare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: job.text, voice: requestedVoice })
+      body: JSON.stringify({
+        text: job.text,
+        voice: requestedVoice,
+        sessionId: speechSessionId,
+        audioFormat: speechAudioFormat
+      })
     });
     const settlePreparation = (job) => prepareJob(job)
       .then((value) => ({ value }), (error) => ({ error }));
@@ -1510,12 +1851,11 @@ const startSpeech = async () => {
       settingsSpeechStatus.textContent = nextPreparation
         ? `Playing with ${voiceName}; generating next…`
         : `Playing with ${voiceName}…`;
-      settingsSpeechPause.disabled = false;
+      syncSpeechControls();
 
       await playPreparedAudio(prepared);
       speechIsPaused = false;
-      settingsSpeechPause.disabled = true;
-      settingsSpeechPause.textContent = "PAUSE";
+      syncSpeechControls();
       if (generation !== speechGeneration) return;
 
       if (nextPreparation) {
@@ -1528,25 +1868,19 @@ const startSpeech = async () => {
     if (generation !== speechGeneration) return;
     speechIsActive = false;
     speechIsPaused = false;
-    settingsSpeechStart.disabled = false;
-    settingsSpeechPause.disabled = true;
-    settingsSpeechPause.textContent = "PAUSE";
-    settingsSpeechStop.disabled = true;
     clearSpeechIndicators();
     releaseSpeechAudio();
     clearSpeechSelection();
+    syncSpeechControls();
     settingsSpeechStatus.textContent = "Finished.";
   } catch (error) {
     if (generation !== speechGeneration) return;
     speechIsActive = false;
     speechIsPaused = false;
-    settingsSpeechStart.disabled = false;
-    settingsSpeechPause.disabled = true;
-    settingsSpeechPause.textContent = "PAUSE";
-    settingsSpeechStop.disabled = true;
     clearSpeechIndicators();
     releaseSpeechAudio();
     clearSpeechSelection();
+    syncSpeechControls();
     const message = error?.message || "Local Piper could not read this text.";
     settingsSpeechStatus.textContent = message;
     showStatus(`PIPER ERROR · ${message}`, 3200);
@@ -1558,8 +1892,14 @@ const openBook = async (file) => {
     showStatus("Please drop an EPUB file.");
     return;
   }
+  if (isBookLoading) return;
 
   const generation = ++loadGeneration;
+  savePositionNow();
+  isBookLoading = true;
+  positionPersistenceSuspended = true;
+  setReopenAvailability(lastBookCanReopen);
+  renderRecentBooks();
   clearStatus();
   showStatus("OPENING…");
 
@@ -1570,12 +1910,14 @@ const openBook = async (file) => {
 
     destroyCurrentBook();
     activeBookKey = hash;
+    applyStoredBookSettings(hash);
     const savedPosition = loadPosition(hash);
 
     book = ePub(bytes);
     await book.opened;
     await book.ready;
     if (generation !== loadGeneration) return;
+    const coverThumbnailPromise = createCoverThumbnail(book);
 
     const sections = [];
     book.spine.each((section) => {
@@ -1596,7 +1938,10 @@ const openBook = async (file) => {
       2800
     );
 
-    const metadata = await book.loaded.metadata;
+    const [metadata, thumbnail] = await Promise.all([
+      book.loaded.metadata,
+      coverThumbnailPromise
+    ]);
     const lastBookInfo = {
       hash,
       fileName: file.name,
@@ -1611,7 +1956,14 @@ const openBook = async (file) => {
     localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
 
     try {
-      const cachedBook = { ...lastBookInfo, bytes };
+      const previousCachedBook = cachedRecentBooks.find((record) =>
+        booksMatch(lastBookInfo, record)
+      );
+      const cachedBook = {
+        ...lastBookInfo,
+        bytes,
+        thumbnail: thumbnail || previousCachedBook?.thumbnail || ""
+      };
       cachedRecentBooks = [
         cachedBook,
         ...cachedRecentBooks.filter((record) => !booksMatch(cachedBook, record))
@@ -1632,6 +1984,15 @@ const openBook = async (file) => {
     activeBookKey = null;
     setReadingMode(false);
     showStatus("That EPUB could not be opened.");
+  } finally {
+    if (generation === loadGeneration) {
+      positionPersistenceSuspended = false;
+      isBookLoading = false;
+      renderRecentBooks();
+      setReopenAvailability(lastBookCanReopen);
+      syncSpeechControls();
+      schedulePositionSave();
+    }
   }
 };
 
@@ -1645,6 +2006,7 @@ const openDroppedFiles = (fileList) => {
 };
 
 const reopenCachedBook = (record) => {
+  if (isBookLoading) return;
   const cached = cachedRecentBooks.find((candidate) => booksMatch(record, candidate));
   if (!cached?.bytes) {
     showStatus("THIS BOOK IS NOT CACHED · DROP IT AGAIN", 1800);
@@ -1668,6 +2030,7 @@ const reopenCachedBook = (record) => {
 };
 
 const reopenLastBook = () => {
+  if (isBookLoading) return;
   if (!lastBookCanReopen || recentBookInfo.length === 0) {
     showStatus("LAST BOOK IS NOT CACHED · DROP IT AGAIN", 1800);
     return;
@@ -1696,6 +2059,7 @@ const scrollOnePage = (direction) => {
 };
 
 const returnToHomeScreen = () => {
+  if (isBookLoading) return;
   loadGeneration += 1;
   clearStatus();
   destroyCurrentBook();
@@ -1727,7 +2091,7 @@ const handleReaderKeyDown = (event) => {
 
   if (noCommandModifier && !event.shiftKey && key === "r") {
     event.preventDefault();
-    reopenLastBook();
+    if (!isBookLoading) reopenLastBook();
     return;
   }
 
@@ -1865,6 +2229,16 @@ settingsReopen.addEventListener("click", reopenLastBook);
 settingsSpeechStart.addEventListener("click", startSpeech);
 settingsSpeechPause.addEventListener("click", toggleSpeechPause);
 settingsSpeechStop.addEventListener("click", stopSpeech);
+speechOverlayPause.addEventListener("click", () => {
+  if (speechIsActive) void toggleSpeechPause();
+  else void startSpeech();
+});
+speechOverlayStop.addEventListener("click", stopSpeech);
+speechOverlayHome.addEventListener("click", returnToHomeScreen);
+settingsSpeechVoice.addEventListener("change", (event) => {
+  speechVoicePreference = event.target.value || "";
+  saveCurrentReadingSettings();
+});
 
 settingsSpeechMin.addEventListener("input", (event) => {
   applySpeechBounds(Number(event.target.value), speechMaximumLength, "minimum");
@@ -1881,6 +2255,44 @@ settingsSpeechMax.addEventListener("change", (event) => {
 settingsSpeechPosition.addEventListener("input", (event) => {
   applySpeechPosition(Number(event.target.value), true);
 });
+settingsSpeechMinDown.addEventListener("click", () => {
+  applySpeechBounds(
+    speechMinimumLength - 50,
+    speechMaximumLength,
+    "minimum",
+    true
+  );
+});
+settingsSpeechMinUp.addEventListener("click", () => {
+  applySpeechBounds(
+    speechMinimumLength + 50,
+    speechMaximumLength,
+    "minimum",
+    true
+  );
+});
+settingsSpeechMaxDown.addEventListener("click", () => {
+  applySpeechBounds(
+    speechMinimumLength,
+    speechMaximumLength - 50,
+    "maximum",
+    true
+  );
+});
+settingsSpeechMaxUp.addEventListener("click", () => {
+  applySpeechBounds(
+    speechMinimumLength,
+    speechMaximumLength + 50,
+    "maximum",
+    true
+  );
+});
+settingsSpeechPositionDown.addEventListener("click", () => {
+  applySpeechPosition(speechPositionPercent - 1, true);
+});
+settingsSpeechPositionUp.addEventListener("click", () => {
+  applySpeechPosition(speechPositionPercent + 1, true);
+});
 
 startPaletteNext.addEventListener("click", () => applyPalette(paletteIndex + 1));
 startFontNext.addEventListener("click", () => applyFont(fontIndex + 1));
@@ -1890,6 +2302,17 @@ startPaletteSelect.addEventListener("change", (event) => {
 settingsPaletteSelect.addEventListener("change", (event) => {
   applyPalette(PALETTES.findIndex((palette) => palette.id === event.target.value));
 });
+const handleContrastInput = (event, announce = false) => {
+  applyContrast(Number(event.target.value), announce);
+};
+startContrast.addEventListener("input", (event) => handleContrastInput(event));
+settingsContrast.addEventListener("input", (event) => handleContrastInput(event));
+startContrast.addEventListener("change", (event) => handleContrastInput(event, true));
+settingsContrast.addEventListener("change", (event) => handleContrastInput(event, true));
+startContrastDown.addEventListener("click", () => applyContrast(contrast - 1));
+settingsContrastDown.addEventListener("click", () => applyContrast(contrast - 1));
+startContrastUp.addEventListener("click", () => applyContrast(contrast + 1));
+settingsContrastUp.addEventListener("click", () => applyContrast(contrast + 1));
 startFontSelect.addEventListener("change", (event) => {
   applyFont(FONTS.findIndex((font) => font.id === event.target.value));
 });
@@ -1904,6 +2327,18 @@ startFontSize.addEventListener("input", (event) => handleFontSizeInput(event));
 settingsFontSize.addEventListener("input", (event) => handleFontSizeInput(event));
 startFontSize.addEventListener("change", (event) => handleFontSizeInput(event, true));
 settingsFontSize.addEventListener("change", (event) => handleFontSizeInput(event, true));
+startFontSizeDown.addEventListener("click", () => {
+  applyFontSize(fontSizePx - FONT_SIZE_STEP_PX);
+});
+settingsFontSizeDown.addEventListener("click", () => {
+  applyFontSize(fontSizePx - FONT_SIZE_STEP_PX);
+});
+startFontSizeUp.addEventListener("click", () => {
+  applyFontSize(fontSizePx + FONT_SIZE_STEP_PX);
+});
+settingsFontSizeUp.addEventListener("click", () => {
+  applyFontSize(fontSizePx + FONT_SIZE_STEP_PX);
+});
 
 const handleLineHeightInput = (event, announce = false) => {
   applyLineHeight(Number(event.target.value), announce);
@@ -1912,6 +2347,18 @@ startLineHeight.addEventListener("input", (event) => handleLineHeightInput(event
 settingsLineHeight.addEventListener("input", (event) => handleLineHeightInput(event));
 startLineHeight.addEventListener("change", (event) => handleLineHeightInput(event, true));
 settingsLineHeight.addEventListener("change", (event) => handleLineHeightInput(event, true));
+startLineHeightDown.addEventListener("click", () => {
+  applyLineHeight(lineHeight - LINE_HEIGHT_STEP);
+});
+settingsLineHeightDown.addEventListener("click", () => {
+  applyLineHeight(lineHeight - LINE_HEIGHT_STEP);
+});
+startLineHeightUp.addEventListener("click", () => {
+  applyLineHeight(lineHeight + LINE_HEIGHT_STEP);
+});
+settingsLineHeightUp.addEventListener("click", () => {
+  applyLineHeight(lineHeight + LINE_HEIGHT_STEP);
+});
 
 startTrackingDown.addEventListener("click", () => {
   applyTracking(trackingEm - TRACKING_STEP_EM);
@@ -1935,6 +2382,10 @@ startWidth.addEventListener("input", (event) => handleWidthInput(event));
 settingsWidth.addEventListener("input", (event) => handleWidthInput(event));
 startWidth.addEventListener("change", (event) => handleWidthInput(event, true));
 settingsWidth.addEventListener("change", (event) => handleWidthInput(event, true));
+startWidthDown.addEventListener("click", () => applyWidth(widthCh - 2));
+settingsWidthDown.addEventListener("click", () => applyWidth(widthCh - 2));
+startWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
+settingsWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
 
 settingsToggle.addEventListener("click", () => {
   setSettingsOpen(settingsPanel.hidden);
@@ -1942,6 +2393,8 @@ settingsToggle.addEventListener("click", () => {
 settingsHome.addEventListener("click", returnToHomeScreen);
 settingsPageUp.addEventListener("click", () => scrollOnePage(-1));
 settingsPageDown.addEventListener("click", () => scrollOnePage(1));
+startResetAll.addEventListener("click", resetAllSettings);
+settingsResetAll.addEventListener("click", resetAllSettings);
 
 window.addEventListener("click", (event) => {
   if (!settingsPanel.hidden && !event.target?.closest?.("#settings-menu")) {
@@ -2001,7 +2454,7 @@ window.addEventListener("pointerup", stopRightDrag);
 window.addEventListener("pointercancel", stopRightDrag);
 window.addEventListener("lostpointercapture", stopRightDrag);
 window.addEventListener("contextmenu", (event) => {
-  if (!reader.hidden) event.preventDefault();
+  if (!reader.hidden && lastPointerType !== "touch") event.preventDefault();
 });
 window.addEventListener("keydown", handleReaderKeyDown, true);
 window.addEventListener("scroll", () => {
@@ -2015,3 +2468,5 @@ if (typeof window.ResizeObserver === "function") {
 }
 window.addEventListener("blur", () => stopRightDrag());
 window.addEventListener("beforeunload", savePositionNow);
+syncSpeechControls();
+void probePiperBridge();

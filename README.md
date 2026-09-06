@@ -84,8 +84,8 @@ fonts and images are settling, and its saved position is being restored.
 
 - `O`: open another EPUB with the system file selector
 - `R`: reopen the newest book from the browser's local cache
-- `V`: start local Piper speech at selected text, or at the text currently in view;
-  press it again or press `Escape` to stop
+- `V`: continuously read text that has appeared in the viewport; press it again
+  or press `Escape` to stop
 - Mouse wheel, trackpad, and middle-click autoscroll: native browser behavior
 - Hold the right mouse button and move anywhere on the reading page: scroll in
   the direction of the mouse movement; release to stop
@@ -137,9 +137,14 @@ spoken-line position.
 
 The reading menu contains a Piper voice selector, remembered minimum and
 maximum chunk controls, `READ FROM HERE`, `PAUSE` / `CONTINUE`, and `STOP`. If
-text is selected, only that selection is read. Otherwise reading
-starts at the first text block near the upper-middle of the viewport and
-continues through the rest of the book. Text is normalized and split near the
+text is selected, only that selection is read. Otherwise the reader captures
+only text lines intersecting the current viewport. While one chunk plays, Piper
+may generate the next planned screen in the background from the already loaded
+DOM. After the spoken chunk finishes, the page scrolls downward in 10 ms and
+audio waits until JavaScript verifies that the next chunk has become visible.
+Text beyond a large image, empty area, or screen edge is therefore never spoken
+off-screen. If playback starts where no readable text is visible, the reader
+asks you to scroll to some text. Text is normalized and split near the
 configured limit. Between the minimum and maximum, the reader prefers the last
 strong stop (`.`, `!`, or `?`), then the last softer pause (`,`, `;`, or `:`),
 then a whole-word boundary. Only an unbroken word longer than the limit is cut
@@ -168,16 +173,16 @@ Immediately before each cached chunk plays, the reader maps that chunk back to
 its original DOM text nodes. A slim vertical marker appears just left of that
 range instead of selecting and recoloring a large block of text. Its horizontal
 position is anchored just outside the containing text block, even when reading
-begins in the middle of a paragraph or on an indented line. Each new chunk uses
-a near-immediate 5 ms transition to move its actual first rendered line—not
-merely its paragraph—to the upper reading area, so long paragraphs follow
-correctly. This visual animation runs independently and never delays audio
-playback. The marker is
+begins in the middle of a paragraph or on an indented line. Normal viewport
+playback moves down only after the current chunk has finished, using a fast
+10 ms transition, then reads a fresh visible snapshot. Explicitly selected text
+retains its follow transition when it extends beyond the screen. This visual animation runs
+independently and never delays audio playback. The marker is
 recalculated after browser zoom, font changes, width changes, and other text
 reflow, and is cleared when reading stops. Exact ranges and fallback block
-mapping both place the spoken text at a remembered height in the viewport. The
-menu's `Spoken line position` slider ranges from 5–50% and defaults to 22% from
-the top. The existing 5 ms TTS follow transition is intentionally unchanged.
+mapping for explicitly selected text uses the remembered height in the
+viewport. The menu's `Spoken line position` slider ranges from 5–50% and
+defaults to 22% from the top.
 
 The bridge listens only on `127.0.0.1`. By default it looks for `.onnx` and
 `.onnx.json` voice files in `~/piper`, selects among available speakers when a
