@@ -138,7 +138,8 @@ spoken-line position.
 The reading menu contains a Piper voice selector, remembered minimum and
 maximum chunk controls, `READ FROM HERE`, `PAUSE` / `CONTINUE`, and `STOP`. If
 text is selected, only that selection is read. Otherwise the reader captures
-only text lines intersecting the current viewport. While one chunk plays, Piper
+only text lines whose complete rendered line height is inside the current
+viewport; a line clipped at either edge waits for the next scroll. While one chunk plays, Piper
 may generate the next planned screen in the background from the already loaded
 DOM. After the spoken chunk finishes, the page scrolls downward in 10 ms and
 audio waits until JavaScript verifies that the next chunk has become visible.

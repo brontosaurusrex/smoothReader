@@ -537,7 +537,7 @@ for (const range of [
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260906-viewport2/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260906-viewport3/);
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 6);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
@@ -705,6 +705,12 @@ const aboveViewportSpeechElement = makeViewportSpeechElement(
   -20,
   () => []
 );
+const clippedViewportSpeechElement = makeViewportSpeechElement(
+  "This line is only partly visible.",
+  0,
+  24,
+  () => [{ left: 100, right: 300, top: 0, bottom: 20, width: 200, height: 20 }]
+);
 const partialViewportSpeechElement = makeViewportSpeechElement(
   "hidden visible words below",
   -40,
@@ -728,6 +734,7 @@ const imageHeavySpeechElement = makeViewportSpeechElement(
 );
 elements["#viewer"].querySelectorAll = () => [
   aboveViewportSpeechElement,
+  clippedViewportSpeechElement,
   partialViewportSpeechElement,
   fullViewportSpeechElement,
   imageHeavySpeechElement

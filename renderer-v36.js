@@ -1679,7 +1679,7 @@ const visibleSpeechEntry = (element, viewportTop, viewportBottom) => {
       binarySearchFailed = true;
       break;
     }
-    if (rect.bottom > viewportTop) {
+    if (rect.top >= viewportTop) {
       firstCandidate = middle;
       high = middle - 1;
     } else {
@@ -1698,7 +1698,7 @@ const visibleSpeechEntry = (element, viewportTop, viewportBottom) => {
         binarySearchFailed = true;
         break;
       }
-      if (rect.top < viewportBottom) {
+      if (rect.bottom <= viewportBottom) {
         lastCandidate = middle;
         low = middle + 1;
       } else {
@@ -1715,8 +1715,8 @@ const visibleSpeechEntry = (element, viewportTop, viewportBottom) => {
     const rect = wordRect(index);
     return Boolean(
       rect &&
-      rect.bottom > viewportTop &&
-      rect.top < viewportBottom &&
+      rect.top >= viewportTop &&
+      rect.bottom <= viewportBottom &&
       rect.right > 0 &&
       rect.left < window.innerWidth
     );
@@ -1797,7 +1797,7 @@ const ensureSpeechJobVisible = async (job) => {
     .find((rect) => rect.height > 0 && rect.width > 0);
   let firstRect = firstRenderedRect();
   if (!firstRect) return false;
-  if (firstRect.bottom > visibleBounds.top && firstRect.top < visibleBounds.bottom) {
+  if (firstRect.top >= visibleBounds.top && firstRect.bottom <= visibleBounds.bottom) {
     return true;
   }
 
@@ -1806,8 +1806,8 @@ const ensureSpeechJobVisible = async (job) => {
   firstRect = firstRenderedRect();
   return Boolean(
     firstRect &&
-    firstRect.bottom > visibleBounds.top &&
-    firstRect.top < visibleBounds.bottom
+    firstRect.top >= visibleBounds.top &&
+    firstRect.bottom <= visibleBounds.bottom
   );
 };
 
