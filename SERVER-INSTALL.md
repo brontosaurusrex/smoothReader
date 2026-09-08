@@ -122,8 +122,9 @@ The branch output should be `gh-pages`.
 
 ## 5. Install Piper voices
 
-Copy one or more models into `/var/lib/smooth-reader/voices`. Every model needs
-its sidecar configuration. For example:
+Copy one or more models into `/var/lib/smooth-reader/voices` or any directory
+beneath it. Every model needs its sidecar configuration in the same directory.
+For example:
 
 ```text
 en_US-example-medium.onnx
@@ -150,14 +151,14 @@ List the installed files:
 
 ```bash
 find /var/lib/smooth-reader/voices \
-  -maxdepth 1 -type f \( -name '*.onnx' -o -name '*.onnx.json' \) \
-  -printf '%f\n' | sort
+  -type f \( -name '*.onnx' -o -name '*.onnx.json' \) \
+  -printf '%P\n' | sort
 ```
 
 Test one model before configuring the service:
 
 ```bash
-MODEL="$(find /var/lib/smooth-reader/voices -maxdepth 1 -type f -name '*.onnx' -print -quit)"
+MODEL="$(find /var/lib/smooth-reader/voices -type f -name '*.onnx' -print -quit)"
 test -n "$MODEL" || { echo "No Piper model found" >&2; exit 1; }
 
 printf '%s\n' 'This is a Smooth Reader Piper test.' | \
@@ -511,7 +512,7 @@ Check names, permissions, and matching JSON files:
 
 ```bash
 sudo -u smoothreader find /var/lib/smooth-reader/voices \
-  -maxdepth 1 -type f -printf '%f\n' | sort
+  -type f -printf '%P\n' | sort
 ```
 
 The sidecar name must be the full model filename plus `.json`, such as

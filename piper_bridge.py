@@ -55,7 +55,13 @@ class PiperController:
     def voices(self) -> list[Path]:
         if not self.voice_dir.is_dir():
             return []
-        return sorted(self.voice_dir.glob("*.onnx"), key=lambda path: path.name.lower())
+        return sorted(
+            self.voice_dir.rglob("*.onnx"),
+            key=lambda path: self._voice_id(path).lower(),
+        )
+
+    def _voice_id(self, model: Path) -> str:
+        return model.relative_to(self.voice_dir).as_posix()
 
     def status(self) -> dict[str, Any]:
         voices = self.voices()
@@ -72,7 +78,7 @@ class PiperController:
         return {
             "ok": True,
             "available": not missing,
-            "voices": [voice.name for voice in voices],
+            "voices": [self._voice_id(voice) for voice in voices],
             "voiceDirectory": str(self.voice_dir),
             "cacheDirectory": str(self.cache_dir),
             "loudnorm": LOUDNORM_FILTER,
@@ -89,8 +95,16 @@ class PiperController:
         if not voices:
             raise RuntimeError(f"No .onnx voices found in {self.voice_dir}")
         if requested:
-            requested_name = Path(requested).name
-            match = next((voice for voice in voices if voice.name == requested_name), None)
+            requested_id = requested.replace("\\", "/")
+            match = next(
+                (voice for voice in voices if self._voice_id(voice) == requested_id),
+                None,
+            )
+            if not match:
+                legacy_matches = [
+                    voice for voice in voices if voice.name == Path(requested_id).name
+                ]
+                match = legacy_matches[0] if len(legacy_matches) == 1 else None
             if not match:
                 raise RuntimeError("The selected Piper voice is no longer available")
             return match
@@ -108,9 +122,10 @@ class PiperController:
         sample_rate = int(config.get("audio", {}).get("sample_rate", 22_050) or 22_050)
         return speakers, sample_rate
 
-    @staticmethod
-    def _speaker_for_text(text: str, model: Path, speaker_count: int) -> int:
-        digest = hashlib.sha256(f"{model.name}\0{text}".encode("utf-8")).digest()
+    def _speaker_for_text(self, text: str, model: Path, speaker_count: int) -> int:
+        digest = hashlib.sha256(
+            f"{self._voice_id(model)}\0{text}".encode("utf-8")
+        ).digest()
         return int.from_bytes(digest[:8], "big") % speaker_count
 
     def _cache_identity(
@@ -123,9 +138,13 @@ class PiperController:
     ) -> str:
         try:
             model_stat = model.stat()
-            model_identity = [model.name, model_stat.st_size, model_stat.st_mtime_ns]
+            model_identity = [
+                self._voice_id(model),
+                model_stat.st_size,
+                model_stat.st_mtime_ns,
+            ]
         except OSError:
-            model_identity = [model.name, 0, 0]
+            model_identity = [self._voice_id(model), 0, 0]
         identity = {
             "version": CACHE_FORMAT_VERSION,
             "text": text,
@@ -389,7 +408,7 @@ class PiperController:
 
                 metadata = {
                     "cacheId": cache_id,
-                    "voice": model.name,
+                    "voice": self._voice_id(model),
                     "speaker": speaker,
                     "speakerCount": speaker_count,
                     "sampleRate": actual_sample_rate,
@@ -613,7 +632,7 @@ def parse_args() -> argparse.Namespace:
         "--voice-dir",
         type=Path,
         default=Path(os.environ.get("PIPER_VOICE_DIR", "~/piper")),
-        help="directory containing Piper .onnx and .onnx.json files",
+        help="root directory recursively containing Piper .onnx and .onnx.json files",
     )
     parser.add_argument(
         "--cache-dir",

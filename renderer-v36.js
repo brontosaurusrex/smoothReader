@@ -87,7 +87,6 @@ const settingsReopen = document.querySelector("#settings-reopen");
 const settingsResetAll = document.querySelector("#settings-reset-all");
 const readingProgress = document.querySelector("#reading-progress");
 const speechVoice = document.querySelector("#speech-voice");
-const speechProgress = document.querySelector("#speech-progress");
 const speechControls = document.querySelector("#speech-controls");
 const speechOverlayPause = document.querySelector("#speech-overlay-pause");
 const speechOverlayStop = document.querySelector("#speech-overlay-stop");
@@ -1319,6 +1318,18 @@ const buildSpeechJobs = (
   return jobs;
 };
 
+const buildViewportSpeechJobs = (
+  entries,
+  minimumLength = speechMinimumLength,
+  maximumLength = speechMaximumLength
+) => {
+  const jobs = buildSpeechJobs(entries, minimumLength, maximumLength, false);
+  if (jobs.length > 1 && jobs.at(-1).text.length < minimumLength) {
+    jobs.pop();
+  }
+  return jobs;
+};
+
 const splitSpeechText = (
   text,
   minimumLength = speechMinimumLength,
@@ -1599,9 +1610,16 @@ const updateSpeechVoices = (voices) => {
     option.textContent = voice.replace(/\.onnx$/i, "").toUpperCase();
     settingsSpeechVoice.appendChild(option);
   });
-  speechVoicePreference = voices.includes(selected) ? selected : "";
+  const legacyMatches = selected
+    ? voices.filter((voice) => voice.split("/").pop() === selected)
+    : [];
+  speechVoicePreference = voices.includes(selected)
+    ? selected
+    : legacyMatches.length === 1
+      ? legacyMatches[0]
+      : "";
   settingsSpeechVoice.value = speechVoicePreference;
-  if (selected && !speechVoicePreference) saveCurrentReadingSettings();
+  if (selected && selected !== speechVoicePreference) saveCurrentReadingSettings();
 };
 
 const requestPiper = async (path, options = {}) => {
@@ -1912,8 +1930,6 @@ const nextSpeechViewport = (cursor) => {
 const clearSpeechIndicators = () => {
   speechVoice.hidden = true;
   speechVoice.textContent = "";
-  speechProgress.hidden = true;
-  speechProgress.textContent = "";
 };
 
 const syncSpeechControls = () => {
@@ -2116,16 +2132,11 @@ const startSpeech = async () => {
     let firstBatch = true;
     let queuedBatch = null;
     while (entries.length > 0) {
-      const jobs = queuedBatch?.jobs || buildSpeechJobs(
-        entries,
-        speechMinimumLength,
-        speechMaximumLength,
-        !viewportReading
-      );
+      const jobs = queuedBatch?.jobs || (viewportReading
+        ? buildViewportSpeechJobs(entries)
+        : buildSpeechJobs(entries));
       if (jobs.length === 0) break;
       if (viewportReading) jobs.forEach((job) => { job.followText = false; });
-      speechProgress.textContent = `1/${jobs.length}`;
-      speechProgress.hidden = false;
       settingsSpeechStatus.textContent = queuedBatch
         ? "Next visible text is ready."
         : firstBatch
@@ -2146,7 +2157,6 @@ const startSpeech = async () => {
       for (let index = 0; index < jobs.length; index += 1) {
         if (generation !== speechGeneration) return;
         const currentJob = jobs[index];
-        speechProgress.textContent = `${index + 1}/${jobs.length}`;
         let nextPreparation = index + 1 < jobs.length
           ? settlePreparation(jobs[index + 1])
           : null;
@@ -2154,12 +2164,7 @@ const startSpeech = async () => {
           const futureCursor = speechCursorFromJob(currentJob) || viewportCursor;
           const plan = nextSpeechViewport(futureCursor);
           if (plan) {
-            const futureJobs = buildSpeechJobs(
-              plan.entries,
-              speechMinimumLength,
-              speechMaximumLength,
-              false
-            );
+            const futureJobs = buildViewportSpeechJobs(plan.entries);
             futureJobs.forEach((job) => { job.followText = false; });
             if (futureJobs.length > 0) {
               futureBatch = {

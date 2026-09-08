@@ -920,8 +920,7 @@ body.is-right-dragging * {
 }
 
 #reading-progress,
-#speech-voice,
-#speech-progress {
+#speech-voice {
   color: var(--display-muted);
   font-family: var(--reader-font);
   font-size: 0.72rem;
@@ -929,11 +928,15 @@ body.is-right-dragging * {
   opacity: 0.72;
 }
 
-#speech-voice,
-#speech-progress {
+#speech-voice {
   font-size: 0.62rem;
   letter-spacing: 0.06em;
   opacity: 0.55;
+}
+
+#reading-progress {
+  font-size: 1.50rem;
+  font-weight: 400;
 }
 
 #speech-voice {

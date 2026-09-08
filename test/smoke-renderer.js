@@ -176,7 +176,6 @@ const elements = {
   "#settings-reopen": makeElement(),
   "#settings-reset-all": makeElement(),
   "#speech-voice": makeElement(),
-  "#speech-progress": makeElement(),
   "#speech-controls": makeElement(),
   "#speech-overlay-pause": makeElement(),
   "#speech-overlay-stop": makeElement(),
@@ -193,7 +192,6 @@ elements["#recent-books"].hidden = true;
 elements["#settings-menu"].hidden = true;
 elements["#settings-panel"].hidden = true;
 elements["#reading-progress"].hidden = true;
-elements["#speech-progress"].hidden = true;
 elements["#speech-voice"].hidden = true;
 elements["#speech-controls"].hidden = true;
 elements["#speech-marker"].hidden = true;
@@ -507,7 +505,7 @@ assert.match(indexSource, /id="settings-width"/);
 assert.match(indexSource, /id="reading-progress"/);
 assert.match(indexSource, /id="progress-stack"/);
 assert.match(indexSource, /id="speech-voice"/);
-assert.match(indexSource, /id="speech-progress"/);
+assert.doesNotMatch(indexSource, /id="speech-progress"/);
 assert.match(indexSource, /id="speech-controls"/);
 assert.match(indexSource, /id="speech-overlay-pause"/);
 assert.match(indexSource, /id="speech-overlay-stop"/);
@@ -543,7 +541,8 @@ for (const range of [
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260906-sentences1/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260908-nochunks1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260908-shorttail1/);
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 6);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
@@ -563,7 +562,8 @@ assert.match(rendererSource, /const eased = 1 - \(\(1 - progress\) \*\* 3\)/);
 assert.doesNotMatch(rendererSource, /await animateSpeechScrollBy/);
 assert.match(rendererSource, /unlockSpeechAudio\(\);\s*const generation/);
 assert.match(rendererSource, /nextPreparation/);
-assert.match(rendererSource, /speechProgress\.textContent = `\$\{index \+ 1\}\/\$\{jobs\.length\}`/);
+assert.doesNotMatch(rendererSource, /speechProgress|speechChunkNumber|CHUNK/);
+assert.match(stylesSource, /#reading-progress\s*\{[^}]*font-size:\s*0\.82rem/s);
 assert.match(rendererSource, /speechVoice\.textContent = formatSpeechVoice\(prepared\)/);
 assert.equal(
   vm.runInContext("formatSpeechVoice({ voice: 'solo.onnx', speaker: 0, speakerCount: 1 })", context),
@@ -627,8 +627,7 @@ assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*min-heigh
 assert.ok(indexSource.indexOf('id="speech-controls"') < indexSource.indexOf('id="reading-progress"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-pause"') < indexSource.indexOf('id="speech-overlay-stop"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-stop"') < indexSource.indexOf('id="speech-overlay-home"'));
-assert.ok(indexSource.indexOf('id="reading-progress"') < indexSource.indexOf('id="speech-progress"'));
-assert.ok(indexSource.indexOf('id="speech-progress"') < indexSource.indexOf('id="speech-voice"'));
+assert.ok(indexSource.indexOf('id="reading-progress"') < indexSource.indexOf('id="speech-voice"'));
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*var\(--reader-font-size\)/s);
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*relative[^}]*place-content:\s*start center[^}]*min-height:\s*100dvh[^}]*overflow:\s*visible/s);
 assert.doesNotMatch(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*fixed/s);
@@ -806,6 +805,29 @@ assert.equal(
     context
   ),
   false
+);
+context.viewportTrailingRemainderEntries = [{
+  element: null,
+  text: `${"Navigation ".repeat(30)}systems stable. Angular anomaly.`
+}];
+assert.equal(
+  vm.runInContext(
+    "buildSpeechJobs(viewportTrailingRemainderEntries, 100, 350, false).at(-1).text",
+    context
+  ),
+  "Angular anomaly."
+);
+assert.equal(
+  vm.runInContext(
+    "buildViewportSpeechJobs(viewportTrailingRemainderEntries, 100, 350).length",
+    context
+  ),
+  1
+);
+context.viewportOnlyShortEntry = [{ element: null, text: "Angular anomaly." }];
+assert.equal(
+  vm.runInContext("buildViewportSpeechJobs(viewportOnlyShortEntry, 100, 350).length", context),
+  1
 );
 vm.runInContext(`
   globalThis.visibleSpeechJob = buildSpeechJobs(visibleSpeechEntries, 1, 80)[0];

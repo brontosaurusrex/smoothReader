@@ -158,10 +158,11 @@ exactly at the maximum, so the maximum is always a strict character limit. Text
 from adjacent short EPUB paragraphs is accumulated before
 splitting, preventing tiny audio files that can produce Piper or loudnorm
 artifacts. The defaults are 150–350 characters; minimum can be set from 100–500
-and maximum from 300–1200. A final remainder may be shorter than the configured
-minimum because it is never merged in a way that would exceed the maximum. If
-the total selected text is too short to meet the minimum, one shorter chunk is
-unavoidable. Random voice selection is the default;
+and maximum from 300–1200. During normal viewport reading, an undersized final
+remainder is deferred, scrolled into the next viewport, and combined with newly
+visible text instead of being synthesized alone. At the actual end of the book,
+or when the total explicitly selected text is too short to meet the minimum,
+one shorter chunk is unavoidable. Random voice selection is the default;
 choosing a specific installed model keeps that voice.
 
 Piper generates a temporary WAV, then FFmpeg applies `loudnorm` once and stores
@@ -190,9 +191,11 @@ mapping for explicitly selected text uses the remembered height in the
 viewport. The menu's `Spoken line position` slider ranges from 5–50% and
 defaults to 22% from the top.
 
-The bridge listens only on `127.0.0.1`. By default it looks for `.onnx` and
-`.onnx.json` voice files in `~/piper`, selects among available speakers when a
-model has more than one, and reads the model sample rate. Piper writes proper
+The bridge listens only on `127.0.0.1`. By default it recursively looks for
+`.onnx` and adjacent `.onnx.json` voice files in `~/piper` and its subdirectories,
+selects among available speakers when a model has more than one, and reads the
+model sample rate. Subdirectory names become part of the voice ID, preventing
+same-named models in different folders from colliding. Piper writes proper
 WAV files with an embedded format and sample-rate header; the bridge validates
 that header, runs FFmpeg's `loudnorm` filter (`I=-16`, `LRA=11`, `TP=-1.5`), and
 encodes the requested cached format. The browser's native audio element plays
@@ -200,8 +203,8 @@ those files and handles pause/continue locally, preserving the exact playback
 position. No mpv process or IPC socket is used. The active voice name includes
 its zero-based internal speaker ID (for example, `model-name/3`) only when the
 ONNX model contains multiple speakers. Single-speaker models show only their
-voice name. A small `current/total` chunk counter appears beneath the bottom-right reading
-percentage, with the longer voice name on the lowest line. The browser probes
+voice name. The reading percentage and active voice name appear in the
+bottom-right corner, with the longer voice name on the lowest line. The browser probes
 the bridge once at startup, populates the voice list, and shows the Play/Pause
 and Stop shortcuts whenever Piper is available. Play starts reading from the
 current view, then changes to Pause/Continue during playback; Stop is disabled
