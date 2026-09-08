@@ -103,7 +103,8 @@ const TRACKING_KEY = "smooth-reader:tracking";
 const WIDTH_KEY = "smooth-reader:text-width";
 const SPEECH_MIN_KEY = "smooth-reader:speech-minimum";
 const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
-const SPEECH_POSITION_KEY = "smooth-reader:speech-position";
+const LEGACY_SPEECH_POSITION_KEY = "smooth-reader:speech-position";
+const SPEECH_CENTER_OFFSET_KEY = "smooth-reader:speech-center-offset";
 const SPEECH_SESSION_KEY = "smooth-reader:speech-session";
 const SILENT_WAV_DATA_URL = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
@@ -140,9 +141,11 @@ const MIN_SPEECH_MIN_LENGTH = 100;
 const MAX_SPEECH_MIN_LENGTH = 500;
 const MIN_SPEECH_MAX_LENGTH = 300;
 const MAX_SPEECH_MAX_LENGTH = 1200;
-const DEFAULT_SPEECH_POSITION_PERCENT = 22;
-const MIN_SPEECH_POSITION_PERCENT = 5;
-const MAX_SPEECH_POSITION_PERCENT = 50;
+const LEGACY_DEFAULT_SPEECH_POSITION_PERCENT = 22;
+const DEFAULT_SPEECH_CENTER_OFFSET_PERCENT = 0;
+const MIN_SPEECH_CENTER_OFFSET_PERCENT = -25;
+const MAX_SPEECH_CENTER_OFFSET_PERCENT = 25;
+const SPEECH_VIEWPORT_MARGIN_PX = 16;
 const SPEECH_SCROLL_DURATION_MS = 10;
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
@@ -189,6 +192,11 @@ let recentBookInfo = [];
 let cachedRecentBooks = [];
 let pendingLayoutAnchor = null;
 let layoutChangeGeneration = 0;
+let stableResizeAnchor = null;
+let activeResizeAnchor = null;
+let resizeAnchorFrame = null;
+let resizeEndTimer = null;
+let resizeCaptureTimer = null;
 let speechGeneration = 0;
 let speechIsActive = false;
 let speechIsPaused = false;
@@ -238,19 +246,29 @@ let lineHeight = Number.isFinite(savedLineHeight)
   : DEFAULT_LINE_HEIGHT;
 const savedSpeechMinimum = Number.parseInt(localStorage.getItem(SPEECH_MIN_KEY), 10);
 const savedSpeechMaximum = Number.parseInt(localStorage.getItem(SPEECH_MAX_KEY), 10);
-const savedSpeechPosition = Number.parseInt(localStorage.getItem(SPEECH_POSITION_KEY), 10);
+const savedSpeechCenterOffset = Number.parseInt(
+  localStorage.getItem(SPEECH_CENTER_OFFSET_KEY),
+  10
+);
+const savedLegacySpeechPosition = Number.parseInt(
+  localStorage.getItem(LEGACY_SPEECH_POSITION_KEY),
+  10
+);
 let speechMinimumLength = Number.isFinite(savedSpeechMinimum)
   ? Math.max(MIN_SPEECH_MIN_LENGTH, Math.min(MAX_SPEECH_MIN_LENGTH, savedSpeechMinimum))
   : DEFAULT_SPEECH_MIN_LENGTH;
 let speechMaximumLength = Number.isFinite(savedSpeechMaximum)
   ? Math.max(MIN_SPEECH_MAX_LENGTH, Math.min(MAX_SPEECH_MAX_LENGTH, savedSpeechMaximum))
   : DEFAULT_SPEECH_MAX_LENGTH;
-let speechPositionPercent = Number.isFinite(savedSpeechPosition)
-  ? Math.max(
-    MIN_SPEECH_POSITION_PERCENT,
-    Math.min(MAX_SPEECH_POSITION_PERCENT, savedSpeechPosition)
-  )
-  : DEFAULT_SPEECH_POSITION_PERCENT;
+const initialSpeechCenterOffset = Number.isFinite(savedSpeechCenterOffset)
+  ? savedSpeechCenterOffset
+  : Number.isFinite(savedLegacySpeechPosition)
+    ? savedLegacySpeechPosition - LEGACY_DEFAULT_SPEECH_POSITION_PERCENT
+    : DEFAULT_SPEECH_CENTER_OFFSET_PERCENT;
+let speechCenterOffsetPercent = Math.max(
+  MIN_SPEECH_CENTER_OFFSET_PERCENT,
+  Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, initialSpeechCenterOffset)
+);
 if (speechMinimumLength > speechMaximumLength) {
   speechMinimumLength = Math.min(DEFAULT_SPEECH_MIN_LENGTH, speechMaximumLength);
 }
@@ -577,6 +595,43 @@ const scheduleLayoutAnchorRestore = (anchor) => {
     });
 };
 
+const captureStableResizeAnchor = () => {
+  stableResizeAnchor = captureLayoutAnchor();
+};
+
+const scheduleStableResizeAnchorCapture = () => {
+  window.clearTimeout(resizeCaptureTimer);
+  if (activeResizeAnchor || reader.hidden) return;
+  resizeCaptureTimer = window.setTimeout(captureStableResizeAnchor, 80);
+};
+
+const handleViewportResize = () => {
+  scheduleSpeechMarkerRefresh();
+  if (reader.hidden || viewer.children.length === 0) return;
+  if (!activeResizeAnchor) {
+    activeResizeAnchor = stableResizeAnchor || captureLayoutAnchor();
+  }
+  const anchor = activeResizeAnchor;
+  if (resizeAnchorFrame !== null) window.cancelAnimationFrame(resizeAnchorFrame);
+  resizeAnchorFrame = window.requestAnimationFrame(() => {
+    resizeAnchorFrame = null;
+    const currentTop = getAnchorViewportTop(anchor);
+    if (!Number.isFinite(currentTop)) return;
+    const correction = currentTop - anchor.viewportTop;
+    if (Math.abs(correction) > 0.5) {
+      window.scrollBy({ top: correction, left: 0, behavior: "auto" });
+    }
+    updateReadingProgress();
+    schedulePositionSave();
+  });
+
+  window.clearTimeout(resizeEndTimer);
+  resizeEndTimer = window.setTimeout(() => {
+    activeResizeAnchor = null;
+    captureStableResizeAnchor();
+  }, 160);
+};
+
 const bookSettingsKey = (hash) => `${BOOK_SETTINGS_PREFIX}${hash}`;
 
 const captureReadingSettings = () => ({
@@ -823,7 +878,10 @@ const resetAllSettings = () => {
     DEFAULT_SPEECH_MIN_LENGTH,
     DEFAULT_SPEECH_MAX_LENGTH
   );
-  applySpeechPosition(DEFAULT_SPEECH_POSITION_PERCENT, Boolean(speechActiveJob));
+  applySpeechCenterOffset(
+    DEFAULT_SPEECH_CENTER_OFFSET_PERCENT,
+    Boolean(speechActiveJob)
+  );
   saveCurrentReadingSettings();
   showStatus("ALL SETTINGS RESET · BOOKS AND POSITIONS KEPT", 1800);
 };
@@ -911,6 +969,12 @@ const hashBook = async (arrayBuffer) => {
 
 const destroyCurrentBook = () => {
   window.clearTimeout(saveTimer);
+  window.clearTimeout(resizeEndTimer);
+  window.clearTimeout(resizeCaptureTimer);
+  if (resizeAnchorFrame !== null) window.cancelAnimationFrame(resizeAnchorFrame);
+  resizeAnchorFrame = null;
+  stableResizeAnchor = null;
+  activeResizeAnchor = null;
   savePositionNow();
   stopRightDrag();
   layoutChangeGeneration += 1;
@@ -1203,24 +1267,26 @@ const applySpeechBounds = (nextMinimum, nextMaximum, changed = "", announce = fa
 
 applySpeechBounds(speechMinimumLength, speechMaximumLength);
 
-const applySpeechPosition = (nextPosition, followCurrent = false) => {
-  speechPositionPercent = Math.round(Math.max(
-    MIN_SPEECH_POSITION_PERCENT,
-    Math.min(MAX_SPEECH_POSITION_PERCENT, nextPosition)
+const applySpeechCenterOffset = (nextOffset, followCurrent = false) => {
+  speechCenterOffsetPercent = Math.round(Math.max(
+    MIN_SPEECH_CENTER_OFFSET_PERCENT,
+    Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, nextOffset)
   ));
-  localStorage.setItem(SPEECH_POSITION_KEY, String(speechPositionPercent));
-  settingsSpeechPosition.value = String(speechPositionPercent);
-  settingsSpeechPositionValue.textContent = `${speechPositionPercent}%`;
+  localStorage.setItem(SPEECH_CENTER_OFFSET_KEY, String(speechCenterOffsetPercent));
+  settingsSpeechPosition.value = String(speechCenterOffsetPercent);
+  settingsSpeechPositionValue.textContent = (
+    `${speechCenterOffsetPercent > 0 ? "+" : ""}${speechCenterOffsetPercent}%`
+  );
   settingsSpeechPositionDown.disabled = (
-    speechPositionPercent <= MIN_SPEECH_POSITION_PERCENT
+    speechCenterOffsetPercent <= MIN_SPEECH_CENTER_OFFSET_PERCENT
   );
   settingsSpeechPositionUp.disabled = (
-    speechPositionPercent >= MAX_SPEECH_POSITION_PERCENT
+    speechCenterOffsetPercent >= MAX_SPEECH_CENTER_OFFSET_PERCENT
   );
   if (followCurrent && speechActiveJob) positionSpeechMarker(true);
 };
 
-applySpeechPosition(speechPositionPercent);
+applySpeechCenterOffset(speechCenterOffsetPercent);
 
 const speechSourceFromEntries = (entries) => {
   let text = "";
@@ -1532,6 +1598,58 @@ const animateSpeechScrollBy = (offset) => {
   speechScrollFrame = window.requestAnimationFrame(step);
 };
 
+const speechViewportBounds = (rangeHeight = 0) => {
+  const fittingMargin = Math.max(0, (window.innerHeight - rangeHeight) / 2);
+  const margin = Math.min(
+    SPEECH_VIEWPORT_MARGIN_PX,
+    window.innerHeight / 4,
+    fittingMargin
+  );
+  return {
+    top: margin,
+    bottom: Math.max(margin, window.innerHeight - margin)
+  };
+};
+
+const speechRectsBounds = (rects) => {
+  if (!rects?.length) return null;
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return { top, bottom, height: Math.max(0, bottom - top) };
+};
+
+const speechTargetCenterY = (rangeHeight = 0) => {
+  const viewport = speechViewportBounds(rangeHeight);
+  const availableHeight = viewport.bottom - viewport.top;
+  const desiredCenter = (
+    window.innerHeight / 2 +
+    window.innerHeight * (speechCenterOffsetPercent / 100)
+  );
+  if (rangeHeight >= availableHeight) {
+    return viewport.top + availableHeight / 2;
+  }
+  return Math.max(
+    viewport.top + rangeHeight / 2,
+    Math.min(viewport.bottom - rangeHeight / 2, desiredCenter)
+  );
+};
+
+const speechScrollOffsetForRects = (rects) => {
+  const range = speechRectsBounds(rects);
+  if (!range) return 0;
+  const viewport = speechViewportBounds(range.height);
+  const availableHeight = viewport.bottom - viewport.top;
+  if (range.height >= availableHeight) return range.top - viewport.top;
+  const currentCenter = range.top + range.height / 2;
+  return currentCenter - speechTargetCenterY(range.height);
+};
+
+const speechPlanningTopY = () => {
+  const viewport = speechViewportBounds();
+  const assumedRangeHeight = (viewport.bottom - viewport.top) / 2;
+  return speechTargetCenterY(assumedRangeHeight) - assumedRangeHeight / 2;
+};
+
 const positionSpeechMarker = (followText = false) => {
   clearSpeechVisuals();
   if (!speechActiveJob) return;
@@ -1552,7 +1670,7 @@ const positionSpeechMarker = (followText = false) => {
     speechMarker.style.height = `${Math.max(18, lastRect.bottom - firstRect.top)}px`;
     speechMarker.hidden = false;
 
-    const scrollOffset = firstRect.top - window.innerHeight * (speechPositionPercent / 100);
+    const scrollOffset = speechScrollOffsetForRects(rects);
     if (followText && Math.abs(scrollOffset) > 1) {
       animateSpeechScrollBy(scrollOffset);
     }
@@ -1565,7 +1683,7 @@ const positionSpeechMarker = (followText = false) => {
 
   const rect = firstElement?.getBoundingClientRect?.();
   if (followText && rects.length === 0 && rect) {
-    const fallbackOffset = rect.top - window.innerHeight * (speechPositionPercent / 100);
+    const fallbackOffset = speechScrollOffsetForRects([rect]);
     if (Math.abs(fallbackOffset) > 1) {
       animateSpeechScrollBy(fallbackOffset);
     }
@@ -1867,24 +1985,28 @@ const scrollBySpeechOffset = async (offset) => {
 
 const ensureSpeechJobVisible = async (job) => {
   if (!pageIsVisible()) return true;
-  const visibleBounds = { top: 8, bottom: Math.max(8, window.innerHeight - 8) };
-  const firstRenderedRect = () => [...(createSpeechRange(job)?.getClientRects?.() || [])]
-    .find((rect) => rect.height > 0 && rect.width > 0);
-  let firstRect = firstRenderedRect();
-  if (!firstRect) return false;
-  if (firstRect.top >= visibleBounds.top && firstRect.bottom <= visibleBounds.bottom) {
-    return true;
-  }
+  const renderedRects = () => [...(createSpeechRange(job)?.getClientRects?.() || [])]
+    .filter((rect) => rect.height > 0 && rect.width > 0);
+  let rects = renderedRects();
+  if (rects.length === 0) return false;
 
-  const targetY = window.innerHeight * (speechPositionPercent / 100);
-  await scrollBySpeechOffset(firstRect.top - targetY);
+  await scrollBySpeechOffset(speechScrollOffsetForRects(rects));
   if (!pageIsVisible()) return true;
-  firstRect = firstRenderedRect();
-  return Boolean(
-    firstRect &&
-    firstRect.top >= visibleBounds.top &&
-    firstRect.bottom <= visibleBounds.bottom
+  positionSpeechMarker(false);
+  rects = renderedRects();
+  const range = speechRectsBounds(rects);
+  if (!range) return false;
+  const viewport = speechViewportBounds(range.height);
+  if (range.height > window.innerHeight) {
+    return range.top < viewport.bottom && range.bottom > viewport.top;
+  }
+  const fitsPreferredBounds = (
+    range.top >= viewport.top - 1 && range.bottom <= viewport.bottom + 1
   );
+  const fitsPhysicalViewport = (
+    range.top >= -1 && range.bottom <= window.innerHeight + 1
+  );
+  return fitsPreferredBounds || fitsPhysicalViewport;
 };
 
 const scrollDownAfterSpeechJob = async (job) => {
@@ -1892,7 +2014,7 @@ const scrollDownAfterSpeechJob = async (job) => {
     .filter((rect) => rect.height > 0 && rect.width > 0);
   const lastRect = rects.at(-1);
   if (!lastRect) return false;
-  const targetY = window.innerHeight * (speechPositionPercent / 100);
+  const targetY = speechPlanningTopY();
   const offset = Math.max(0, lastRect.bottom - targetY);
   return scrollBySpeechOffset(offset);
 };
@@ -1915,7 +2037,7 @@ const nextSpeechViewport = (cursor) => {
     const firstRect = mappedSpeechRangeRects(mapped, start, end)[0];
     if (!firstRect) continue;
 
-    const targetY = window.innerHeight * (speechPositionPercent / 100);
+    const targetY = speechPlanningTopY();
     const offset = Math.max(0, firstRect.top - targetY);
     const entries = sentenceBoundedViewportEntries(speechEntriesInViewport(
       8 + offset,
@@ -2285,6 +2407,7 @@ const openBook = async (file) => {
 
     if (generation !== loadGeneration) return;
     await restorePosition(savedPosition);
+    captureStableResizeAnchor();
     showStatus(
       `NATIVE SCROLL · ${sections.length} SECTIONS · HOME · PAGE UP / PAGE DOWN`,
       2800
@@ -2605,7 +2728,7 @@ settingsSpeechMax.addEventListener("change", (event) => {
   applySpeechBounds(speechMinimumLength, Number(event.target.value), "maximum", true);
 });
 settingsSpeechPosition.addEventListener("input", (event) => {
-  applySpeechPosition(Number(event.target.value), true);
+  applySpeechCenterOffset(Number(event.target.value), true);
 });
 settingsSpeechMinDown.addEventListener("click", () => {
   applySpeechBounds(
@@ -2640,10 +2763,10 @@ settingsSpeechMaxUp.addEventListener("click", () => {
   );
 });
 settingsSpeechPositionDown.addEventListener("click", () => {
-  applySpeechPosition(speechPositionPercent - 1, true);
+  applySpeechCenterOffset(speechCenterOffsetPercent - 1, true);
 });
 settingsSpeechPositionUp.addEventListener("click", () => {
-  applySpeechPosition(speechPositionPercent + 1, true);
+  applySpeechCenterOffset(speechCenterOffsetPercent + 1, true);
 });
 
 startPaletteNext.addEventListener("click", () => applyPalette(paletteIndex + 1));
@@ -2812,8 +2935,9 @@ window.addEventListener("keydown", handleReaderKeyDown, true);
 window.addEventListener("scroll", () => {
   schedulePositionSave();
   updateReadingProgress();
+  scheduleStableResizeAnchorCapture();
 }, { passive: true });
-window.addEventListener("resize", scheduleSpeechMarkerRefresh, { passive: true });
+window.addEventListener("resize", handleViewportResize, { passive: true });
 document.addEventListener?.("visibilitychange", () => {
   if (!pageIsVisible()) {
     if (speechScrollTargetY !== null) {

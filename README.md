@@ -130,8 +130,8 @@ settings compatible across screen sizes without requiring browser zoom.
 
 On a first run with no saved preferences, the defaults are Nord, `0%` contrast,
 Alegreya, 36 px text, 1.28 line height, +0.02 em letter spacing, approximately 44
-characters per line, random voice, 150–350 character speech chunks, and a 22%
-spoken-line position.
+characters per line, random voice, 150–350 character speech chunks, and a
+centered spoken-text block with `0%` offset.
 
 ## Local Piper speech
 
@@ -188,8 +188,19 @@ independently and never delays audio playback. The marker is
 recalculated after browser zoom, font changes, width changes, and other text
 reflow, and is cleared when reading stops. Exact ranges and fallback block
 mapping for explicitly selected text uses the remembered height in the
-viewport. The menu's `Spoken line position` slider ranges from 5–50% and
-defaults to 22% from the top.
+viewport. The menu's `Spoken text center offset` slider ranges from `-25%` to
+`+25%` and defaults to `0%`: negative values move the spoken block upward and
+positive values move it downward. The exact center is clamped according to the
+rendered block height and a viewport safety margin, keeping the entire spoken
+range on-screen whenever it can fit. That margin automatically shrinks for a
+tall chunk, so text that fits the physical viewport is not rejected merely
+because it cannot retain the full preferred margin. Oversized ranges are aligned
+from the top rather than being clipped equally at both ends.
+
+When the browser window is resized, the reader remembers a text anchor near the
+upper-middle of the viewport and restores that anchor throughout the resize.
+This prevents width-driven line reflow from replacing the passage being read
+with a visually unrelated one.
 
 The bridge listens only on `127.0.0.1`. By default it recursively looks for
 `.onnx` and adjacent `.onnx.json` voice files in `~/piper` and its subdirectories,

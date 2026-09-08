@@ -203,6 +203,7 @@ stored.set("smooth-reader:last-book", JSON.stringify({
   fileName: "previous.epub",
   title: "Previous Book"
 }));
+stored.set("smooth-reader:speech-position", "22");
 const indexedRecords = new Map([
   ["last-opened", {
     fileName: "previous.epub",
@@ -520,7 +521,8 @@ assert.match(indexSource, /id="settings-line-height"/);
 assert.match(indexSource, /id="settings-speech-start"/);
 assert.match(indexSource, /id="settings-speech-min"/);
 assert.match(indexSource, /id="settings-speech-max"/);
-assert.match(indexSource, /id="settings-speech-position"[^>]*min="5"[^>]*max="50"/);
+assert.match(indexSource, /Spoken text center offset/);
+assert.match(indexSource, /id="settings-speech-position"[^>]*min="-25"[^>]*max="25"/);
 assert.match(indexSource, /id="settings-speech-pause"/);
 assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(indexSource, /id="settings-toggle"[\s\S]*aria-label="Open reader settings"/);
@@ -541,8 +543,8 @@ for (const range of [
 assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260908-nochunks1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260908-shorttail1/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260908-center1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260908-center2/);
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 6);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
@@ -576,9 +578,12 @@ assert.equal(
 assert.doesNotMatch(rendererSource, /PIPER · PLAYING|PIPER · [0-9]/);
 assert.equal((rendererSource.match(/showStatus\(`PIPER ERROR/g) || []).length, 2);
 assert.match(rendererSource, /createSpeechRange/);
-assert.match(rendererSource, /addEventListener\("resize", scheduleSpeechMarkerRefresh/);
+assert.match(rendererSource, /addEventListener\("resize", handleViewportResize/);
+assert.match(rendererSource, /stableResizeAnchor \|\| captureLayoutAnchor\(\)/);
 assert.match(rendererSource, /ResizeObserver\(scheduleSpeechMarkerRefresh\)/);
-assert.equal((rendererSource.match(/speechPositionPercent \/ 100/g) || []).length, 5);
+assert.match(rendererSource, /speechScrollOffsetForRects/);
+assert.match(rendererSource, /speechTargetCenterY/);
+assert.match(rendererSource, /SPEECH_VIEWPORT_MARGIN_PX = 16/);
 assert.doesNotMatch(rendererSource, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
 assert.match(indexSource, /id="speech-marker"/);
 assert.match(stylesSource, /#speech-marker/);
@@ -612,6 +617,8 @@ assert.match(stylesSource, /#settings-menu[^{]*\{[^}]*right:/s);
 assert.doesNotMatch(stylesSource, /#settings-menu[^{]*\{[^}]*left:\s*0\.8rem/s);
 assert.match(stylesSource, /#speech-controls/);
 assert.match(stylesSource, /#speech-controls[^{]*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*1fr/s);
+assert.match(stylesSource, /#speech-controls button[^{]*\{[^}]*border:\s*1px solid transparent[^}]*background:\s*transparent[^}]*opacity:\s*0\.2/s);
+assert.match(stylesSource, /#speech-controls button:is\(:hover, :focus-visible\)[^{]*\{[^}]*border-color:\s*var\(--display-line\)[^}]*background:\s*var\(--display-panel\)[^}]*opacity:\s*1/s);
 assert.match(stylesSource, /#recent-book-list \.recent-book::before[^{]*\{[^}]*content:\s*"EPUB"/s);
 assert.match(rendererSource, /const createCoverThumbnail = async/);
 assert.match(rendererSource, /void probePiperBridge\(\)/);
@@ -954,7 +961,22 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#start-line-height-value"].textContent, "1.28");
   assert.equal(elements["#settings-speech-min-value"].textContent, "150 chars");
   assert.equal(elements["#settings-speech-max-value"].textContent, "350 chars");
-  assert.equal(elements["#settings-speech-position-value"].textContent, "22%");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
+  assert.equal(stored.get("smooth-reader:speech-center-offset"), "0");
+  assert.equal(vm.runInContext("speechTargetCenterY(80)", context), 400);
+  vm.runInContext("applySpeechCenterOffset(25)", context);
+  assert.equal(elements["#settings-speech-position-value"].textContent, "+25%");
+  assert.equal(vm.runInContext("speechTargetCenterY(80)", context), 600);
+  assert.equal(vm.runInContext("speechTargetCenterY(760)", context), 404);
+  assert.equal(vm.runInContext("speechViewportBounds(790).top", context), 5);
+  assert.equal(
+    vm.runInContext(
+      "speechScrollOffsetForRects([{ top: -20, bottom: 800, height: 820, width: 200 }])",
+      context
+    ),
+    -20
+  );
+  vm.runInContext("applySpeechCenterOffset(0)", context);
   assert.equal(context.document.documentElement.dataset.palette, "nord");
   assert.equal(context.document.documentElement.dataset.font, "alegreya");
   assert.equal(vm.runInContext("speechAudioFormat", context), "opus");
@@ -1137,6 +1159,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.dataset.palette, "paper");
 
   assert.equal(context.document.documentElement.dataset.font, "alegreya");
+  anchorRectCalls = 0;
   assert.equal(pressKey("f"), true);
   assert.equal(context.document.documentElement.dataset.font, "eb-garamond");
   const currentBookSettings = () => JSON.parse(
@@ -1146,6 +1169,16 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   await wait(20);
   assert.equal(scrollByCalls.at(-1).top, 60);
   assert.equal(scrollByCalls.at(-1).behavior, "auto");
+
+  anchorRectCalls = 0;
+  vm.runInContext("stableResizeAnchor = captureLayoutAnchor()", context);
+  const resizeScrollCount = scrollByCalls.length;
+  windowListeners.get("resize")();
+  await wait(20);
+  assert.equal(scrollByCalls.length, resizeScrollCount + 1);
+  assert.equal(scrollByCalls.at(-1).top, 60);
+  assert.equal(scrollByCalls.at(-1).behavior, "auto");
+  await wait(170);
 
   assert.equal(pressKey("F", { shiftKey: true }), true);
   assert.equal(context.document.documentElement.dataset.font, "alegreya");
@@ -1271,10 +1304,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(stored.get("smooth-reader:speech-minimum"), "400");
   assert.equal(stored.get("smooth-reader:speech-maximum"), "700");
   elements["#settings-speech-position"].listeners.get("input")({
-    target: { value: "22" }
+    target: { value: "-8" }
   });
-  assert.equal(elements["#settings-speech-position-value"].textContent, "22%");
-  assert.equal(stored.get("smooth-reader:speech-position"), "22");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "-8%");
+  assert.equal(stored.get("smooth-reader:speech-center-offset"), "-8");
   elements["#settings-speech-min-down"].listeners.get("click")();
   assert.equal(elements["#settings-speech-min-value"].textContent, "350 chars");
   elements["#settings-speech-min-up"].listeners.get("click")();
@@ -1284,9 +1317,9 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   elements["#settings-speech-max-up"].listeners.get("click")();
   assert.equal(elements["#settings-speech-max-value"].textContent, "700 chars");
   elements["#settings-speech-position-down"].listeners.get("click")();
-  assert.equal(elements["#settings-speech-position-value"].textContent, "21%");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "-9%");
   elements["#settings-speech-position-up"].listeners.get("click")();
-  assert.equal(elements["#settings-speech-position-value"].textContent, "22%");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "-8%");
 
   assert.equal(pressKey("r"), true);
   await wait(80);
@@ -1384,7 +1417,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.style["--reader-width"], "44ch");
   assert.equal(elements["#settings-speech-min-value"].textContent, "150 chars");
   assert.equal(elements["#settings-speech-max-value"].textContent, "350 chars");
-  assert.equal(elements["#settings-speech-position-value"].textContent, "22%");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
   assert.equal(stored.get("smooth-reader:last-book"), rememberedLastBook);
   assert.equal(stored.get("smooth-reader:recent-books"), rememberedRecentBooks);
   assert.deepEqual(
