@@ -534,7 +534,8 @@ assert.match(indexSource, /id="library-manage-actions"[^>]*hidden/);
 assert.match(indexSource, /id="start-remove-books"[^>]*>REMOVE SELECTED</);
 assert.match(indexSource, /id="start-cancel-manage"[^>]*>CANCEL</);
 assert.match(indexSource, /id="library-import-input"[^>]*accept="\.zip,application\/zip"/);
-assert.ok(indexSource.indexOf('id="library-actions"') < indexSource.indexOf('id="start-settings-scope"'));
+assert.match(indexSource, /id="library-actions"/);
+assert.ok(indexSource.indexOf('id="library-actions"') < indexSource.indexOf('id="start-hotkeys"'));
 assert.doesNotMatch(indexSource, /id="settings-(?:export|import)-library"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
 assert.match(indexSource, /Middle-click/);
@@ -583,13 +584,12 @@ for (const range of [
 assert.doesNotMatch(indexSource, /id="start-(?:contrast|font-size|line-height|width|reset-all)"/);
 assert.match(indexSource, /id="settings-reset-book"[^>]*>RESET THIS BOOK</);
 assert.doesNotMatch(indexSource, /id="settings-reset-global"|RESET GLOBAL SETTINGS/);
-assert.match(indexSource, /id="start-settings-scope"/);
-assert.match(indexSource, /<strong>PER BOOK<\/strong>/);
+assert.doesNotMatch(indexSource, /id="start-settings-scope"/);
 assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260909-librarymanage1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260909-librarymanage1/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260909-homecenter1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260909-newdefaults1/);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
@@ -700,7 +700,9 @@ assert.match(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*44px[^}]*height
 assert.doesNotMatch(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*52px/s);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#start-hotkeys[^{]*\{[^}]*font-size:\s*clamp\(1rem/s);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#settings-panel[^{]*\{[^}]*width:\s*min\(96vw, 28rem\)[^}]*font-size:\s*1rem/s);
-assert.match(stylesSource, /#recent-book-list[^{]*\{[^}]*grid-template-columns:\s*repeat\(auto-fill/s);
+assert.match(stylesSource, /#recent-book-list[^{]*\{[^}]*grid-template-columns:\s*repeat\(auto-fit/s);
+assert.match(stylesSource, /#recent-book-list[^{]*\{[^}]*justify-content:\s*center/s);
+assert.match(stylesSource, /#drop-picker,\s*#recent-books,\s*#start-hotkeys,\s*#library-actions,\s*#library-manage-actions[^{]*\{[^}]*justify-self:\s*center[^}]*margin-inline:\s*auto/s);
 assert.ok(indexSource.indexOf('id="speech-controls"') < indexSource.indexOf('id="reading-progress"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-pause"') < indexSource.indexOf('id="speech-overlay-stop"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-stop"') < indexSource.indexOf('id="speech-overlay-home"'));
@@ -1495,6 +1497,31 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     "Test Book — second.epub"
   );
   assert.equal(renderedSections.length, 10);
+  assert.equal(context.document.documentElement.dataset.palette, "nord");
+  assert.equal(context.document.documentElement.dataset.font, "alegreya");
+  assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
+  assert.equal(context.document.documentElement.style["--reader-font-size"], "36px");
+  assert.equal(context.document.documentElement.style["--reader-line-height"], "1.28");
+  assert.equal(context.document.documentElement.style["--reader-tracking"], "0.02em");
+  assert.equal(context.document.documentElement.style["--reader-width"], "44ch");
+  assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
+  assert.deepEqual(JSON.parse(vm.runInContext(
+    "JSON.stringify(captureReadingSettings())",
+    context
+  )), {
+    palette: "nord",
+    contrast: 0,
+    font: "alegreya",
+    fontSize: 36,
+    lineHeight: 1.28,
+    tracking: 0.02,
+    width: 44,
+    voice: "",
+    speaker: "",
+    speechMaximum: 550,
+    speechCenterOffset: 0
+  });
   elements["#settings-font-size"].listeners.get("input")({ target: { value: "60" } });
   assert.equal(context.document.documentElement.style["--reader-font-size"], "60px");
   elements["#settings-palette"].listeners.get("change")({

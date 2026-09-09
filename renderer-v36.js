@@ -772,6 +772,12 @@ const readBookSettings = (hash) => {
 const applyStoredBookSettings = (hash) => {
   const stored = readBookSettings(hash);
   if (!stored) {
+    suppressSettingsPersistence = true;
+    try {
+      applyDefaultReadingSettings();
+    } finally {
+      suppressSettingsPersistence = false;
+    }
     saveCurrentReadingSettings();
     return;
   }
@@ -966,29 +972,33 @@ const applyLineHeight = (nextLineHeight, announce = true) => {
   if (announce) showStatus(`LINE HEIGHT · ${lineHeight.toFixed(2)}`, 900);
 };
 
+function applyDefaultReadingSettings() {
+  const defaultFontIndex = FONTS.findIndex((font) => font.id === "alegreya");
+  const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
+  applyPalette(defaultPaletteIndex, false);
+  applyContrast(DEFAULT_CONTRAST, false);
+  applyFont(defaultFontIndex, false);
+  applyFontSize(DEFAULT_FONT_SIZE_PX, false);
+  applyLineHeight(DEFAULT_LINE_HEIGHT, false);
+  applyTracking(DEFAULT_TRACKING_EM, false);
+  applyWidth(DEFAULT_WIDTH_CH, false);
+  speechVoicePreference = "";
+  speechSpeakerPreference = "";
+  settingsSpeechVoice.value = "";
+  syncSpeechSpeakerOptions();
+  applySpeechBounds(DEFAULT_SPEECH_MIN_LENGTH, DEFAULT_SPEECH_MAX_LENGTH);
+  applySpeechCenterOffset(
+    DEFAULT_SPEECH_CENTER_OFFSET_PERCENT,
+    Boolean(speechActiveJob)
+  );
+}
+
 const resetCurrentBookSettings = () => {
   if (!activeBookKey) return;
 
-  const defaultFontIndex = FONTS.findIndex((font) => font.id === "alegreya");
   suppressSettingsPersistence = true;
   try {
-    const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
-    applyPalette(defaultPaletteIndex, false);
-    applyContrast(DEFAULT_CONTRAST, false);
-    applyFont(defaultFontIndex, false);
-    applyFontSize(DEFAULT_FONT_SIZE_PX, false);
-    applyLineHeight(DEFAULT_LINE_HEIGHT, false);
-    applyTracking(DEFAULT_TRACKING_EM, false);
-    applyWidth(DEFAULT_WIDTH_CH, false);
-    speechVoicePreference = "";
-    speechSpeakerPreference = "";
-    settingsSpeechVoice.value = "";
-    syncSpeechSpeakerOptions();
-    applySpeechBounds(DEFAULT_SPEECH_MIN_LENGTH, DEFAULT_SPEECH_MAX_LENGTH);
-    applySpeechCenterOffset(
-      DEFAULT_SPEECH_CENTER_OFFSET_PERCENT,
-      Boolean(speechActiveJob)
-    );
+    applyDefaultReadingSettings();
   } finally {
     suppressSettingsPersistence = false;
   }

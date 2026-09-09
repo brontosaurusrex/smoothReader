@@ -54,9 +54,9 @@ line height, letter spacing, text width, Piper voice and embedded speaker ID,
 maximum speech chunk length, and spoken-text center offset.
 
 `RESET THIS BOOK` restores those controls only for the open book. It keeps the
-cached EPUB and reading position. New books inherit the current reader settings,
-then become independently configurable. The home screen always uses Nord with
-neutral contrast.
+cached EPUB and reading position. A newly added book always starts with the
+first-run defaults, then becomes independently configurable. The home screen
+always uses Nord with neutral contrast.
 
 First-run defaults: Nord, Alegreya 36 px, 1.28 line height, +0.02 em letter spacing, about 44 characters per line, 0% contrast, random voice and speaker ID, a fixed 150-character minimum and adjustable 550-character maximum speech chunk, and centered spoken text.
 

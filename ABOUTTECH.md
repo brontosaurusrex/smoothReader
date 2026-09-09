@@ -190,16 +190,17 @@ Small, synchronous state is kept under keys beginning with `smooth-reader:`.
 | `smooth-reader:book-settings:<SHA-256>` | Palette, contrast, typography, width, Piper voice/speaker, maximum speech chunk, and spoken-text offset |
 | `smooth-reader:recent-books` | Up to 12 lightweight book metadata records |
 | `smooth-reader:last-book` | Most recently opened book metadata |
-| `smooth-reader:palette` | Legacy/default palette fallback used when opening an older or new book |
+| `smooth-reader:palette` | Legacy palette fallback used when opening an older saved book |
 | `smooth-reader:contrast` | Legacy/default contrast fallback |
 | `smooth-reader:speech-maximum` | Legacy/default maximum TTS chunk fallback |
 | `smooth-reader:speech-center-offset` | Legacy/default spoken-text offset fallback |
 
-The standalone setting keys are retained only as migration and inheritance
-fallbacks. Once a book is active, every adjustable reader value is written to
-its per-book record. Older records are upgraded in place the next time their
-book opens. The home view ignores book appearance and is always rendered in
-Nord with neutral contrast.
+The standalone setting keys are retained only as migration fallbacks for older
+saved records. A book without a per-book record starts from the first-run
+defaults rather than copying the previously opened book. Once active, every
+adjustable reader value is written to its per-book record. Older partial records
+are upgraded in place the next time their book opens. The home view ignores book
+appearance and is always rendered in Nord with neutral contrast.
 
 Position writes are debounced by 180 ms while scrolling. A position is also
 saved before hiding or replacing the current book. Restoration waits for fonts,
