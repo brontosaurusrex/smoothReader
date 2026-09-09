@@ -45,13 +45,16 @@ The top-right hamburger opens all reader controls.
 
 The home screen and settings drawer always use the bundled EnvyCodeR Nerd Font. Changing a book's font affects only its text, reading percentage, and Piper voice label.
 
-Per book: font, font size, line height, letter spacing, text width, and Piper voice.
+Every reader control is stored per book: palette, contrast, font, font size,
+line height, letter spacing, text width, Piper voice and embedded speaker ID,
+maximum speech chunk length, and spoken-text center offset.
 
-Global: palette, contrast, maximum speech chunk length, and spoken-text center offset.
+`RESET THIS BOOK` restores those controls only for the open book. It keeps the
+cached EPUB and reading position. New books inherit the current reader settings,
+then become independently configurable. The home screen always uses Nord with
+neutral contrast.
 
-`RESET THIS BOOK` and `RESET GLOBAL SETTINGS` keep cached EPUBs and reading positions. New books inherit the currently active reading typography before becoming independently configurable.
-
-First-run defaults: Nord, Alegreya 36 px, 1.28 line height, +0.02 em letter spacing, about 44 characters per line, 0% contrast, random voice, a fixed 150-character minimum and adjustable 550-character maximum speech chunk, and centered spoken text.
+First-run defaults: Nord, Alegreya 36 px, 1.28 line height, +0.02 em letter spacing, about 44 characters per line, 0% contrast, random voice and speaker ID, a fixed 150-character minimum and adjustable 550-character maximum speech chunk, and centered spoken text.
 
 All selectable fonts are self-hosted in `vendor/fonts`; the app makes no Google Fonts requests.
 
@@ -62,8 +65,7 @@ All selectable fonts are self-hosted in `vendor/fonts`; the app makes no Google 
 - up to 12 cached EPUB files and their cover thumbnails
 - the recent-books list
 - the current and saved reading position for every remembered book
-- per-book typography and Piper voice settings
-- global palette, contrast, maximum chunk, and spoken-text offset settings
+- every per-book reader setting, including typography, appearance, and Piper controls
 
 Import merges the backup into the current browser rather than clearing it. Duplicate books are matched by their content hash, existing cached data is preserved, and the newer timestamp wins when both sides contain a reading position. If the combined library exceeds 12 books, the 12 most recently opened remain in the accessible cache.
 
@@ -89,6 +91,11 @@ python3 piper_bridge.py \
 ```
 
 The bridge searches the voice directory recursively for `.onnx` models and their `.onnx.json` files. It generates in the background, normalizes speech with FFmpeg, and serves mono Ogg Opus at 48 kbps when supported, with WAV fallback. Each browser tab has an isolated speech session; uncached Piper jobs share a fair single-generator queue.
+
+After selecting a multi-speaker ONNX voice, an `Embedded voice` selector appears.
+`RANDOM ID` keeps deterministic automatic speaker selection; selecting a numbered
+ID fixes that speaker for every chunk of that book. Single-speaker models do not
+show the extra selector. Names from `speaker_id_map` are shown when available.
 
 Speech is planned from fully visible lines, advances after each batch, and continues in background tabs without a false off-screen error. Mobile operating systems may still suspend a browser under battery or memory pressure.
 

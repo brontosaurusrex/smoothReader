@@ -40,6 +40,8 @@ const settingsWidthValue = document.querySelector("#settings-width-value");
 const settingsWidthDown = document.querySelector("#settings-width-down");
 const settingsWidthUp = document.querySelector("#settings-width-up");
 const settingsSpeechVoice = document.querySelector("#settings-speech-voice");
+const settingsSpeechSpeakerRow = document.querySelector("#settings-speech-speaker-row");
+const settingsSpeechSpeaker = document.querySelector("#settings-speech-speaker");
 const settingsSpeechMax = document.querySelector("#settings-speech-max");
 const settingsSpeechMaxValue = document.querySelector("#settings-speech-max-value");
 const settingsSpeechMaxDown = document.querySelector("#settings-speech-max-down");
@@ -57,7 +59,6 @@ const speechAudio = document.querySelector("#speech-audio");
 const settingsHome = document.querySelector("#settings-home");
 const settingsOpen = document.querySelector("#settings-open");
 const settingsResetBook = document.querySelector("#settings-reset-book");
-const settingsResetGlobal = document.querySelector("#settings-reset-global");
 const readingProgress = document.querySelector("#reading-progress");
 const speechVoice = document.querySelector("#speech-voice");
 const speechControls = document.querySelector("#speech-controls");
@@ -189,6 +190,8 @@ let speechScrollFrame = null;
 let speechScrollTargetY = null;
 let speechTextMaps = new WeakMap();
 let speechVoicePreference = "";
+let speechSpeakerPreference = "";
+let speechVoiceDetails = new Map();
 let piperAvailable = false;
 let suppressSettingsPersistence = false;
 const chapterLookup = new Map();
@@ -621,23 +624,28 @@ const handleViewportResize = () => {
 const bookSettingsKey = (hash) => `${BOOK_SETTINGS_PREFIX}${hash}`;
 
 const captureReadingSettings = () => ({
+  palette: PALETTES[paletteIndex].id,
+  contrast,
   font: FONTS[fontIndex].id,
   fontSize: fontSizePx,
   lineHeight,
   tracking: trackingEm,
   width: widthCh,
-  voice: speechVoicePreference
+  voice: speechVoicePreference,
+  speaker: speechSpeakerPreference,
+  speechMaximum: speechMaximumLength,
+  speechCenterOffset: speechCenterOffsetPercent
 });
 
-const saveCurrentReadingSettings = (globalKey = "", globalValue = "") => {
+const saveCurrentReadingSettings = (fallbackKey = "", fallbackValue = "") => {
   if (suppressSettingsPersistence) return;
   if (activeBookKey) {
     localStorage.setItem(
       bookSettingsKey(activeBookKey),
       JSON.stringify(captureReadingSettings())
     );
-  } else if (globalKey) {
-    localStorage.setItem(globalKey, String(globalValue));
+  } else if (fallbackKey) {
+    localStorage.setItem(fallbackKey, String(fallbackValue));
   }
 };
 
@@ -659,6 +667,16 @@ const applyStoredBookSettings = (hash) => {
 
   suppressSettingsPersistence = true;
   try {
+    const paletteId = typeof stored.palette === "string"
+      ? stored.palette
+      : localStorage.getItem(PALETTE_KEY);
+    const storedPalette = PALETTES.findIndex((palette) => palette.id === paletteId);
+    if (storedPalette >= 0) applyPalette(storedPalette, false);
+    const storedContrast = stored.contrast ?? localStorage.getItem(CONTRAST_KEY);
+    if (storedContrast !== null && storedContrast !== "" &&
+        Number.isFinite(Number(storedContrast))) {
+      applyContrast(Number(storedContrast), false);
+    }
     const storedFont = FONTS.findIndex((font) => font.id === stored.font);
     if (storedFont >= 0) applyFont(storedFont, false);
     if (Number.isFinite(Number(stored.fontSize))) {
@@ -674,10 +692,28 @@ const applyStoredBookSettings = (hash) => {
       applyWidth(Number(stored.width), false);
     }
     speechVoicePreference = typeof stored.voice === "string" ? stored.voice : "";
+    const storedSpeaker = String(stored.speaker ?? "");
+    speechSpeakerPreference = /^\d+$/.test(storedSpeaker) ? storedSpeaker : "";
     settingsSpeechVoice.value = speechVoicePreference;
+    syncSpeechSpeakerOptions();
+    const storedSpeechMaximum = stored.speechMaximum ?? localStorage.getItem(SPEECH_MAX_KEY);
+    if (storedSpeechMaximum !== null && storedSpeechMaximum !== "" &&
+        Number.isFinite(Number(storedSpeechMaximum))) {
+      applySpeechBounds(DEFAULT_SPEECH_MIN_LENGTH, Number(storedSpeechMaximum));
+    }
+    const storedSpeechOffset = stored.speechCenterOffset ??
+      localStorage.getItem(SPEECH_CENTER_OFFSET_KEY);
+    if (storedSpeechOffset !== null && storedSpeechOffset !== "" &&
+        Number.isFinite(Number(storedSpeechOffset))) {
+      applySpeechCenterOffset(
+        Number(storedSpeechOffset),
+        Boolean(speechActiveJob)
+      );
+    }
   } finally {
     suppressSettingsPersistence = false;
   }
+  saveCurrentReadingSettings();
 };
 
 const syncSettingsControls = () => {
@@ -714,7 +750,7 @@ const applyPalette = (nextIndex, announce = true) => {
   paletteIndex = (nextIndex + PALETTES.length) % PALETTES.length;
   const palette = PALETTES[paletteIndex];
   document.documentElement.dataset.palette = palette.id;
-  localStorage.setItem(PALETTE_KEY, palette.id);
+  saveCurrentReadingSettings(PALETTE_KEY, palette.id);
   syncSettingsControls();
 
   if (announce) {
@@ -734,7 +770,7 @@ const applyContrast = (nextContrast, announce = true) => {
     "--contrast-soften",
     `${Math.max(0, -contrast)}%`
   );
-  localStorage.setItem(CONTRAST_KEY, String(contrast));
+  saveCurrentReadingSettings(CONTRAST_KEY, contrast);
   syncSettingsControls();
 
   if (announce) {
@@ -825,33 +861,28 @@ const resetCurrentBookSettings = () => {
   const defaultFontIndex = FONTS.findIndex((font) => font.id === "alegreya");
   suppressSettingsPersistence = true;
   try {
+    const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
+    applyPalette(defaultPaletteIndex, false);
+    applyContrast(DEFAULT_CONTRAST, false);
     applyFont(defaultFontIndex, false);
     applyFontSize(DEFAULT_FONT_SIZE_PX, false);
     applyLineHeight(DEFAULT_LINE_HEIGHT, false);
     applyTracking(DEFAULT_TRACKING_EM, false);
     applyWidth(DEFAULT_WIDTH_CH, false);
     speechVoicePreference = "";
+    speechSpeakerPreference = "";
     settingsSpeechVoice.value = "";
+    syncSpeechSpeakerOptions();
+    applySpeechBounds(DEFAULT_SPEECH_MIN_LENGTH, DEFAULT_SPEECH_MAX_LENGTH);
+    applySpeechCenterOffset(
+      DEFAULT_SPEECH_CENTER_OFFSET_PERCENT,
+      Boolean(speechActiveJob)
+    );
   } finally {
     suppressSettingsPersistence = false;
   }
   saveCurrentReadingSettings();
-  showStatus("THIS BOOK'S SETTINGS RESET · POSITION KEPT", 1800);
-};
-
-const resetGlobalSettings = () => {
-  const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
-  applyPalette(defaultPaletteIndex, false);
-  applyContrast(DEFAULT_CONTRAST, false);
-  applySpeechBounds(
-    DEFAULT_SPEECH_MIN_LENGTH,
-    DEFAULT_SPEECH_MAX_LENGTH
-  );
-  applySpeechCenterOffset(
-    DEFAULT_SPEECH_CENTER_OFFSET_PERCENT,
-    Boolean(speechActiveJob)
-  );
-  showStatus("GLOBAL SETTINGS RESET · BOOKS AND POSITIONS KEPT", 1800);
+  showStatus("ALL SETTINGS FOR THIS BOOK RESET · POSITION KEPT", 1800);
 };
 
 applyPalette(paletteIndex, false);
@@ -958,38 +989,34 @@ const importedRecentMetadata = (manifest) => {
 };
 
 const applyImportedSettings = () => {
-  const importedPaletteIndex = PALETTES.findIndex(
-    (palette) => palette.id === localStorage.getItem(PALETTE_KEY)
-  );
-  if (importedPaletteIndex >= 0) applyPalette(importedPaletteIndex, false);
-
-  const importedContrast = Number.parseInt(localStorage.getItem(CONTRAST_KEY), 10);
-  if (Number.isFinite(importedContrast)) applyContrast(importedContrast, false);
-
-  const importedSpeechMaximum = Number.parseInt(localStorage.getItem(SPEECH_MAX_KEY), 10);
-  applySpeechBounds(
-    DEFAULT_SPEECH_MIN_LENGTH,
-    Number.isFinite(importedSpeechMaximum)
-      ? importedSpeechMaximum
-      : DEFAULT_SPEECH_MAX_LENGTH
-  );
-
-  const importedSpeechOffset = Number.parseInt(
-    localStorage.getItem(SPEECH_CENTER_OFFSET_KEY),
-    10
-  );
-  if (Number.isFinite(importedSpeechOffset)) {
-    applySpeechCenterOffset(importedSpeechOffset, Boolean(speechActiveJob));
-  }
-
   if (activeBookKey) {
     applyStoredBookSettings(activeBookKey);
   } else {
+    const importedPaletteIndex = PALETTES.findIndex(
+      (palette) => palette.id === localStorage.getItem(PALETTE_KEY)
+    );
+    const importedContrast = Number.parseInt(localStorage.getItem(CONTRAST_KEY), 10);
+    const importedSpeechMaximum = Number.parseInt(localStorage.getItem(SPEECH_MAX_KEY), 10);
+    const importedSpeechOffset = Number.parseInt(
+      localStorage.getItem(SPEECH_CENTER_OFFSET_KEY),
+      10
+    );
     const importedFontIndex = FONTS.findIndex(
       (font) => font.id === localStorage.getItem(FONT_KEY)
     );
     suppressSettingsPersistence = true;
     try {
+      if (importedPaletteIndex >= 0) applyPalette(importedPaletteIndex, false);
+      if (Number.isFinite(importedContrast)) applyContrast(importedContrast, false);
+      applySpeechBounds(
+        DEFAULT_SPEECH_MIN_LENGTH,
+        Number.isFinite(importedSpeechMaximum)
+          ? importedSpeechMaximum
+          : DEFAULT_SPEECH_MAX_LENGTH
+      );
+      if (Number.isFinite(importedSpeechOffset)) {
+        applySpeechCenterOffset(importedSpeechOffset, Boolean(speechActiveJob));
+      }
       if (importedFontIndex >= 0) applyFont(importedFontIndex, false);
       const importedFontSize = Number.parseInt(localStorage.getItem(FONT_SIZE_KEY), 10);
       const importedLineHeight = Number.parseFloat(localStorage.getItem(LINE_HEIGHT_KEY));
@@ -1146,6 +1173,7 @@ const setSettingsOpen = (isOpen) => {
 };
 
 const setReadingMode = (isReading) => {
+  document.documentElement.dataset.view = isReading ? "reader" : "home";
   dropZone.hidden = isReading;
   reader.hidden = !isReading;
   settingsMenu.hidden = !isReading;
@@ -1530,7 +1558,7 @@ const normalizeSpeechText = (text) => String(text || "")
   .replace(/\s+/g, " ")
   .trim();
 
-const applySpeechBounds = (nextMinimum, nextMaximum, changed = "", announce = false) => {
+function applySpeechBounds(nextMinimum, nextMaximum, changed = "", announce = false) {
   const minimum = DEFAULT_SPEECH_MIN_LENGTH;
   const maximum = Math.round(Math.max(
     MIN_SPEECH_MAX_LENGTH,
@@ -1539,21 +1567,24 @@ const applySpeechBounds = (nextMinimum, nextMaximum, changed = "", announce = fa
 
   speechMinimumLength = minimum;
   speechMaximumLength = maximum;
-  localStorage.setItem(SPEECH_MAX_KEY, String(maximum));
+  saveCurrentReadingSettings(SPEECH_MAX_KEY, maximum);
   settingsSpeechMax.value = String(maximum);
   settingsSpeechMaxValue.textContent = `${maximum} chars`;
   settingsSpeechMaxDown.disabled = maximum <= MIN_SPEECH_MAX_LENGTH;
   settingsSpeechMaxUp.disabled = maximum >= MAX_SPEECH_MAX_LENGTH;
-};
+}
 
 applySpeechBounds(speechMinimumLength, speechMaximumLength);
 
-const applySpeechCenterOffset = (nextOffset, followCurrent = false) => {
+function applySpeechCenterOffset(nextOffset, followCurrent = false) {
   speechCenterOffsetPercent = Math.round(Math.max(
     MIN_SPEECH_CENTER_OFFSET_PERCENT,
     Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, nextOffset)
   ));
-  localStorage.setItem(SPEECH_CENTER_OFFSET_KEY, String(speechCenterOffsetPercent));
+  saveCurrentReadingSettings(
+    SPEECH_CENTER_OFFSET_KEY,
+    speechCenterOffsetPercent
+  );
   settingsSpeechPosition.value = String(speechCenterOffsetPercent);
   settingsSpeechPositionValue.textContent = (
     `${speechCenterOffsetPercent > 0 ? "+" : ""}${speechCenterOffsetPercent}%`
@@ -1565,7 +1596,7 @@ const applySpeechCenterOffset = (nextOffset, followCurrent = false) => {
     speechCenterOffsetPercent >= MAX_SPEECH_CENTER_OFFSET_PERCENT
   );
   if (followCurrent && speechActiveJob) positionSpeechMarker(true);
-};
+}
 
 applySpeechCenterOffset(speechCenterOffsetPercent);
 
@@ -1995,8 +2026,59 @@ const setSpeechActiveJob = (job) => {
   positionSpeechMarker(job?.followText !== false);
 };
 
-const updateSpeechVoices = (voices) => {
+function syncSpeechSpeakerOptions() {
+  settingsSpeechSpeaker.replaceChildren();
+  const randomOption = document.createElement("option");
+  randomOption.value = "";
+  randomOption.textContent = "RANDOM ID";
+  settingsSpeechSpeaker.appendChild(randomOption);
+
+  const details = speechVoiceDetails.get(speechVoicePreference);
+  const speakerCount = Math.max(1, Number(details?.speakerCount) || 1);
+  const shouldShow = Boolean(speechVoicePreference && details && speakerCount > 1);
+  settingsSpeechSpeakerRow.hidden = !shouldShow;
+  settingsSpeechSpeaker.disabled = !shouldShow;
+  if (!shouldShow) {
+    if (!speechVoicePreference || details) speechSpeakerPreference = "";
+    settingsSpeechSpeaker.value = "";
+    return;
+  }
+
+  const selectedId = Number(speechSpeakerPreference);
+  if (
+    speechSpeakerPreference !== "" &&
+    (!Number.isInteger(selectedId) || selectedId < 0 || selectedId >= speakerCount)
+  ) speechSpeakerPreference = "";
+
+  for (let speakerId = 0; speakerId < speakerCount; speakerId += 1) {
+    const option = document.createElement("option");
+    const id = String(speakerId);
+    const name = typeof details.speakerNames?.[id] === "string"
+      ? details.speakerNames[id].trim()
+      : "";
+    option.value = id;
+    option.textContent = name ? `ID ${id} — ${name}` : `ID ${id}`;
+    settingsSpeechSpeaker.appendChild(option);
+  }
+  settingsSpeechSpeaker.value = speechSpeakerPreference;
+}
+
+const updateSpeechVoices = (voices, voiceDetails = []) => {
   const selected = speechVoicePreference;
+  const detailLookup = new Map(
+    (Array.isArray(voiceDetails) ? voiceDetails : [])
+      .filter((details) => typeof details?.id === "string")
+      .map((details) => [details.id, details])
+  );
+  speechVoiceDetails = new Map(voices.map((voice) => {
+    const details = detailLookup.get(voice);
+    return [voice, {
+      speakerCount: Math.max(1, Number(details?.speakerCount) || 1),
+      speakerNames: details?.speakerNames && typeof details.speakerNames === "object"
+        ? details.speakerNames
+        : {}
+    }];
+  }));
   settingsSpeechVoice.replaceChildren();
   const randomOption = document.createElement("option");
   randomOption.value = "";
@@ -2017,8 +2099,14 @@ const updateSpeechVoices = (voices) => {
     : legacyMatches.length === 1
       ? legacyMatches[0]
       : "";
+  if (selected && !speechVoicePreference) speechSpeakerPreference = "";
   settingsSpeechVoice.value = speechVoicePreference;
-  if (selected && selected !== speechVoicePreference) saveCurrentReadingSettings();
+  const previousSpeaker = speechSpeakerPreference;
+  syncSpeechSpeakerOptions();
+  if (
+    (selected && selected !== speechVoicePreference) ||
+    previousSpeaker !== speechSpeakerPreference
+  ) saveCurrentReadingSettings();
 };
 
 const requestPiper = async (path, options = {}) => {
@@ -2041,7 +2129,7 @@ const requestPiper = async (path, options = {}) => {
 const inspectPiperBridge = async () => {
   const bridge = await requestPiper("/api/piper/status");
   if (!bridge.available) throw new Error(bridge.error || "Piper or FFmpeg was not found.");
-  updateSpeechVoices(bridge.voices || []);
+  updateSpeechVoices(bridge.voices || [], bridge.voiceDetails || []);
   const format = speechAudioFormat === "opus" ? "Opus 48 kbps" : "WAV compatibility mode";
   settingsSpeechStatus.textContent = `${bridge.voices.length} local voice${bridge.voices.length === 1 ? "" : "s"} ready · ${format}.`;
   return bridge;
@@ -2517,12 +2605,16 @@ const startSpeech = async () => {
         : "No readable text is visible. Scroll to some text and try again.");
     }
     const requestedVoice = speechVoicePreference || null;
+    const requestedSpeaker = speechSpeakerPreference === ""
+      ? null
+      : Number(speechSpeakerPreference);
     const prepareJob = (job) => requestPiper("/api/piper/prepare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text: job.text,
         voice: requestedVoice,
+        speaker: requestedSpeaker,
         sessionId: speechSessionId,
         audioFormat: speechAudioFormat
       })
@@ -2856,6 +2948,8 @@ const handleReaderKeyDown = (event) => {
     return;
   }
 
+  if (reader.hidden) return;
+
   if (noCommandModifier && !event.shiftKey && !event.repeat && key === "v") {
     event.preventDefault();
     if (speechIsActive) stopSpeech();
@@ -2999,6 +3093,14 @@ speechOverlayStop.addEventListener("click", stopSpeech);
 speechOverlayHome.addEventListener("click", returnToHomeScreen);
 settingsSpeechVoice.addEventListener("change", (event) => {
   speechVoicePreference = event.target.value || "";
+  speechSpeakerPreference = "";
+  syncSpeechSpeakerOptions();
+  saveCurrentReadingSettings();
+});
+settingsSpeechSpeaker.addEventListener("change", (event) => {
+  speechSpeakerPreference = /^\d+$/.test(event.target.value)
+    ? event.target.value
+    : "";
   saveCurrentReadingSettings();
 });
 
@@ -3093,7 +3195,6 @@ settingsToggle.addEventListener("click", () => {
 });
 settingsHome.addEventListener("click", returnToHomeScreen);
 settingsResetBook.addEventListener("click", resetCurrentBookSettings);
-settingsResetGlobal.addEventListener("click", resetGlobalSettings);
 
 window.addEventListener("click", (event) => {
   if (!settingsPanel.hidden && !event.target?.closest?.("#settings-menu")) {

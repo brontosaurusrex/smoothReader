@@ -187,17 +187,19 @@ Small, synchronous state is kept under keys beginning with `smooth-reader:`.
 | Key pattern | Stored value |
 | --- | --- |
 | `smooth-reader:position:<SHA-256>` | JSON containing `scrollY`, fallback `ratio`, and `savedAt` timestamp |
-| `smooth-reader:book-settings:<SHA-256>` | Font, font size, line height, tracking, width, and Piper voice |
+| `smooth-reader:book-settings:<SHA-256>` | Palette, contrast, typography, width, Piper voice/speaker, maximum speech chunk, and spoken-text offset |
 | `smooth-reader:recent-books` | Up to 12 lightweight book metadata records |
 | `smooth-reader:last-book` | Most recently opened book metadata |
-| `smooth-reader:palette` | Global palette |
-| `smooth-reader:contrast` | Global contrast adjustment |
-| `smooth-reader:speech-maximum` | Global maximum TTS chunk length |
-| `smooth-reader:speech-center-offset` | Global spoken-text position offset |
+| `smooth-reader:palette` | Legacy/default palette fallback used when opening an older or new book |
+| `smooth-reader:contrast` | Legacy/default contrast fallback |
+| `smooth-reader:speech-maximum` | Legacy/default maximum TTS chunk fallback |
+| `smooth-reader:speech-center-offset` | Legacy/default spoken-text offset fallback |
 
-The older standalone font/size/line-height/tracking/width keys are retained as
-fallback or inheritance values when no book is active. Once a book is active,
-those typography values are written to its per-book record.
+The standalone setting keys are retained only as migration and inheritance
+fallbacks. Once a book is active, every adjustable reader value is written to
+its per-book record. Older records are upgraded in place the next time their
+book opens. The home view ignores book appearance and is always rendered in
+Nord with neutral contrast.
 
 Position writes are debounced by 180 ms while scrolling. A position is also
 saved before hiding or replacing the current book. Restoration waits for fonts,
@@ -330,7 +332,7 @@ start generating its first chunk in advance. Playback never waits for the
 
 The active text is represented by a DOM `Range`. A narrow marker is positioned
 to the left of the owning block and recalculated after scroll, zoom, resize, or
-layout changes. Spoken text is centered in the usable viewport with a global
+layout changes. Spoken text is centered in the usable viewport with a per-book
 -25% to +25% offset. The centering calculation clamps itself so a chunk that can
 fit is not intentionally pushed beyond the viewport.
 
@@ -346,8 +348,8 @@ and implements these endpoints:
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /api/piper/status` | Piper/FFmpeg availability, voices, paths, queue state, and codec details |
-| `POST /api/piper/prepare` | Generate or retrieve one speech chunk |
+| `GET /api/piper/status` | Piper/FFmpeg availability, voices, speaker counts/names, paths, queue state, and codec details |
+| `POST /api/piper/prepare` | Generate or retrieve one speech chunk, optionally with a fixed speaker ID |
 | `POST /api/piper/stop` | Cancel queued or active generation for one session |
 | `GET /api/piper/audio/<cache-id>` | Stream cached Opus/WAV with HTTP Range support |
 
@@ -364,12 +366,21 @@ The configured voice directory is searched recursively for `.onnx` files.
 Voice IDs are paths relative to that root, which allows organized subfolders and
 avoids collisions between same-named models.
 
-The matching `<model>.onnx.json` supplies sample rate and speaker count. Missing
-or invalid configuration falls back to one speaker at 22,050 Hz. A specifically
-selected voice is used directly. `RANDOM VOICE` is deterministic: a hash of the
-text selects a model, and a hash of voice plus text selects a speaker. Repeating
-the same input therefore reaches the same cache entry. The speaker ID is shown
-in the UI only when a model contains multiple speakers.
+The matching `<model>.onnx.json` supplies sample rate, speaker count, and—when
+present—`speaker_id_map` names. Missing or invalid configuration falls back to
+one speaker at 22,050 Hz. The status response keeps the simple voice-ID list for
+compatibility and also supplies a `voiceDetails` list used to build the embedded
+speaker selector. Speaker options are created only for the explicitly selected
+model, so models with more than 900 IDs do not fill every voice menu in advance.
+
+A specifically selected voice is used directly. `RANDOM VOICE` is deterministic:
+a hash of the text selects a model. For a multi-speaker model, `RANDOM ID` uses a
+hash of voice plus text, so its ID may vary between chunks but identical input
+uses the same ID and cache entry. Selecting a numbered ID sends that exact ID on
+every prepare request and fixes it for that book. The server validates the ID
+against the model's speaker count before running Piper. Single-speaker models
+hide the extra selector. The active speaker ID is displayed beside the voice
+name only when the model contains multiple speakers.
 
 ### Audio-generation pipeline
 
@@ -393,7 +404,7 @@ The cache ID is SHA-256 over:
 - normalized chunk text
 - cache-format version
 - voice ID plus model file size and modification time
-- speaker and model sample rate
+- resolved speaker ID and model sample rate
 - requested output format and Opus bitrate
 
 Changing the model, text, speaker, codec, bitrate, or cache version creates a new
@@ -426,7 +437,7 @@ be authenticated because speech generation consumes CPU and disk.
 | EPUB bytes | Browser IndexedDB | No | Yes |
 | Cover thumbnails | Browser IndexedDB | No | Yes |
 | Reading positions | Browser localStorage | No | Yes |
-| Book and global settings | Browser localStorage | No | Yes |
+| Per-book settings and legacy fallbacks | Browser localStorage | No | Yes |
 | Speech session ID | Browser sessionStorage | With speech requests | No |
 | Current speech text | Browser memory | Only when Piper is used | No |
 | Voice models | Server filesystem | Already server-side | No |

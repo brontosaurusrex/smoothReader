@@ -214,6 +214,22 @@
   --scrollbar: #66536c;
 }
 
+:root[data-view="home"] {
+  color-scheme: dark;
+  --background: #2e3440;
+  --text: #d8dee9;
+  --muted: #8192aa;
+  --line: #4c566a;
+  --heading: #eceff4;
+  --link: #88c0d0;
+  --panel: #3b4252;
+  --hover: #353c4a;
+  --cover: rgb(46 52 64 / 94%);
+  --scrollbar: #607089;
+  --contrast-strength: 0% !important;
+  --contrast-soften: 0% !important;
+}
+
 @supports (color: color-mix(in srgb, white, black)) {
   :root {
     --display-background: color-mix(

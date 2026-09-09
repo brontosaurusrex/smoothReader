@@ -132,6 +132,8 @@ const elements = {
   "#settings-width-down": makeElement(),
   "#settings-width-up": makeElement(),
   "#settings-speech-voice": makeElement(),
+  "#settings-speech-speaker-row": makeElement(),
+  "#settings-speech-speaker": makeElement(),
   "#settings-speech-max": makeElement(),
   "#settings-speech-max-value": makeElement(),
   "#settings-speech-max-down": makeElement(),
@@ -147,7 +149,6 @@ const elements = {
   "#settings-home": makeElement(),
   "#settings-open": makeElement(),
   "#settings-reset-book": makeElement(),
-  "#settings-reset-global": makeElement(),
   "#speech-voice": makeElement(),
   "#speech-controls": makeElement(),
   "#speech-overlay-pause": makeElement(),
@@ -164,6 +165,7 @@ elements["#status"].hidden = true;
 elements["#recent-books"].hidden = true;
 elements["#settings-menu"].hidden = true;
 elements["#settings-panel"].hidden = true;
+elements["#settings-speech-speaker-row"].hidden = true;
 elements["#reading-progress"].hidden = true;
 elements["#speech-voice"].hidden = true;
 elements["#speech-controls"].hidden = true;
@@ -316,7 +318,7 @@ const context = vm.createContext({
     },
     documentElement: {
       scrollHeight: 3000,
-      dataset: {},
+      dataset: { view: "home" },
       style: {
         setProperty(name, value) {
           this[name] = value;
@@ -424,7 +426,16 @@ const context = vm.createContext({
           ? {
             ok: true,
             available: true,
-            voices: ["voice-one.onnx", "voice-two.onnx"]
+            voices: ["voice-one.onnx", "voice-two.onnx", "voice-large.onnx"],
+            voiceDetails: [
+              {
+                id: "voice-one.onnx",
+                speakerCount: 3,
+                speakerNames: { "0": "ALPHA", "2": "GAMMA" }
+              },
+              { id: "voice-two.onnx", speakerCount: 1, speakerNames: {} },
+              { id: "voice-large.onnx", speakerCount: 901, speakerNames: {} }
+            ]
           }
           : { ok: true }
       });
@@ -492,10 +503,15 @@ vm.runInContext(rendererSource, context, {
 
 const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
 const stylesSource = fs.readFileSync(path.join(__dirname, "..", "styles-v36-mobile7.css"), "utf8");
+const readmeSource = fs.readFileSync(path.join(__dirname, "..", "README.md"), "utf8");
+const aboutTechSource = fs.readFileSync(path.join(__dirname, "..", "ABOUTTECH.md"), "utf8");
 const fontsDirectory = path.join(__dirname, "..", "vendor", "fonts");
 const fontsSource = fs.readFileSync(path.join(fontsDirectory, "reader-fonts.css"), "utf8");
 assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /renderer-v36\.js/);
+assert.match(readmeSource, /\[ABOUTTECH\.md\]\(ABOUTTECH\.md\)/);
+assert.match(aboutTechSource, /## Browser-side persistence/);
+assert.match(aboutTechSource, /## Piper bridge: server side/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /id="start-export-library"[^>]*>EXPORT LIBRARY</);
@@ -526,6 +542,8 @@ assert.match(indexSource, /id="settings-font-size"/);
 assert.match(indexSource, /id="settings-contrast"[^>]*min="-30"[^>]*max="30"/);
 assert.match(indexSource, /id="settings-line-height"/);
 assert.match(indexSource, /id="settings-speech-start"/);
+assert.match(indexSource, /id="settings-speech-speaker-row"[^>]*hidden/);
+assert.match(indexSource, /id="settings-speech-speaker"[^>]*>\s*<option value="">RANDOM ID<\/option>/);
 assert.doesNotMatch(indexSource, /id="settings-speech-min"/);
 assert.match(indexSource, /id="settings-speech-max"/);
 assert.match(indexSource, /Spoken text center offset/);
@@ -547,13 +565,14 @@ for (const range of [
 }
 assert.doesNotMatch(indexSource, /id="start-(?:contrast|font-size|line-height|width|reset-all)"/);
 assert.match(indexSource, /id="settings-reset-book"[^>]*>RESET THIS BOOK</);
-assert.match(indexSource, /id="settings-reset-global"[^>]*>RESET GLOBAL SETTINGS</);
+assert.doesNotMatch(indexSource, /id="settings-reset-global"|RESET GLOBAL SETTINGS/);
 assert.match(indexSource, /id="start-settings-scope"/);
 assert.match(indexSource, /<strong>PER BOOK<\/strong>/);
-assert.match(indexSource, /<strong>GLOBAL<\/strong>/);
+assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
+assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260909-backup1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260909-backup1/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260909-perbook1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260909-perbook1/);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
@@ -594,6 +613,8 @@ assert.match(rendererSource, /nextPreparation/);
 assert.doesNotMatch(rendererSource, /speechProgress|speechChunkNumber|CHUNK/);
 assert.match(stylesSource, /#reading-progress\s*\{[^}]*font-size:\s*1\.50rem[^}]*font-weight:\s*400/s);
 assert.match(rendererSource, /speechVoice\.textContent = formatSpeechVoice\(prepared\)/);
+assert.match(rendererSource, /speaker:\s*requestedSpeaker/);
+assert.match(rendererSource, /speaker:\s*speechSpeakerPreference/);
 assert.equal(
   vm.runInContext("formatSpeechVoice({ voice: 'solo.onnx', speaker: 0, speakerCount: 1 })", context),
   "solo"
@@ -633,6 +654,7 @@ assert.match(stylesSource, /"Cascadia Mono"/);
 assert.match(stylesSource, /@supports \(color: color-mix\(in srgb, white, black\)\)/);
 assert.match(stylesSource, /--contrast-strength/);
 assert.match(stylesSource, /--contrast-soften/);
+assert.match(stylesSource, /:root\[data-view="home"\][^{]*\{[^}]*--background:\s*#2e3440[^}]*--contrast-strength:\s*0%\s*!important/s);
 assert.match(stylesSource, /--range-button-size:\s*44px/);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*--range-button-size:\s*48px/);
 assert.match(stylesSource, /overflow-x:\s*clip/);
@@ -995,7 +1017,9 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   documentListeners.get("visibilitychange")();
   context.window.scrollY = 0;
   assert.equal(fetchCalls.filter((path) => path === "/api/piper/status").length, 1);
-  assert.equal(elements["#settings-speech-voice"].children.length, 3);
+  assert.equal(elements["#settings-speech-voice"].children.length, 4);
+  assert.equal(elements["#settings-speech-speaker-row"].hidden, true);
+  assert.equal(elements["#settings-speech-speaker"].children.length, 1);
   assert.equal(elements["#speech-controls"].hidden, true);
   assert.equal(elements["#recent-books"].hidden, false);
   assert.equal(elements["#recent-book-list"].children.length, 1);
@@ -1078,6 +1102,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#speech-overlay-pause"].disabled, false);
   assert.equal(elements["#speech-overlay-pause"].textContent, "▶");
   assert.equal(elements["#speech-overlay-stop"].disabled, true);
+  assert.equal(context.document.documentElement.dataset.view, "reader");
   vm.runInContext("piperAvailable = false; syncSpeechControls();", context);
   assert.equal(elements["#speech-overlay-pause"].hidden, true);
   assert.equal(elements["#speech-overlay-stop"].hidden, true);
@@ -1209,10 +1234,13 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(pressKey("PageUp"), true);
   assert.equal(scrollByCalls.at(-1).top, -704);
 
+  const currentBookSettings = () => JSON.parse(
+    [...stored.entries()].find(([key]) => key.startsWith("smooth-reader:book-settings:"))[1]
+  );
   assert.equal(context.document.documentElement.dataset.palette, "nord");
   assert.equal(pressKey("p"), true);
   assert.equal(context.document.documentElement.dataset.palette, "solarized");
-  assert.equal(stored.get("smooth-reader:palette"), "solarized");
+  assert.equal(currentBookSettings().palette, "solarized");
 
   assert.equal(pressKey("P", { shiftKey: true }), true);
   assert.equal(context.document.documentElement.dataset.palette, "nord");
@@ -1224,9 +1252,6 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   anchorRectCalls = 0;
   assert.equal(pressKey("f"), true);
   assert.equal(context.document.documentElement.dataset.font, "eb-garamond");
-  const currentBookSettings = () => JSON.parse(
-    [...stored.entries()].find(([key]) => key.startsWith("smooth-reader:book-settings:"))[1]
-  );
   assert.equal(currentBookSettings().font, "eb-garamond");
   await wait(20);
   assert.equal(scrollByCalls.at(-1).top, 60);
@@ -1329,7 +1354,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.style["--contrast-strength"], "20%");
   assert.equal(context.document.documentElement.style["--contrast-soften"], "0%");
   assert.equal(elements["#settings-contrast-value"].textContent, "+20%");
-  assert.equal(stored.get("smooth-reader:contrast"), "20");
+  assert.equal(currentBookSettings().contrast, 20);
   elements["#settings-contrast-down"].listeners.get("click")();
   assert.equal(elements["#settings-contrast-value"].textContent, "+19%");
   elements["#settings-contrast-up"].listeners.get("click")();
@@ -1347,13 +1372,38 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#speech-overlay-stop"].listeners.has("click"), true);
   assert.equal(elements["#speech-overlay-home"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-voice"].listeners.has("change"), true);
+  assert.equal(elements["#settings-speech-speaker"].listeners.has("change"), true);
+  elements["#settings-speech-voice"].listeners.get("change")({
+    target: { value: "voice-one.onnx" }
+  });
+  assert.equal(elements["#settings-speech-speaker-row"].hidden, false);
+  assert.equal(elements["#settings-speech-speaker"].children.length, 4);
+  assert.equal(elements["#settings-speech-speaker"].children[0].textContent, "RANDOM ID");
+  assert.equal(elements["#settings-speech-speaker"].children[1].textContent, "ID 0 — ALPHA");
+  assert.equal(elements["#settings-speech-speaker"].children[2].textContent, "ID 1");
+  assert.equal(elements["#settings-speech-speaker"].children[3].textContent, "ID 2 — GAMMA");
+  elements["#settings-speech-speaker"].listeners.get("change")({
+    target: { value: "2" }
+  });
+  assert.equal(vm.runInContext("speechSpeakerPreference", context), "2");
+  assert.equal(vm.runInContext("captureReadingSettings().speaker", context), "2");
+  elements["#settings-speech-voice"].listeners.get("change")({
+    target: { value: "voice-large.onnx" }
+  });
+  assert.equal(elements["#settings-speech-speaker"].children.length, 902);
+  assert.equal(elements["#settings-speech-speaker"].children.at(-1).textContent, "ID 900");
+  elements["#settings-speech-voice"].listeners.get("change")({
+    target: { value: "voice-two.onnx" }
+  });
+  assert.equal(elements["#settings-speech-speaker-row"].hidden, true);
+  assert.equal(vm.runInContext("speechSpeakerPreference", context), "");
   for (const button of [
     "#settings-contrast-down", "#settings-contrast-up",
     "#settings-line-height-down", "#settings-line-height-up",
     "#settings-width-down", "#settings-width-up",
     "#settings-speech-max-down", "#settings-speech-max-up",
     "#settings-speech-position-down", "#settings-speech-position-up",
-    "#settings-reset-book", "#settings-reset-global"
+    "#settings-reset-book"
   ]) {
     assert.equal(elements[button].listeners.has("click"), true, button);
   }
@@ -1362,12 +1412,12 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(vm.runInContext("speechMinimumLength", context), 150);
   assert.equal(elements["#settings-speech-max-value"].textContent, "700 chars");
   assert.equal(stored.has("smooth-reader:speech-minimum"), false);
-  assert.equal(stored.get("smooth-reader:speech-maximum"), "700");
+  assert.equal(currentBookSettings().speechMaximum, 700);
   elements["#settings-speech-position"].listeners.get("input")({
     target: { value: "-8" }
   });
   assert.equal(elements["#settings-speech-position-value"].textContent, "-8%");
-  assert.equal(stored.get("smooth-reader:speech-center-offset"), "-8");
+  assert.equal(currentBookSettings().speechCenterOffset, -8);
   elements["#settings-speech-max-down"].listeners.get("click")();
   assert.equal(elements["#settings-speech-max-value"].textContent, "650 chars");
   elements["#settings-speech-max-up"].listeners.get("click")();
@@ -1423,10 +1473,20 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(renderedSections.length, 10);
   elements["#settings-font-size"].listeners.get("input")({ target: { value: "60" } });
   assert.equal(context.document.documentElement.style["--reader-font-size"], "60px");
+  elements["#settings-palette"].listeners.get("change")({
+    target: { value: "forest" }
+  });
+  elements["#settings-contrast"].listeners.get("change")({ target: { value: "-10" } });
+  elements["#settings-speech-max"].listeners.get("change")({ target: { value: "850" } });
+  elements["#settings-speech-position"].listeners.get("input")({ target: { value: "5" } });
   elements["#recent-book-list"].children[2].listeners.get("click")();
   await wait(80);
   assert.equal(context.document.documentElement.style["--reader-font-size"], "24px");
   assert.equal(context.document.documentElement.style["--reader-width"], "84ch");
+  assert.equal(context.document.documentElement.dataset.palette, "nord");
+  assert.equal(elements["#settings-contrast-value"].textContent, "+20%");
+  assert.equal(elements["#settings-speech-max-value"].textContent, "700 chars");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "-8%");
   assert.equal(renderedSections.length, 12);
 
   let releaseSlowBook;
@@ -1462,7 +1522,12 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.title, "Smooth Reader");
   assert.equal(context.window.history.state.view, "home");
   assert.equal(context.window.scrollY, 0);
+  assert.equal(context.document.documentElement.dataset.view, "home");
   assert.equal(elements["#viewer"].children.length, loadedSectionCount);
+
+  const paletteOnHome = context.document.documentElement.dataset.palette;
+  assert.equal(pressKey("p"), false);
+  assert.equal(context.document.documentElement.dataset.palette, paletteOnHome);
 
   context.window.history.forward();
   await wait(10);
@@ -1485,24 +1550,27 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.style["--reader-line-height"], "1.28");
   assert.equal(context.document.documentElement.style["--reader-tracking"], "0.02em");
   assert.equal(context.document.documentElement.style["--reader-width"], "44ch");
-  assert.equal(context.document.documentElement.style["--contrast-strength"], "20%");
-  assert.equal(elements["#settings-speech-max-value"].textContent, "700 chars");
+  assert.equal(context.document.documentElement.dataset.palette, "nord");
+  assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
+  assert.equal(context.document.documentElement.style["--contrast-soften"], "0%");
+  assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
+  assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
   const activeSettingsKey = `smooth-reader:book-settings:${vm.runInContext("activeBookKey", context)}`;
   assert.deepEqual(JSON.parse(stored.get(activeSettingsKey)), {
+    palette: "nord",
+    contrast: 0,
     font: "alegreya",
     fontSize: 36,
     lineHeight: 1.28,
     tracking: 0.02,
     width: 44,
-    voice: ""
+    voice: "",
+    speaker: "",
+    speechMaximum: 550,
+    speechCenterOffset: 0
   });
 
-  elements["#settings-reset-global"].listeners.get("click")();
-  assert.equal(context.document.documentElement.dataset.palette, "nord");
-  assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
   assert.equal(vm.runInContext("speechMinimumLength", context), 150);
-  assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
-  assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
   assert.equal(stored.get("smooth-reader:last-book"), rememberedLastBook);
   assert.equal(stored.get("smooth-reader:recent-books"), rememberedRecentBooks);
   assert.deepEqual(

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-view="home">
   <head>
     <meta charset="UTF-8">
     <meta
@@ -9,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smooth Reader</title>
     <link rel="stylesheet" href="vendor/fonts/reader-fonts.css?v=20260903-fonts1">
-    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260909-backup1">
+    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260909-perbook1">
   </head>
   <body>
     <main id="app">
@@ -46,9 +46,9 @@
         </div>
         <div id="start-settings-scope" aria-label="Settings storage">
           <small>SETTINGS</small>
-          <p><strong>PER BOOK</strong> Font, font size, line height, letter spacing, text width, and Piper voice.</p>
-          <p><strong>GLOBAL</strong> Palette, contrast, maximum speech chunk length, and spoken-text center offset.</p>
-          <p>The reader menu's reset buttons keep cached books and reading positions.</p>
+          <p><strong>PER BOOK</strong> Every reader setting, including palette, contrast, typography, Piper voice/ID, speech chunk length, and spoken-text offset.</p>
+          <p>The home screen always uses the Nord palette.</p>
+          <p>Resetting a book keeps its cached EPUB and reading position.</p>
         </div>
       </section>
 
@@ -113,6 +113,7 @@
           </div>
           <span class="settings-label">Local Piper</span>
           <label>Voice<select id="settings-speech-voice"><option value="">RANDOM VOICE</option></select></label>
+          <label id="settings-speech-speaker-row" hidden>Embedded voice<select id="settings-speech-speaker"><option value="">RANDOM ID</option></select></label>
           <div class="settings-control">
             <span class="settings-label"><label for="settings-speech-max">Maximum chunk</label><output id="settings-speech-max-value"></output></span>
             <div class="range-stepper">
@@ -138,7 +139,6 @@
           <button id="settings-home" class="settings-wide" type="button">HOME</button>
           <button id="settings-open" class="settings-wide" type="button">OPEN ANOTHER EPUB</button>
           <button id="settings-reset-book" class="settings-wide" type="button">RESET THIS BOOK</button>
-          <button id="settings-reset-global" class="settings-wide" type="button">RESET GLOBAL SETTINGS</button>
         </div>
       </aside>
 
@@ -165,6 +165,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260909-backup1"></script>
+    <script src="renderer-v36.js?v=20260909-perbook1"></script>
   </body>
 </html>
