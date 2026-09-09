@@ -4,6 +4,9 @@
 
 A small, install-free EPUB reader built around one continuous, native-scrolling document. It runs in a browser on desktop and mobile; the optional local bridge adds Piper text-to-speech.
 
+For a detailed explanation of the EPUB pipeline, browser storage, backup format,
+scroll/reflow handling, and Piper architecture, see [ABOUTTECH.md](ABOUTTECH.md).
+
 ## Keyboard shortcuts
 
 - `O` — open another EPUB
