@@ -393,6 +393,7 @@ body.is-dragging #drop-zone::before {
 }
 
 #recent-book-list .recent-book {
+  position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -410,6 +411,39 @@ body.is-dragging #drop-zone::before {
   text-align: left;
   line-height: 1.35;
   white-space: normal;
+}
+
+#recent-book-list.is-managing .recent-book::after {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 1px solid var(--display-line);
+  border-radius: 50%;
+  color: var(--display-background);
+  background: color-mix(in srgb, var(--display-background), transparent 18%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--display-background), transparent 45%);
+}
+
+#recent-book-list.is-managing .recent-book.is-selected::after {
+  content: "✓";
+  border-color: var(--display-link);
+  color: var(--display-background);
+  background: var(--display-link);
+  font-family: var(--ui-font);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+#recent-book-list.is-managing .recent-book.is-selected {
+  color: var(--display-text);
+  background: var(--display-hover);
+  outline: 2px solid var(--display-link);
+  outline-offset: 2px;
 }
 
 #recent-book-list .recent-book::before {
@@ -486,16 +520,25 @@ body.is-dragging #drop-zone::before {
   letter-spacing: 0.08em;
 }
 
-#library-actions {
+#library-actions,
+#library-manage-actions {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
   width: min(50rem, calc(100vw - 6rem));
   margin-top: 1.2rem;
 }
 
-#library-actions button {
+#library-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#library-manage-actions {
+  grid-template-columns: 2fr 1fr;
+}
+
+#library-actions button,
+#library-manage-actions button {
   min-height: 44px;
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--display-line);
@@ -506,9 +549,21 @@ body.is-dragging #drop-zone::before {
   font: inherit;
 }
 
-#library-actions button:is(:hover, :focus-visible) {
+#library-actions button:is(:hover, :focus-visible),
+#library-manage-actions button:is(:hover, :focus-visible) {
   color: var(--display-text);
   background: var(--display-hover);
+}
+
+#library-actions button:disabled,
+#library-manage-actions button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+#start-remove-books:not(:disabled) {
+  border-color: var(--display-link);
+  color: var(--display-text);
 }
 
 #start-hotkeys > span,
@@ -652,6 +707,7 @@ body.is-dragging #drop-zone::before {
   #recent-books,
   #start-hotkeys,
   #library-actions,
+  #library-manage-actions,
   #start-settings-scope {
     grid-template-columns: 1fr;
     gap: 0.62rem;
@@ -1085,7 +1141,8 @@ body.is-right-dragging * {
     font-size: 1rem;
   }
 
-  #library-actions {
+  #library-actions,
+  #library-manage-actions {
     grid-template-columns: 1fr;
   }
 

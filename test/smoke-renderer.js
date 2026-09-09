@@ -105,6 +105,10 @@ const elements = {
   "#start-reopen": makeElement(),
   "#start-export-library": makeElement(),
   "#start-import-library": makeElement(),
+  "#start-manage-library": makeElement(),
+  "#library-manage-actions": makeElement(),
+  "#start-remove-books": makeElement(),
+  "#start-cancel-manage": makeElement(),
   "#library-import-input": makeElement(),
   "#settings-menu": makeElement(),
   "#settings-toggle": makeElement(),
@@ -166,6 +170,7 @@ elements["#recent-books"].hidden = true;
 elements["#settings-menu"].hidden = true;
 elements["#settings-panel"].hidden = true;
 elements["#settings-speech-speaker-row"].hidden = true;
+elements["#library-manage-actions"].hidden = true;
 elements["#reading-progress"].hidden = true;
 elements["#speech-voice"].hidden = true;
 elements["#speech-controls"].hidden = true;
@@ -198,6 +203,7 @@ let anchorRectCalls = 0;
 const selectionRanges = [];
 const createdRanges = [];
 const fetchCalls = [];
+const confirmPrompts = [];
 let speechRectLeft = 120;
 let speechBlockLeft = 80;
 const anchorTextNode = {
@@ -247,6 +253,9 @@ const indexedDB = {
                 put(value, key) {
                   indexedRecords.set(key, value);
                   setTimeout(() => transaction.oncomplete?.(), 0);
+                },
+                delete(key) {
+                  indexedRecords.delete(key);
                 }
               };
             }
@@ -390,6 +399,10 @@ const context = vm.createContext({
     innerWidth: 1200,
     innerHeight: 800,
     scrollY: 0,
+    confirm(message) {
+      confirmPrompts.push(message);
+      return true;
+    },
     history: {
       state: null,
       scrollRestoration: "auto",
@@ -516,6 +529,10 @@ assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
 assert.match(indexSource, /id="start-export-library"[^>]*>EXPORT LIBRARY</);
 assert.match(indexSource, /id="start-import-library"[^>]*>IMPORT LIBRARY</);
+assert.match(indexSource, /id="start-manage-library"[^>]*>MANAGE LIBRARY</);
+assert.match(indexSource, /id="library-manage-actions"[^>]*hidden/);
+assert.match(indexSource, /id="start-remove-books"[^>]*>REMOVE SELECTED</);
+assert.match(indexSource, /id="start-cancel-manage"[^>]*>CANCEL</);
 assert.match(indexSource, /id="library-import-input"[^>]*accept="\.zip,application\/zip"/);
 assert.ok(indexSource.indexOf('id="library-actions"') < indexSource.indexOf('id="start-settings-scope"'));
 assert.doesNotMatch(indexSource, /id="settings-(?:export|import)-library"/);
@@ -571,8 +588,8 @@ assert.match(indexSource, /<strong>PER BOOK<\/strong>/);
 assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260909-perbook1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260909-perbook1/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260909-librarymanage1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260909-librarymanage1/);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
@@ -706,6 +723,8 @@ assert.match(stylesSource, /data-palette="nord"[\s\S]*--background:\s*#2e3440/);
 assert.match(stylesSource, /#recent-books[^{]*\{[^}]*width:\s*min\(64rem/s);
 assert.match(stylesSource, /#recent-book-list \.recent-book::before[^{]*\{[^}]*width:\s*100%/s);
 assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*text-align:\s*left/s);
+assert.match(stylesSource, /#recent-book-list\.is-managing \.recent-book\.is-selected/);
+assert.match(stylesSource, /#library-manage-actions/);
 
 assert.equal(
   JSON.stringify(vm.runInContext("splitSpeechText('Dr. One. Mr. Two.', 1, 12)", context)),
@@ -1037,6 +1056,8 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     /^url\("data:image\/jpeg/
   );
   assert.equal(elements["#start-reopen"].disabled, false);
+  assert.equal(elements["#start-manage-library"].disabled, false);
+  assert.equal(elements["#library-manage-actions"].hidden, true);
   assert.equal(elements["#settings-palette"].children.length, 10);
   assert.equal(elements["#settings-font"].children.length, 12);
   assert.equal(elements["#settings-contrast-value"].textContent, "0%");
@@ -1364,6 +1385,9 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#start-open"].listeners.has("click"), true);
   assert.equal(elements["#start-export-library"].listeners.has("click"), true);
   assert.equal(elements["#start-import-library"].listeners.has("click"), true);
+  assert.equal(elements["#start-manage-library"].listeners.has("click"), true);
+  assert.equal(elements["#start-remove-books"].listeners.has("click"), true);
+  assert.equal(elements["#start-cancel-manage"].listeners.has("click"), true);
   assert.equal(elements["#library-import-input"].listeners.has("change"), true);
   assert.equal(elements["#settings-speech-start"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-pause"].listeners.has("click"), true);
@@ -1578,6 +1602,40 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     rememberedPositions
   );
   assert.equal(stored.has("smooth-reader:book-settings:"), false);
+
+  const booksBeforeRemoval = JSON.parse(
+    vm.runInContext("JSON.stringify(recentBookInfo.slice(0, 2))", context)
+  );
+  const removedHashes = booksBeforeRemoval.map((record) => record.hash);
+  removedHashes.forEach((hash) => {
+    assert.equal(stored.has(`smooth-reader:book-settings:${hash}`), true);
+  });
+  elements["#start-manage-library"].listeners.get("click")();
+  assert.equal(vm.runInContext("libraryManageMode", context), true);
+  assert.equal(elements["#library-manage-actions"].hidden, false);
+  assert.equal(elements["#recent-book-list"].classList.contains("is-managing"), true);
+  elements["#recent-book-list"].children[0].listeners.get("click")();
+  elements["#recent-book-list"].children[1].listeners.get("click")();
+  assert.equal(elements["#start-remove-books"].textContent, "REMOVE SELECTED (2)");
+  assert.equal(elements["#start-remove-books"].disabled, false);
+  assert.equal(elements["#recent-book-list"].children[0].getAttribute("aria-pressed"), "true");
+  assert.equal(elements["#recent-book-list"].children[1].getAttribute("aria-pressed"), "true");
+  elements["#start-remove-books"].listeners.get("click")();
+  await wait(30);
+  assert.match(confirmPrompts.at(-1), /Remove these 2 books/);
+  assert.equal(elements["#recent-book-list"].children.length, 3);
+  assert.equal(elements["#library-manage-actions"].hidden, true);
+  assert.equal(elements["#recent-book-list"].classList.contains("is-managing"), false);
+  assert.equal(vm.runInContext("activeBookKey", context), null);
+  assert.equal(elements["#viewer"].children.length, 0);
+  removedHashes.forEach((hash) => {
+    assert.equal(stored.has(`smooth-reader:position:${hash}`), false);
+    assert.equal(stored.has(`smooth-reader:book-settings:${hash}`), false);
+  });
+  assert.equal(JSON.parse(stored.get("smooth-reader:recent-books")).length, 3);
+  assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).fileName, "second.epub");
+  assert.equal(indexedRecords.get("recent-books").length, 3);
+  assert.equal(indexedRecords.has("last-opened"), false);
 
   console.log("renderer DOM smoke test passed");
 })().catch((error) => {

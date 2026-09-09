@@ -9,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smooth Reader</title>
     <link rel="stylesheet" href="vendor/fonts/reader-fonts.css?v=20260903-fonts1">
-    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260909-perbook1">
+    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260909-librarymanage1">
   </head>
   <body>
     <main id="app">
@@ -40,9 +40,14 @@
           <span><kbd>V</kbd> read aloud from here · <kbd>Esc</kbd> stop</span>
           <span>During speech, use the bottom-right play/pause and stop buttons</span>
         </div>
-        <div id="library-actions" aria-label="Library backup">
+        <div id="library-actions" aria-label="Library actions">
           <button id="start-export-library" type="button">EXPORT LIBRARY</button>
           <button id="start-import-library" type="button">IMPORT LIBRARY</button>
+          <button id="start-manage-library" type="button" disabled>MANAGE LIBRARY</button>
+        </div>
+        <div id="library-manage-actions" aria-label="Manage selected books" hidden>
+          <button id="start-remove-books" type="button" disabled>REMOVE SELECTED</button>
+          <button id="start-cancel-manage" type="button">CANCEL</button>
         </div>
         <div id="start-settings-scope" aria-label="Settings storage">
           <small>SETTINGS</small>
@@ -165,6 +170,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260909-perbook1"></script>
+    <script src="renderer-v36.js?v=20260909-librarymanage1"></script>
   </body>
 </html>

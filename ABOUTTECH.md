@@ -221,6 +221,12 @@ asking the user to select the original file again. If IndexedDB is unavailable
 or a write fails, the metadata and positions can still exist, but the book must
 be dropped again.
 
+Home-screen library management uses a temporary selection set. Confirmed
+removal rewrites the IndexedDB recent-books array, removes the selected hashes'
+position and settings keys from localStorage, and updates the last-book pointer.
+If the currently loaded book is removed, its hidden DOM and active identity are
+also discarded so Browser Forward cannot silently restore it.
+
 ### sessionStorage
 
 Each browser tab keeps a speech session identifier in session storage. It is

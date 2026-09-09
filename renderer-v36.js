@@ -13,6 +13,10 @@ const startOpen = document.querySelector("#start-open");
 const startReopen = document.querySelector("#start-reopen");
 const startExportLibrary = document.querySelector("#start-export-library");
 const startImportLibrary = document.querySelector("#start-import-library");
+const startManageLibrary = document.querySelector("#start-manage-library");
+const libraryManageActions = document.querySelector("#library-manage-actions");
+const startRemoveBooks = document.querySelector("#start-remove-books");
+const startCancelManage = document.querySelector("#start-cancel-manage");
 const libraryImportInput = document.querySelector("#library-import-input");
 const settingsMenu = document.querySelector("#settings-menu");
 const settingsToggle = document.querySelector("#settings-toggle");
@@ -171,6 +175,8 @@ let lastPointerType = "mouse";
 let lastBookCanReopen = false;
 let recentBookInfo = [];
 let cachedRecentBooks = [];
+let libraryManageMode = false;
+const selectedLibraryBooks = new Set();
 let pendingLayoutAnchor = null;
 let layoutChangeGeneration = 0;
 let stableResizeAnchor = null;
@@ -304,6 +310,36 @@ const booksMatch = (first, second) => {
   return Boolean(first?.fileName && first.fileName === second?.fileName);
 };
 
+const libraryBookKey = (record) => record?.hash
+  ? `hash:${record.hash}`
+  : `file:${record?.fileName || ""}`;
+
+const syncLibraryManageControls = () => {
+  startManageLibrary.disabled = isBookLoading || recentBookInfo.length === 0;
+  libraryManageActions.hidden = !libraryManageMode;
+  startRemoveBooks.disabled = isBookLoading || selectedLibraryBooks.size === 0;
+  startRemoveBooks.textContent = selectedLibraryBooks.size > 0
+    ? `REMOVE SELECTED (${selectedLibraryBooks.size})`
+    : "REMOVE SELECTED";
+  if (libraryManageMode) recentBookList.classList.add("is-managing");
+  else recentBookList.classList.remove("is-managing");
+};
+
+const setLibraryManageMode = (enabled) => {
+  libraryManageMode = Boolean(enabled && recentBookInfo.length > 0 && !isBookLoading);
+  if (!libraryManageMode) selectedLibraryBooks.clear();
+  syncLibraryManageControls();
+  renderRecentBooks();
+};
+
+const toggleLibraryBookSelection = (record) => {
+  const key = libraryBookKey(record);
+  if (selectedLibraryBooks.has(key)) selectedLibraryBooks.delete(key);
+  else selectedLibraryBooks.add(key);
+  syncLibraryManageControls();
+  renderRecentBooks();
+};
+
 const renderRecentBooks = () => {
   recentBookList.replaceChildren();
   recentBooks.hidden = recentBookInfo.length === 0;
@@ -311,9 +347,11 @@ const renderRecentBooks = () => {
   recentBookInfo.forEach((record, index) => {
     const cached = cachedRecentBooks.find((candidate) => booksMatch(record, candidate));
     const button = document.createElement("button");
+    const selectionKey = libraryBookKey(record);
+    const isSelected = selectedLibraryBooks.has(selectionKey);
     button.type = "button";
     button.className = "recent-book";
-    button.disabled = isBookLoading || !cached?.bytes;
+    button.disabled = isBookLoading || (!libraryManageMode && !cached?.bytes);
     button.textContent = record.title && record.title !== record.fileName
       ? `${record.title} — ${record.fileName}`
       : record.fileName;
@@ -321,10 +359,17 @@ const renderRecentBooks = () => {
       button.classList.add("has-cover");
       button.style.setProperty("--recent-book-cover", `url("${cached.thumbnail}")`);
     }
-    button.title = cached?.bytes
-      ? `Open ${record.title || record.fileName}`
-      : "Cached copy unavailable; drop this EPUB again";
-    button.addEventListener("click", () => reopenCachedBook(record));
+    if (libraryManageMode) {
+      if (isSelected) button.classList.add("is-selected");
+      button.setAttribute("aria-pressed", String(isSelected));
+      button.title = `${isSelected ? "Deselect" : "Select"} ${record.title || record.fileName}`;
+      button.addEventListener("click", () => toggleLibraryBookSelection(record));
+    } else {
+      button.title = cached?.bytes
+        ? `Open ${record.title || record.fileName}`
+        : "Cached copy unavailable; drop this EPUB again";
+      button.addEventListener("click", () => reopenCachedBook(record));
+    }
     recentBookList.appendChild(button);
 
     if (index === 0) {
@@ -337,6 +382,7 @@ const renderRecentBooks = () => {
     lastBookCanReopen = false;
     setReopenAvailability(false);
   }
+  syncLibraryManageControls();
 };
 
 const openLastBookDatabase = () => new Promise((resolve, reject) => {
@@ -380,7 +426,9 @@ const writeCachedBooks = async (records) => {
   try {
     await new Promise((resolve, reject) => {
       const transaction = database.transaction(LAST_BOOK_STORE, "readwrite");
-      transaction.objectStore(LAST_BOOK_STORE).put(records, RECENT_BOOKS_RECORD);
+      const store = transaction.objectStore(LAST_BOOK_STORE);
+      store.put(records, RECENT_BOOKS_RECORD);
+      store.delete(LAST_BOOK_RECORD);
       transaction.oncomplete = resolve;
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
@@ -492,6 +540,69 @@ const initializeRecentBooks = async () => {
 };
 
 const recentBooksReady = initializeRecentBooks();
+
+const removeSelectedLibraryBooks = async () => {
+  if (isBookLoading || selectedLibraryBooks.size === 0) return;
+  const selectedRecords = recentBookInfo.filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record))
+  );
+  if (selectedRecords.length === 0) return;
+
+  const count = selectedRecords.length;
+  const prompt = count === 1
+    ? "Remove this book, its reading position, and its settings from this browser?"
+    : `Remove these ${count} books, their reading positions, and their settings from this browser?`;
+  if (!window.confirm(prompt)) return;
+
+  const removedHashes = new Set();
+  selectedRecords.forEach((record) => {
+    if (record.hash) removedHashes.add(record.hash);
+    const cached = cachedRecentBooks.find((candidate) => booksMatch(record, candidate));
+    if (cached?.hash) removedHashes.add(cached.hash);
+  });
+  const activeBookWasRemoved = Boolean(
+    activeBookKey && removedHashes.has(activeBookKey)
+  );
+  const retainedCachedBooks = cachedRecentBooks.filter((cached) =>
+    !selectedRecords.some((record) => booksMatch(record, cached))
+  );
+
+  try {
+    await writeCachedBooks(retainedCachedBooks);
+    if (activeBookWasRemoved) {
+      destroyCurrentBook();
+      activeBookKey = null;
+      activeBookTitle = "";
+      readerScrollBeforeHome = 0;
+      replaceHomeHistory();
+    }
+
+    removedHashes.forEach((hash) => {
+      localStorage.removeItem(positionKey(hash));
+      localStorage.removeItem(bookSettingsKey(hash));
+    });
+    recentBookInfo = recentBookInfo.filter((record) =>
+      !selectedLibraryBooks.has(libraryBookKey(record))
+    );
+    cachedRecentBooks = retainedCachedBooks;
+    if (recentBookInfo.length > 0) {
+      localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
+      localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(recentBookInfo[0]));
+    } else {
+      localStorage.removeItem(RECENT_BOOKS_KEY);
+      localStorage.removeItem(LAST_BOOK_KEY);
+    }
+    lastBookCanReopen = Boolean(
+      cachedRecentBooks.find((cached) => booksMatch(recentBookInfo[0], cached))?.bytes
+    );
+    setLibraryManageMode(false);
+    setReopenAvailability(lastBookCanReopen);
+    showStatus(`${count} ${count === 1 ? "BOOK" : "BOOKS"} REMOVED`, 1800);
+  } catch (error) {
+    console.error(error);
+    showStatus("BOOKS COULD NOT BE REMOVED", 2400);
+  }
+};
 
 const populateSelect = (select, choices) => {
   choices.forEach((choice) => {
@@ -1173,6 +1284,11 @@ const setSettingsOpen = (isOpen) => {
 };
 
 const setReadingMode = (isReading) => {
+  if (isReading && libraryManageMode) {
+    libraryManageMode = false;
+    selectedLibraryBooks.clear();
+    syncLibraryManageControls();
+  }
   document.documentElement.dataset.view = isReading ? "reader" : "home";
   dropZone.hidden = isReading;
   reader.hidden = !isReading;
@@ -2743,6 +2859,7 @@ const openBook = async (file) => {
 
   const generation = ++loadGeneration;
   savePositionNow();
+  setLibraryManageMode(false);
   isBookLoading = true;
   positionPersistenceSuspended = true;
   setReopenAvailability(lastBookCanReopen);
@@ -3082,6 +3199,9 @@ settingsOpen.addEventListener("click", () => fileInput.click());
 startReopen.addEventListener("click", reopenLastBook);
 startExportLibrary.addEventListener("click", () => void exportLibrary());
 startImportLibrary.addEventListener("click", () => libraryImportInput.click());
+startManageLibrary.addEventListener("click", () => setLibraryManageMode(true));
+startCancelManage.addEventListener("click", () => setLibraryManageMode(false));
+startRemoveBooks.addEventListener("click", () => void removeSelectedLibraryBooks());
 settingsSpeechStart.addEventListener("click", startSpeech);
 settingsSpeechPause.addEventListener("click", toggleSpeechPause);
 settingsSpeechStop.addEventListener("click", stopSpeech);

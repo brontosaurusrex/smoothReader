@@ -39,6 +39,10 @@ Open `http://127.0.0.1:8000`, then drop or choose an EPUB. `make run` does the s
 
 The opening screen shows up to 12 recently opened books with sharp cover thumbnails generated from each EPUB at up to 600 × 900 px. EPUB files, reading positions, and preferences stay in that browser's local storage/IndexedDB. Browser Back returns from a book to the opening screen; Forward returns to the loaded book.
 
+`MANAGE LIBRARY` on the opening screen lets you select and remove one or more
+books. Removal deletes their cached EPUBs, thumbnails, positions, and per-book
+settings from that browser.
+
 ## Settings
 
 The top-right hamburger opens all reader controls.
