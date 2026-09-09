@@ -103,30 +103,9 @@ const elements = {
   "#drop-picker": makeElement(),
   "#start-open": makeElement(),
   "#start-reopen": makeElement(),
-  "#start-palette-next": makeElement(),
-  "#start-palette": makeElement(),
-  "#start-contrast": makeElement(),
-  "#start-contrast-value": makeElement(),
-  "#start-contrast-down": makeElement(),
-  "#start-contrast-up": makeElement(),
-  "#start-font-next": makeElement(),
-  "#start-font": makeElement(),
-  "#start-font-size": makeElement(),
-  "#start-font-size-value": makeElement(),
-  "#start-font-size-down": makeElement(),
-  "#start-font-size-up": makeElement(),
-  "#start-line-height": makeElement(),
-  "#start-line-height-value": makeElement(),
-  "#start-line-height-down": makeElement(),
-  "#start-line-height-up": makeElement(),
-  "#start-tracking-down": makeElement(),
-  "#start-tracking-reset": makeElement(),
-  "#start-tracking-up": makeElement(),
-  "#start-width": makeElement(),
-  "#start-width-value": makeElement(),
-  "#start-width-down": makeElement(),
-  "#start-width-up": makeElement(),
-  "#start-reset-all": makeElement(),
+  "#start-export-library": makeElement(),
+  "#start-import-library": makeElement(),
+  "#library-import-input": makeElement(),
   "#settings-menu": makeElement(),
   "#settings-toggle": makeElement(),
   "#settings-panel": makeElement(),
@@ -153,10 +132,6 @@ const elements = {
   "#settings-width-down": makeElement(),
   "#settings-width-up": makeElement(),
   "#settings-speech-voice": makeElement(),
-  "#settings-speech-min": makeElement(),
-  "#settings-speech-min-value": makeElement(),
-  "#settings-speech-min-down": makeElement(),
-  "#settings-speech-min-up": makeElement(),
   "#settings-speech-max": makeElement(),
   "#settings-speech-max-value": makeElement(),
   "#settings-speech-max-down": makeElement(),
@@ -170,11 +145,9 @@ const elements = {
   "#settings-speech-stop": makeElement(),
   "#settings-speech-status": makeElement(),
   "#settings-home": makeElement(),
-  "#settings-page-up": makeElement(),
-  "#settings-page-down": makeElement(),
   "#settings-open": makeElement(),
-  "#settings-reopen": makeElement(),
-  "#settings-reset-all": makeElement(),
+  "#settings-reset-book": makeElement(),
+  "#settings-reset-global": makeElement(),
   "#speech-voice": makeElement(),
   "#speech-controls": makeElement(),
   "#speech-overlay-pause": makeElement(),
@@ -198,6 +171,8 @@ elements["#speech-marker"].hidden = true;
 
 const windowListeners = new Map();
 const documentListeners = new Map();
+const historyEntries = [null];
+let historyIndex = 0;
 const stored = new Map();
 stored.set("smooth-reader:last-book", JSON.stringify({
   fileName: "previous.epub",
@@ -413,6 +388,32 @@ const context = vm.createContext({
     innerWidth: 1200,
     innerHeight: 800,
     scrollY: 0,
+    history: {
+      state: null,
+      scrollRestoration: "auto",
+      replaceState(state) {
+        historyEntries[historyIndex] = state;
+        this.state = state;
+      },
+      pushState(state) {
+        historyEntries.splice(historyIndex + 1);
+        historyEntries.push(state);
+        historyIndex += 1;
+        this.state = state;
+      },
+      back() {
+        if (historyIndex === 0) return;
+        historyIndex -= 1;
+        this.state = historyEntries[historyIndex];
+        setTimeout(() => windowListeners.get("popstate")?.({ state: this.state }), 0);
+      },
+      forward() {
+        if (historyIndex >= historyEntries.length - 1) return;
+        historyIndex += 1;
+        this.state = historyEntries[historyIndex];
+        setTimeout(() => windowListeners.get("popstate")?.({ state: this.state }), 0);
+      }
+    },
     setTimeout,
     clearTimeout,
     fetch(path) {
@@ -497,6 +498,11 @@ assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /renderer-v36\.js/);
 assert.match(indexSource, /id="recent-books"/);
 assert.match(indexSource, /id="start-hotkeys"/);
+assert.match(indexSource, /id="start-export-library"[^>]*>EXPORT LIBRARY</);
+assert.match(indexSource, /id="start-import-library"[^>]*>IMPORT LIBRARY</);
+assert.match(indexSource, /id="library-import-input"[^>]*accept="\.zip,application\/zip"/);
+assert.ok(indexSource.indexOf('id="library-actions"') < indexSource.indexOf('id="start-settings-scope"'));
+assert.doesNotMatch(indexSource, /id="settings-(?:export|import)-library"/);
 assert.match(indexSource, /Alt\+Shift\+1…9\/0/);
 assert.match(indexSource, /Middle-click/);
 assert.match(indexSource, /Right-drag/);
@@ -513,13 +519,14 @@ assert.match(indexSource, /id="speech-overlay-stop"/);
 assert.match(indexSource, /id="speech-overlay-home"/);
 assert.match(indexSource, /id="speech-audio"[^>]*preload="auto"/);
 assert.match(indexSource, /id="settings-home"[^>]*>HOME</);
+assert.doesNotMatch(indexSource, /id="settings-reopen"/);
 assert.doesNotMatch(indexSource, /id="settings-end"/);
+assert.doesNotMatch(indexSource, /id="settings-page-(?:up|down)"/);
 assert.match(indexSource, /id="settings-font-size"/);
 assert.match(indexSource, /id="settings-contrast"[^>]*min="-30"[^>]*max="30"/);
-assert.match(indexSource, /id="start-contrast"[^>]*min="-30"[^>]*max="30"/);
 assert.match(indexSource, /id="settings-line-height"/);
 assert.match(indexSource, /id="settings-speech-start"/);
-assert.match(indexSource, /id="settings-speech-min"/);
+assert.doesNotMatch(indexSource, /id="settings-speech-min"/);
 assert.match(indexSource, /id="settings-speech-max"/);
 assert.match(indexSource, /Spoken text center offset/);
 assert.match(indexSource, /id="settings-speech-position"[^>]*min="-25"[^>]*max="25"/);
@@ -528,30 +535,50 @@ assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(indexSource, /id="settings-toggle"[\s\S]*aria-label="Open reader settings"/);
 assert.match(indexSource, /id="settings-font-size"[^>]*max="80"[^>]*step="2"/);
 assert.match(indexSource, /id="settings-width"[^>]*min="8"[^>]*max="100"[^>]*step="2"/);
-assert.match(indexSource, /id="start-width"[^>]*min="8"[^>]*max="100"[^>]*step="2"/);
 assert.match(indexSource, /id="settings-font-size-down"/);
 assert.match(indexSource, /id="settings-font-size-up"/);
 for (const range of [
-  "start-contrast", "start-font-size", "start-line-height", "start-width",
   "settings-contrast", "settings-font-size", "settings-line-height",
-  "settings-width", "settings-speech-min", "settings-speech-max",
+  "settings-width", "settings-speech-max",
   "settings-speech-position"
 ]) {
   assert.match(indexSource, new RegExp(`id="${range}-down"`), `${range} minus`);
   assert.match(indexSource, new RegExp(`id="${range}-up"`), `${range} plus`);
 }
-assert.match(indexSource, /id="start-reset-all"[^>]*>RESET ALL SETTINGS</);
-assert.match(indexSource, /id="settings-reset-all"[^>]*>RESET ALL SETTINGS</);
+assert.doesNotMatch(indexSource, /id="start-(?:contrast|font-size|line-height|width|reset-all)"/);
+assert.match(indexSource, /id="settings-reset-book"[^>]*>RESET THIS BOOK</);
+assert.match(indexSource, /id="settings-reset-global"[^>]*>RESET GLOBAL SETTINGS</);
+assert.match(indexSource, /id="start-settings-scope"/);
+assert.match(indexSource, /<strong>PER BOOK<\/strong>/);
+assert.match(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260908-center1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260908-center2/);
-assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 6);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260909-backup1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260909-backup1/);
+assert.equal(context.window.history.scrollRestoration, "manual");
+assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
+assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
+assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_HEIGHT", context), 900);
+assert.equal(vm.runInContext("COVER_THUMBNAIL_QUALITY", context), 0.86);
+assert.match(rendererSource, /thumbnailVersion:\s*COVER_THUMBNAIL_VERSION/);
+assert.match(rendererSource, /imageSmoothingQuality = "high"/);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
 assert.match(rendererSource, /\/api\/piper\/prepare/);
 assert.match(rendererSource, /sessionId:\s*speechSessionId/);
 assert.match(rendererSource, /audioFormat:\s*speechAudioFormat/);
 assert.match(rendererSource, /\/api\/piper\/stop[\s\S]*JSON\.stringify\(\{ sessionId: speechSessionId \}\)/);
 assert.match(rendererSource, /BOOK_SETTINGS_PREFIX/);
+assert.match(rendererSource, /LIBRARY_BACKUP_FORMAT = "smooth-reader-library"/);
+assert.match(rendererSource, /const exportLibrary = async/);
+assert.match(rendererSource, /const importLibrary = async/);
+assert.match(rendererSource, /savePositionNow\(\);[\s\S]*storageSnapshot\(\)/);
+assert.match(rendererSource, /key\.startsWith\(POSITION_PREFIX\)/);
+assert.match(rendererSource, /positionSavedAt\(existing\) > positionSavedAt\(value\)/);
+assert.equal(
+  vm.runInContext("recentMetadataOnly({ hash: 'x', thumbnail: 'large', bytes: 'epub' }).thumbnail", context),
+  undefined
+);
+assert.match(rendererSource, /window\.addEventListener\("popstate"/);
+assert.match(rendererSource, /commitReaderHistory/);
 assert.doesNotMatch(rendererSource, /\/api\/piper\/(?:play|pause|resume)/);
 assert.match(rendererSource, /await speechAudio\.play\(\)/);
 assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 10/);
@@ -565,7 +592,7 @@ assert.doesNotMatch(rendererSource, /await animateSpeechScrollBy/);
 assert.match(rendererSource, /unlockSpeechAudio\(\);\s*const generation/);
 assert.match(rendererSource, /nextPreparation/);
 assert.doesNotMatch(rendererSource, /speechProgress|speechChunkNumber|CHUNK/);
-assert.match(stylesSource, /#reading-progress\s*\{[^}]*font-size:\s*0\.82rem/s);
+assert.match(stylesSource, /#reading-progress\s*\{[^}]*font-size:\s*1\.50rem[^}]*font-weight:\s*400/s);
 assert.match(rendererSource, /speechVoice\.textContent = formatSpeechVoice\(prepared\)/);
 assert.equal(
   vm.runInContext("formatSpeechVoice({ voice: 'solo.onnx', speaker: 0, speakerCount: 1 })", context),
@@ -597,6 +624,10 @@ assert.match(fontsSource, /EnvyCodeRNerdFont-Regular-v3\.5\.1\.ttf/);
 assert.match(stylesSource, /"Noto Serif"/);
 assert.match(stylesSource, /"EB Garamond"/);
 assert.match(stylesSource, /"EnvyCodeR Nerd Font"/);
+assert.match(stylesSource, /--ui-font:\s*"EnvyCodeR Nerd Font"/);
+assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-family:\s*var\(--ui-font\)/s);
+assert.match(stylesSource, /#settings-menu[^{]*\{[^}]*font-family:\s*var\(--ui-font\)/s);
+assert.match(stylesSource, /#reading-progress,\s*#speech-voice[^{]*\{[^}]*font-family:\s*var\(--reader-font\)/s);
 assert.match(stylesSource, /data-font="system-sans"[\s\S]*--reader-font:\s*system-ui, -apple-system, "Segoe UI", sans-serif/);
 assert.match(stylesSource, /"Cascadia Mono"/);
 assert.match(stylesSource, /@supports \(color: color-mix\(in srgb, white, black\)\)/);
@@ -630,12 +661,12 @@ assert.match(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*44px[^}]*height
 assert.doesNotMatch(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*52px/s);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#start-hotkeys[^{]*\{[^}]*font-size:\s*clamp\(1rem/s);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#settings-panel[^{]*\{[^}]*width:\s*min\(96vw, 28rem\)[^}]*font-size:\s*1rem/s);
-assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*min-height:\s*48px/s);
+assert.match(stylesSource, /#recent-book-list[^{]*\{[^}]*grid-template-columns:\s*repeat\(auto-fill/s);
 assert.ok(indexSource.indexOf('id="speech-controls"') < indexSource.indexOf('id="reading-progress"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-pause"') < indexSource.indexOf('id="speech-overlay-stop"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-stop"') < indexSource.indexOf('id="speech-overlay-home"'));
 assert.ok(indexSource.indexOf('id="reading-progress"') < indexSource.indexOf('id="speech-voice"'));
-assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*var\(--reader-font-size\)/s);
+assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*clamp\(16px, 1\.2vw, 20px\)/s);
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*relative[^}]*place-content:\s*start center[^}]*min-height:\s*100dvh[^}]*overflow:\s*visible/s);
 assert.doesNotMatch(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*fixed/s);
 assert.match(stylesSource, /font-size:\s*clamp\(0\.82rem, 0\.72em, 1rem\)/);
@@ -650,7 +681,8 @@ for (const palette of [
 }
 assert.match(stylesSource, /data-palette="charcoal"[\s\S]*--background:\s*#121212/);
 assert.match(stylesSource, /data-palette="nord"[\s\S]*--background:\s*#2e3440/);
-assert.match(stylesSource, /#recent-books[^{]*\{[^}]*width:\s*min\(50rem/s);
+assert.match(stylesSource, /#recent-books[^{]*\{[^}]*width:\s*min\(64rem/s);
+assert.match(stylesSource, /#recent-book-list \.recent-book::before[^{]*\{[^}]*width:\s*100%/s);
 assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*text-align:\s*left/s);
 
 assert.equal(
@@ -912,6 +944,37 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
 
 (async () => {
   await wait(20);
+  const backupPositionKey = "smooth-reader:position:backup-test";
+  stored.set(backupPositionKey, JSON.stringify({ scrollY: 200, savedAt: 200 }));
+  context.importedStorageFixture = {
+    [backupPositionKey]: JSON.stringify({ scrollY: 100, savedAt: 100 })
+  };
+  vm.runInContext("mergeImportedStorage(importedStorageFixture)", context);
+  assert.equal(JSON.parse(stored.get(backupPositionKey)).scrollY, 200);
+  context.importedStorageFixture[backupPositionKey] = JSON.stringify({
+    scrollY: 300,
+    savedAt: 300
+  });
+  vm.runInContext("mergeImportedStorage(importedStorageFixture)", context);
+  assert.equal(JSON.parse(stored.get(backupPositionKey)).scrollY, 300);
+  stored.delete(backupPositionKey);
+
+  context.existingBookFixture = [{ hash: "same", fileName: "same.epub", openedAt: 10 }];
+  context.importedBookFixture = [
+    { hash: "same", fileName: "same.epub", openedAt: 20, bytes: "imported" },
+    ...Array.from({ length: 12 }, (_, index) => ({
+      hash: `new-${index}`,
+      fileName: `new-${index}.epub`,
+      openedAt: 30 + index
+    }))
+  ];
+  const mergedBookFixture = vm.runInContext(
+    "mergeBookCollections(existingBookFixture, importedBookFixture)",
+    context
+  );
+  assert.equal(mergedBookFixture.length, 12);
+  assert.equal(mergedBookFixture[0].fileName, "new-11.epub");
+
   const speechScrollCallCount = scrollCalls.length;
   await vm.runInContext("scrollDownAfterSpeechJob(testSpeechJobs[0])", context);
   assert.equal(scrollCalls.length > speechScrollCallCount, true);
@@ -950,17 +1013,16 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     /^url\("data:image\/jpeg/
   );
   assert.equal(elements["#start-reopen"].disabled, false);
-  assert.equal(elements["#start-palette"].children.length, 10);
-  assert.equal(elements["#start-font"].children.length, 12);
-  assert.equal(elements["#start-contrast-value"].textContent, "0%");
+  assert.equal(elements["#settings-palette"].children.length, 10);
+  assert.equal(elements["#settings-font"].children.length, 12);
   assert.equal(elements["#settings-contrast-value"].textContent, "0%");
   assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
   assert.equal(context.document.documentElement.style["--contrast-soften"], "0%");
-  assert.equal(elements["#start-width-value"].textContent, "≈ 44 chars");
-  assert.equal(elements["#start-font-size-value"].textContent, "36px");
-  assert.equal(elements["#start-line-height-value"].textContent, "1.28");
-  assert.equal(elements["#settings-speech-min-value"].textContent, "150 chars");
-  assert.equal(elements["#settings-speech-max-value"].textContent, "350 chars");
+  assert.equal(elements["#settings-width-value"].textContent, "≈ 44 chars");
+  assert.equal(elements["#settings-font-size-value"].textContent, "36px");
+  assert.equal(elements["#settings-line-height-value"].textContent, "1.28");
+  assert.equal(vm.runInContext("speechMinimumLength", context), 150);
+  assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
   assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
   assert.equal(stored.get("smooth-reader:speech-center-offset"), "0");
   assert.equal(vm.runInContext("speechTargetCenterY(80)", context), 400);
@@ -1247,7 +1309,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.style["--reader-width"], "8ch");
   assert.equal(elements["#settings-width-down"].disabled, true);
   elements["#settings-width"].listeners.get("input")({ target: { value: "84" } });
-  assert.equal(elements["#start-width-value"].textContent, "≈ 84 chars");
+  assert.equal(elements["#settings-width-value"].textContent, "≈ 84 chars");
   assert.equal(currentBookSettings().width, 84);
 
   elements["#settings-toggle"].listeners.get("click")();
@@ -1259,22 +1321,25 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   });
   assert.equal(context.document.documentElement.dataset.palette, "nord");
 
-  elements["#start-contrast"].listeners.get("input")({ target: { value: "-15" } });
+  elements["#settings-contrast"].listeners.get("input")({ target: { value: "-15" } });
   assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
   assert.equal(context.document.documentElement.style["--contrast-soften"], "15%");
   assert.equal(elements["#settings-contrast-value"].textContent, "-15%");
   elements["#settings-contrast"].listeners.get("change")({ target: { value: "20" } });
   assert.equal(context.document.documentElement.style["--contrast-strength"], "20%");
   assert.equal(context.document.documentElement.style["--contrast-soften"], "0%");
-  assert.equal(elements["#start-contrast-value"].textContent, "+20%");
+  assert.equal(elements["#settings-contrast-value"].textContent, "+20%");
   assert.equal(stored.get("smooth-reader:contrast"), "20");
   elements["#settings-contrast-down"].listeners.get("click")();
-  assert.equal(elements["#start-contrast-value"].textContent, "+19%");
+  assert.equal(elements["#settings-contrast-value"].textContent, "+19%");
   elements["#settings-contrast-up"].listeners.get("click")();
-  assert.equal(elements["#start-contrast-value"].textContent, "+20%");
+  assert.equal(elements["#settings-contrast-value"].textContent, "+20%");
 
   assert.equal(elements["#recent-book-list"].children[0].listeners.has("click"), true);
   assert.equal(elements["#start-open"].listeners.has("click"), true);
+  assert.equal(elements["#start-export-library"].listeners.has("click"), true);
+  assert.equal(elements["#start-import-library"].listeners.has("click"), true);
+  assert.equal(elements["#library-import-input"].listeners.has("change"), true);
   assert.equal(elements["#settings-speech-start"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-pause"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-stop"].listeners.has("click"), true);
@@ -1283,35 +1348,26 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#speech-overlay-home"].listeners.has("click"), true);
   assert.equal(elements["#settings-speech-voice"].listeners.has("change"), true);
   for (const button of [
-    "#start-contrast-down", "#start-contrast-up",
-    "#start-line-height-down", "#start-line-height-up",
-    "#start-width-down", "#start-width-up",
     "#settings-contrast-down", "#settings-contrast-up",
     "#settings-line-height-down", "#settings-line-height-up",
     "#settings-width-down", "#settings-width-up",
-    "#settings-speech-min-down", "#settings-speech-min-up",
     "#settings-speech-max-down", "#settings-speech-max-up",
     "#settings-speech-position-down", "#settings-speech-position-up",
-    "#start-reset-all", "#settings-reset-all"
+    "#settings-reset-book", "#settings-reset-global"
   ]) {
     assert.equal(elements[button].listeners.has("click"), true, button);
   }
 
-  elements["#settings-speech-min"].listeners.get("change")({ target: { value: "400" } });
   elements["#settings-speech-max"].listeners.get("change")({ target: { value: "700" } });
-  assert.equal(elements["#settings-speech-min-value"].textContent, "400 chars");
+  assert.equal(vm.runInContext("speechMinimumLength", context), 150);
   assert.equal(elements["#settings-speech-max-value"].textContent, "700 chars");
-  assert.equal(stored.get("smooth-reader:speech-minimum"), "400");
+  assert.equal(stored.has("smooth-reader:speech-minimum"), false);
   assert.equal(stored.get("smooth-reader:speech-maximum"), "700");
   elements["#settings-speech-position"].listeners.get("input")({
     target: { value: "-8" }
   });
   assert.equal(elements["#settings-speech-position-value"].textContent, "-8%");
   assert.equal(stored.get("smooth-reader:speech-center-offset"), "-8");
-  elements["#settings-speech-min-down"].listeners.get("click")();
-  assert.equal(elements["#settings-speech-min-value"].textContent, "350 chars");
-  elements["#settings-speech-min-up"].listeners.get("click")();
-  assert.equal(elements["#settings-speech-min-value"].textContent, "400 chars");
   elements["#settings-speech-max-down"].listeners.get("click")();
   assert.equal(elements["#settings-speech-max-value"].textContent, "650 chars");
   elements["#settings-speech-max-up"].listeners.get("click")();
@@ -1321,10 +1377,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   elements["#settings-speech-position-up"].listeners.get("click")();
   assert.equal(elements["#settings-speech-position-value"].textContent, "-8%");
 
-  assert.equal(pressKey("r"), true);
+  assert.equal(pressKey("r"), false);
   await wait(80);
   assert.equal(elements["#viewer"].children.length, 2);
-  assert.deepEqual(renderedSections, [1, 2, 1, 2, 1, 2]);
+  assert.deepEqual(renderedSections, [1, 2, 1, 2]);
 
   const secondFile = {
     name: "second.epub",
@@ -1364,14 +1420,14 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     elements["#recent-book-list"].children[0].textContent,
     "Test Book — second.epub"
   );
-  assert.equal(renderedSections.length, 12);
+  assert.equal(renderedSections.length, 10);
   elements["#settings-font-size"].listeners.get("input")({ target: { value: "60" } });
   assert.equal(context.document.documentElement.style["--reader-font-size"], "60px");
   elements["#recent-book-list"].children[2].listeners.get("click")();
   await wait(80);
   assert.equal(context.document.documentElement.style["--reader-font-size"], "24px");
   assert.equal(context.document.documentElement.style["--reader-width"], "84ch");
-  assert.equal(renderedSections.length, 14);
+  assert.equal(renderedSections.length, 12);
 
   let releaseSlowBook;
   const slowBook = {
@@ -1386,37 +1442,66 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   await wait(10);
   assert.equal(vm.runInContext("isBookLoading", context), true);
   assert.equal(elements["#start-reopen"].disabled, true);
-  assert.equal(pressKey("r"), true);
-  assert.equal(renderedSections.length, 14);
+  assert.equal(pressKey("r"), false);
+  assert.equal(renderedSections.length, 12);
   releaseSlowBook();
   await wait(100);
   assert.equal(vm.runInContext("isBookLoading", context), false);
   assert.equal(vm.runInContext("positionPersistenceSuspended", context), false);
-  assert.equal(renderedSections.length, 16);
+  assert.equal(renderedSections.length, 14);
+  assert.equal(context.window.history.state.view, "reader");
+  const loadedSectionCount = elements["#viewer"].children.length;
 
   elements["#settings-home"].listeners.get("click")();
+  await wait(10);
   assert.equal(elements["#drop-zone"].hidden, false);
   assert.equal(elements["#reader"].hidden, true);
   assert.equal(elements["#settings-menu"].hidden, true);
   assert.equal(elements["#reading-progress"].hidden, true);
   assert.equal(elements["#recent-book-list"].children.length, 5);
   assert.equal(context.document.title, "Smooth Reader");
+  assert.equal(context.window.history.state.view, "home");
+  assert.equal(context.window.scrollY, 0);
+  assert.equal(elements["#viewer"].children.length, loadedSectionCount);
+
+  context.window.history.forward();
+  await wait(10);
+  assert.equal(elements["#drop-zone"].hidden, true);
+  assert.equal(elements["#reader"].hidden, false);
+  assert.equal(context.window.history.state.view, "reader");
+  elements["#speech-overlay-home"].listeners.get("click")();
+  await wait(10);
+  assert.equal(elements["#drop-zone"].hidden, false);
+  assert.equal(context.window.history.state.view, "home");
 
   const rememberedLastBook = stored.get("smooth-reader:last-book");
   const rememberedRecentBooks = stored.get("smooth-reader:recent-books");
   const rememberedPositions = new Map(
     [...stored.entries()].filter(([key]) => key.startsWith("smooth-reader:position:"))
   );
-  elements["#start-reset-all"].listeners.get("click")();
-  assert.equal(context.document.documentElement.dataset.palette, "nord");
+  elements["#settings-reset-book"].listeners.get("click")();
   assert.equal(context.document.documentElement.dataset.font, "alegreya");
-  assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
   assert.equal(context.document.documentElement.style["--reader-font-size"], "36px");
   assert.equal(context.document.documentElement.style["--reader-line-height"], "1.28");
   assert.equal(context.document.documentElement.style["--reader-tracking"], "0.02em");
   assert.equal(context.document.documentElement.style["--reader-width"], "44ch");
-  assert.equal(elements["#settings-speech-min-value"].textContent, "150 chars");
-  assert.equal(elements["#settings-speech-max-value"].textContent, "350 chars");
+  assert.equal(context.document.documentElement.style["--contrast-strength"], "20%");
+  assert.equal(elements["#settings-speech-max-value"].textContent, "700 chars");
+  const activeSettingsKey = `smooth-reader:book-settings:${vm.runInContext("activeBookKey", context)}`;
+  assert.deepEqual(JSON.parse(stored.get(activeSettingsKey)), {
+    font: "alegreya",
+    fontSize: 36,
+    lineHeight: 1.28,
+    tracking: 0.02,
+    width: 44,
+    voice: ""
+  });
+
+  elements["#settings-reset-global"].listeners.get("click")();
+  assert.equal(context.document.documentElement.dataset.palette, "nord");
+  assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
+  assert.equal(vm.runInContext("speechMinimumLength", context), 150);
+  assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
   assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
   assert.equal(stored.get("smooth-reader:last-book"), rememberedLastBook);
   assert.equal(stored.get("smooth-reader:recent-books"), rememberedRecentBooks);
@@ -1424,17 +1509,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     new Map([...stored.entries()].filter(([key]) => key.startsWith("smooth-reader:position:"))),
     rememberedPositions
   );
-  for (const [key, value] of stored.entries()) {
-    if (!key.startsWith("smooth-reader:book-settings:")) continue;
-    assert.deepEqual(JSON.parse(value), {
-      font: "alegreya",
-      fontSize: 36,
-      lineHeight: 1.28,
-      tracking: 0.02,
-      width: 44,
-      voice: ""
-    });
-  }
+  assert.equal(stored.has("smooth-reader:book-settings:"), false);
 
   console.log("renderer DOM smoke test passed");
 })().catch((error) => {

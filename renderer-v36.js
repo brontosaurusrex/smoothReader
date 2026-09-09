@@ -11,30 +11,9 @@ const recentBookList = document.querySelector("#recent-book-list");
 const dropPicker = document.querySelector("#drop-picker");
 const startOpen = document.querySelector("#start-open");
 const startReopen = document.querySelector("#start-reopen");
-const startPaletteNext = document.querySelector("#start-palette-next");
-const startPaletteSelect = document.querySelector("#start-palette");
-const startContrast = document.querySelector("#start-contrast");
-const startContrastValue = document.querySelector("#start-contrast-value");
-const startContrastDown = document.querySelector("#start-contrast-down");
-const startContrastUp = document.querySelector("#start-contrast-up");
-const startFontNext = document.querySelector("#start-font-next");
-const startFontSelect = document.querySelector("#start-font");
-const startFontSize = document.querySelector("#start-font-size");
-const startFontSizeValue = document.querySelector("#start-font-size-value");
-const startFontSizeDown = document.querySelector("#start-font-size-down");
-const startFontSizeUp = document.querySelector("#start-font-size-up");
-const startLineHeight = document.querySelector("#start-line-height");
-const startLineHeightValue = document.querySelector("#start-line-height-value");
-const startLineHeightDown = document.querySelector("#start-line-height-down");
-const startLineHeightUp = document.querySelector("#start-line-height-up");
-const startTrackingDown = document.querySelector("#start-tracking-down");
-const startTrackingReset = document.querySelector("#start-tracking-reset");
-const startTrackingUp = document.querySelector("#start-tracking-up");
-const startWidth = document.querySelector("#start-width");
-const startWidthValue = document.querySelector("#start-width-value");
-const startWidthDown = document.querySelector("#start-width-down");
-const startWidthUp = document.querySelector("#start-width-up");
-const startResetAll = document.querySelector("#start-reset-all");
+const startExportLibrary = document.querySelector("#start-export-library");
+const startImportLibrary = document.querySelector("#start-import-library");
+const libraryImportInput = document.querySelector("#library-import-input");
 const settingsMenu = document.querySelector("#settings-menu");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
@@ -61,10 +40,6 @@ const settingsWidthValue = document.querySelector("#settings-width-value");
 const settingsWidthDown = document.querySelector("#settings-width-down");
 const settingsWidthUp = document.querySelector("#settings-width-up");
 const settingsSpeechVoice = document.querySelector("#settings-speech-voice");
-const settingsSpeechMin = document.querySelector("#settings-speech-min");
-const settingsSpeechMinValue = document.querySelector("#settings-speech-min-value");
-const settingsSpeechMinDown = document.querySelector("#settings-speech-min-down");
-const settingsSpeechMinUp = document.querySelector("#settings-speech-min-up");
 const settingsSpeechMax = document.querySelector("#settings-speech-max");
 const settingsSpeechMaxValue = document.querySelector("#settings-speech-max-value");
 const settingsSpeechMaxDown = document.querySelector("#settings-speech-max-down");
@@ -80,11 +55,9 @@ const settingsSpeechStatus = document.querySelector("#settings-speech-status");
 const speechMarker = document.querySelector("#speech-marker");
 const speechAudio = document.querySelector("#speech-audio");
 const settingsHome = document.querySelector("#settings-home");
-const settingsPageUp = document.querySelector("#settings-page-up");
-const settingsPageDown = document.querySelector("#settings-page-down");
 const settingsOpen = document.querySelector("#settings-open");
-const settingsReopen = document.querySelector("#settings-reopen");
-const settingsResetAll = document.querySelector("#settings-reset-all");
+const settingsResetBook = document.querySelector("#settings-reset-book");
+const settingsResetGlobal = document.querySelector("#settings-reset-global");
 const readingProgress = document.querySelector("#reading-progress");
 const speechVoice = document.querySelector("#speech-voice");
 const speechControls = document.querySelector("#speech-controls");
@@ -101,7 +74,6 @@ const FONT_SIZE_KEY = "smooth-reader:font-size";
 const LINE_HEIGHT_KEY = "smooth-reader:line-height";
 const TRACKING_KEY = "smooth-reader:tracking";
 const WIDTH_KEY = "smooth-reader:text-width";
-const SPEECH_MIN_KEY = "smooth-reader:speech-minimum";
 const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
 const LEGACY_SPEECH_POSITION_KEY = "smooth-reader:speech-position";
 const SPEECH_CENTER_OFFSET_KEY = "smooth-reader:speech-center-offset";
@@ -113,7 +85,15 @@ const LAST_BOOK_DB = "smooth-reader-library";
 const LAST_BOOK_STORE = "books";
 const LAST_BOOK_RECORD = "last-opened";
 const RECENT_BOOKS_RECORD = "recent-books";
-const MAX_RECENT_BOOKS = 6;
+const MAX_RECENT_BOOKS = 12;
+const COVER_THUMBNAIL_VERSION = 2;
+const COVER_THUMBNAIL_MAX_WIDTH = 600;
+const COVER_THUMBNAIL_MAX_HEIGHT = 900;
+const COVER_THUMBNAIL_QUALITY = 0.86;
+const LIBRARY_BACKUP_FORMAT = "smooth-reader-library";
+const LIBRARY_BACKUP_VERSION = 1;
+const MAX_LIBRARY_IMPORT_BYTES = 512 * 1024 * 1024;
+const HISTORY_APP = "smooth-reader";
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
 const RIGHT_DRAG_SPEED = 1.35;
@@ -136,9 +116,7 @@ const MIN_LINE_HEIGHT = 1.2;
 const MAX_LINE_HEIGHT = 2.2;
 const LINE_HEIGHT_STEP = 0.04;
 const DEFAULT_SPEECH_MIN_LENGTH = 150;
-const DEFAULT_SPEECH_MAX_LENGTH = 350;
-const MIN_SPEECH_MIN_LENGTH = 100;
-const MAX_SPEECH_MIN_LENGTH = 500;
+const DEFAULT_SPEECH_MAX_LENGTH = 550;
 const MIN_SPEECH_MAX_LENGTH = 300;
 const MAX_SPEECH_MAX_LENGTH = 1200;
 const LEGACY_DEFAULT_SPEECH_POSITION_PERCENT = 22;
@@ -177,6 +155,8 @@ const FONTS = [
 
 let book = null;
 let activeBookKey = null;
+let activeBookTitle = "";
+let readerScrollBeforeHome = 0;
 let saveTimer = null;
 let statusTimer = null;
 let loadGeneration = 0;
@@ -244,7 +224,6 @@ const savedLineHeight = Number.parseFloat(localStorage.getItem(LINE_HEIGHT_KEY))
 let lineHeight = Number.isFinite(savedLineHeight)
   ? Math.max(MIN_LINE_HEIGHT, Math.min(MAX_LINE_HEIGHT, savedLineHeight))
   : DEFAULT_LINE_HEIGHT;
-const savedSpeechMinimum = Number.parseInt(localStorage.getItem(SPEECH_MIN_KEY), 10);
 const savedSpeechMaximum = Number.parseInt(localStorage.getItem(SPEECH_MAX_KEY), 10);
 const savedSpeechCenterOffset = Number.parseInt(
   localStorage.getItem(SPEECH_CENTER_OFFSET_KEY),
@@ -254,9 +233,7 @@ const savedLegacySpeechPosition = Number.parseInt(
   localStorage.getItem(LEGACY_SPEECH_POSITION_KEY),
   10
 );
-let speechMinimumLength = Number.isFinite(savedSpeechMinimum)
-  ? Math.max(MIN_SPEECH_MIN_LENGTH, Math.min(MAX_SPEECH_MIN_LENGTH, savedSpeechMinimum))
-  : DEFAULT_SPEECH_MIN_LENGTH;
+let speechMinimumLength = DEFAULT_SPEECH_MIN_LENGTH;
 let speechMaximumLength = Number.isFinite(savedSpeechMaximum)
   ? Math.max(MIN_SPEECH_MAX_LENGTH, Math.min(MAX_SPEECH_MAX_LENGTH, savedSpeechMaximum))
   : DEFAULT_SPEECH_MAX_LENGTH;
@@ -269,9 +246,6 @@ let speechCenterOffsetPercent = Math.max(
   MIN_SPEECH_CENTER_OFFSET_PERCENT,
   Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, initialSpeechCenterOffset)
 );
-if (speechMinimumLength > speechMaximumLength) {
-  speechMinimumLength = Math.min(DEFAULT_SPEECH_MIN_LENGTH, speechMaximumLength);
-}
 
 const speechSessionId = (() => {
   const makeId = () => crypto.randomUUID?.().replaceAll("-", "") ||
@@ -308,7 +282,6 @@ const clearStatus = () => {
 
 const setReopenAvailability = (canReopen) => {
   startReopen.disabled = isBookLoading || !canReopen;
-  settingsReopen.disabled = isBookLoading || !canReopen;
 };
 
 const loadRecentBookInfo = () => {
@@ -439,7 +412,11 @@ const createCoverThumbnail = async (bookInstance) => {
     if (!blob?.type?.startsWith("image/")) return "";
 
     const bitmap = await window.createImageBitmap(blob);
-    const scale = Math.min(1, 160 / bitmap.width, 240 / bitmap.height);
+    const scale = Math.min(
+      1,
+      COVER_THUMBNAIL_MAX_WIDTH / bitmap.width,
+      COVER_THUMBNAIL_MAX_HEIGHT / bitmap.height
+    );
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -450,9 +427,11 @@ const createCoverThumbnail = async (bookInstance) => {
     }
     canvasContext.fillStyle = "#ffffff";
     canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+    canvasContext.imageSmoothingEnabled = true;
+    canvasContext.imageSmoothingQuality = "high";
     canvasContext.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close?.();
-    return canvas.toDataURL?.("image/jpeg", 0.78) || "";
+    return canvas.toDataURL?.("image/jpeg", COVER_THUMBNAIL_QUALITY) || "";
   } catch (error) {
     console.warn("Could not create an EPUB cover thumbnail.", error);
     return "";
@@ -460,9 +439,17 @@ const createCoverThumbnail = async (bookInstance) => {
 };
 
 const backfillRecentThumbnails = async () => {
+  if (
+    typeof window.fetch !== "function" ||
+    typeof window.createImageBitmap !== "function"
+  ) return;
+
   let changed = false;
   for (const cached of cachedRecentBooks) {
-    if (cached.thumbnail || !cached.bytes) continue;
+    if (
+      !cached.bytes ||
+      (cached.thumbnail && cached.thumbnailVersion === COVER_THUMBNAIL_VERSION)
+    ) continue;
     let coverBook = null;
     try {
       coverBook = ePub(cached.bytes);
@@ -471,9 +458,10 @@ const backfillRecentThumbnails = async () => {
       const thumbnail = await createCoverThumbnail(coverBook);
       if (thumbnail) {
         cached.thumbnail = thumbnail;
-        changed = true;
         renderRecentBooks();
       }
+      cached.thumbnailVersion = COVER_THUMBNAIL_VERSION;
+      changed = true;
     } catch (error) {
       console.warn("Could not inspect a cached EPUB cover.", error);
     } finally {
@@ -500,7 +488,7 @@ const initializeRecentBooks = async () => {
   }
 };
 
-initializeRecentBooks();
+const recentBooksReady = initializeRecentBooks();
 
 const populateSelect = (select, choices) => {
   choices.forEach((choice) => {
@@ -511,9 +499,7 @@ const populateSelect = (select, choices) => {
   });
 };
 
-populateSelect(startPaletteSelect, PALETTES);
 populateSelect(settingsPaletteSelect, PALETTES);
-populateSelect(startFontSelect, FONTS);
 populateSelect(settingsFontSelect, FONTS);
 
 const getAnchorViewportTop = (anchor) => {
@@ -703,42 +689,24 @@ const syncSettingsControls = () => {
   const lineHeightText = lineHeight.toFixed(2);
   const contrastText = `${contrast > 0 ? "+" : ""}${contrast}%`;
 
-  startPaletteSelect.value = paletteId;
   settingsPaletteSelect.value = paletteId;
-  startContrast.value = String(contrast);
   settingsContrast.value = String(contrast);
-  startContrastValue.textContent = contrastText;
   settingsContrastValue.textContent = contrastText;
-  startContrastDown.disabled = contrast <= MIN_CONTRAST;
   settingsContrastDown.disabled = contrast <= MIN_CONTRAST;
-  startContrastUp.disabled = contrast >= MAX_CONTRAST;
   settingsContrastUp.disabled = contrast >= MAX_CONTRAST;
-  startFontSelect.value = fontId;
   settingsFontSelect.value = fontId;
   settingsTrackingValue.textContent = trackingText;
-  startWidth.value = String(widthCh);
   settingsWidth.value = String(widthCh);
-  startWidthValue.textContent = widthText;
   settingsWidthValue.textContent = widthText;
-  startWidthDown.disabled = widthCh <= MIN_WIDTH_CH;
   settingsWidthDown.disabled = widthCh <= MIN_WIDTH_CH;
-  startWidthUp.disabled = widthCh >= MAX_WIDTH_CH;
   settingsWidthUp.disabled = widthCh >= MAX_WIDTH_CH;
-  startFontSize.value = String(fontSizePx);
   settingsFontSize.value = String(fontSizePx);
-  startFontSizeValue.textContent = fontSizeText;
   settingsFontSizeValue.textContent = fontSizeText;
-  startFontSizeDown.disabled = fontSizePx <= MIN_FONT_SIZE_PX;
   settingsFontSizeDown.disabled = fontSizePx <= MIN_FONT_SIZE_PX;
-  startFontSizeUp.disabled = fontSizePx >= MAX_FONT_SIZE_PX;
   settingsFontSizeUp.disabled = fontSizePx >= MAX_FONT_SIZE_PX;
-  startLineHeight.value = String(lineHeight);
   settingsLineHeight.value = String(lineHeight);
-  startLineHeightValue.textContent = lineHeightText;
   settingsLineHeightValue.textContent = lineHeightText;
-  startLineHeightDown.disabled = lineHeight <= MIN_LINE_HEIGHT;
   settingsLineHeightDown.disabled = lineHeight <= MIN_LINE_HEIGHT;
-  startLineHeightUp.disabled = lineHeight >= MAX_LINE_HEIGHT;
   settingsLineHeightUp.disabled = lineHeight >= MAX_LINE_HEIGHT;
 };
 
@@ -851,29 +819,30 @@ const applyLineHeight = (nextLineHeight, announce = true) => {
   if (announce) showStatus(`LINE HEIGHT · ${lineHeight.toFixed(2)}`, 900);
 };
 
-const resetAllSettings = () => {
-  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
-    const key = localStorage.key(index);
-    if (key?.startsWith(BOOK_SETTINGS_PREFIX)) localStorage.removeItem(key);
-  }
+const resetCurrentBookSettings = () => {
+  if (!activeBookKey) return;
 
-  const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
   const defaultFontIndex = FONTS.findIndex((font) => font.id === "alegreya");
-  localStorage.setItem(FONT_KEY, "alegreya");
-  localStorage.setItem(FONT_SIZE_KEY, String(DEFAULT_FONT_SIZE_PX));
-  localStorage.setItem(LINE_HEIGHT_KEY, String(DEFAULT_LINE_HEIGHT));
-  localStorage.setItem(TRACKING_KEY, String(DEFAULT_TRACKING_EM));
-  localStorage.setItem(WIDTH_KEY, String(DEFAULT_WIDTH_CH));
+  suppressSettingsPersistence = true;
+  try {
+    applyFont(defaultFontIndex, false);
+    applyFontSize(DEFAULT_FONT_SIZE_PX, false);
+    applyLineHeight(DEFAULT_LINE_HEIGHT, false);
+    applyTracking(DEFAULT_TRACKING_EM, false);
+    applyWidth(DEFAULT_WIDTH_CH, false);
+    speechVoicePreference = "";
+    settingsSpeechVoice.value = "";
+  } finally {
+    suppressSettingsPersistence = false;
+  }
+  saveCurrentReadingSettings();
+  showStatus("THIS BOOK'S SETTINGS RESET · POSITION KEPT", 1800);
+};
 
+const resetGlobalSettings = () => {
+  const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
   applyPalette(defaultPaletteIndex, false);
   applyContrast(DEFAULT_CONTRAST, false);
-  applyFont(defaultFontIndex, false);
-  applyFontSize(DEFAULT_FONT_SIZE_PX, false);
-  applyLineHeight(DEFAULT_LINE_HEIGHT, false);
-  applyTracking(DEFAULT_TRACKING_EM, false);
-  applyWidth(DEFAULT_WIDTH_CH, false);
-  speechVoicePreference = "";
-  settingsSpeechVoice.value = "";
   applySpeechBounds(
     DEFAULT_SPEECH_MIN_LENGTH,
     DEFAULT_SPEECH_MAX_LENGTH
@@ -882,8 +851,7 @@ const resetAllSettings = () => {
     DEFAULT_SPEECH_CENTER_OFFSET_PERCENT,
     Boolean(speechActiveJob)
   );
-  saveCurrentReadingSettings();
-  showStatus("ALL SETTINGS RESET · BOOKS AND POSITIONS KEPT", 1800);
+  showStatus("GLOBAL SETTINGS RESET · BOOKS AND POSITIONS KEPT", 1800);
 };
 
 applyPalette(paletteIndex, false);
@@ -896,6 +864,276 @@ applyLineHeight(lineHeight, false);
 if (recentBookInfo[0]?.hash && readBookSettings(recentBookInfo[0].hash)) {
   applyStoredBookSettings(recentBookInfo[0].hash);
 }
+
+const storageSnapshot = () => {
+  const values = {};
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith("smooth-reader:")) continue;
+    const value = localStorage.getItem(key);
+    if (value !== null) values[key] = value;
+  }
+  return values;
+};
+
+const bookMetadataOnly = (record) => {
+  const { bytes, epubPath, ...metadata } = record || {};
+  return metadata;
+};
+
+const recentMetadataOnly = (record) => {
+  const { bytes, epubPath, thumbnail, thumbnailVersion, ...metadata } = record || {};
+  return metadata;
+};
+
+const recordOpenedAt = (record) => {
+  const openedAt = Number(record?.openedAt);
+  return Number.isFinite(openedAt) ? openedAt : 0;
+};
+
+const mergeBookCollections = (existingRecords, importedRecords) => {
+  const merged = (existingRecords || []).map((record) => ({ ...record }));
+  for (const imported of importedRecords || []) {
+    if (!imported?.fileName && !imported?.hash) continue;
+    const index = merged.findIndex((record) => booksMatch(record, imported));
+    if (index < 0) {
+      merged.push({ ...imported });
+      continue;
+    }
+
+    const existing = merged[index];
+    merged[index] = {
+      ...imported,
+      ...existing,
+      fileName: existing.fileName || imported.fileName,
+      title: existing.title || imported.title,
+      openedAt: Math.max(recordOpenedAt(existing), recordOpenedAt(imported)),
+      bytes: existing.bytes || imported.bytes,
+      thumbnail: existing.thumbnail || imported.thumbnail,
+      thumbnailVersion: existing.thumbnail
+        ? existing.thumbnailVersion
+        : imported.thumbnailVersion
+    };
+  }
+  return merged
+    .sort((first, second) => recordOpenedAt(second) - recordOpenedAt(first))
+    .slice(0, MAX_RECENT_BOOKS);
+};
+
+const positionSavedAt = (value) => {
+  try {
+    const savedAt = Number(JSON.parse(value)?.savedAt);
+    return Number.isFinite(savedAt) ? savedAt : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const mergeImportedStorage = (importedValues) => {
+  if (!importedValues || typeof importedValues !== "object") return;
+  for (const [key, value] of Object.entries(importedValues)) {
+    if (
+      !key.startsWith("smooth-reader:") ||
+      typeof value !== "string" ||
+      key === RECENT_BOOKS_KEY ||
+      key === LAST_BOOK_KEY
+    ) continue;
+
+    if (key.startsWith(POSITION_PREFIX)) {
+      const existing = localStorage.getItem(key);
+      if (existing && positionSavedAt(existing) > positionSavedAt(value)) continue;
+    }
+    localStorage.setItem(key, value);
+  }
+};
+
+const importedRecentMetadata = (manifest) => {
+  try {
+    const storedRecent = JSON.parse(manifest.localStorage?.[RECENT_BOOKS_KEY] || "null");
+    if (Array.isArray(storedRecent)) return storedRecent;
+  } catch {
+    // Fall back to the book records in the manifest.
+  }
+  return (manifest.books || []).map(recentMetadataOnly);
+};
+
+const applyImportedSettings = () => {
+  const importedPaletteIndex = PALETTES.findIndex(
+    (palette) => palette.id === localStorage.getItem(PALETTE_KEY)
+  );
+  if (importedPaletteIndex >= 0) applyPalette(importedPaletteIndex, false);
+
+  const importedContrast = Number.parseInt(localStorage.getItem(CONTRAST_KEY), 10);
+  if (Number.isFinite(importedContrast)) applyContrast(importedContrast, false);
+
+  const importedSpeechMaximum = Number.parseInt(localStorage.getItem(SPEECH_MAX_KEY), 10);
+  applySpeechBounds(
+    DEFAULT_SPEECH_MIN_LENGTH,
+    Number.isFinite(importedSpeechMaximum)
+      ? importedSpeechMaximum
+      : DEFAULT_SPEECH_MAX_LENGTH
+  );
+
+  const importedSpeechOffset = Number.parseInt(
+    localStorage.getItem(SPEECH_CENTER_OFFSET_KEY),
+    10
+  );
+  if (Number.isFinite(importedSpeechOffset)) {
+    applySpeechCenterOffset(importedSpeechOffset, Boolean(speechActiveJob));
+  }
+
+  if (activeBookKey) {
+    applyStoredBookSettings(activeBookKey);
+  } else {
+    const importedFontIndex = FONTS.findIndex(
+      (font) => font.id === localStorage.getItem(FONT_KEY)
+    );
+    suppressSettingsPersistence = true;
+    try {
+      if (importedFontIndex >= 0) applyFont(importedFontIndex, false);
+      const importedFontSize = Number.parseInt(localStorage.getItem(FONT_SIZE_KEY), 10);
+      const importedLineHeight = Number.parseFloat(localStorage.getItem(LINE_HEIGHT_KEY));
+      const importedTracking = Number.parseFloat(localStorage.getItem(TRACKING_KEY));
+      const importedWidth = Number.parseInt(localStorage.getItem(WIDTH_KEY), 10);
+      if (Number.isFinite(importedFontSize)) applyFontSize(importedFontSize, false);
+      if (Number.isFinite(importedLineHeight)) applyLineHeight(importedLineHeight, false);
+      if (Number.isFinite(importedTracking)) applyTracking(importedTracking, false);
+      if (Number.isFinite(importedWidth)) applyWidth(importedWidth, false);
+    } finally {
+      suppressSettingsPersistence = false;
+    }
+  }
+};
+
+const exportLibrary = async () => {
+  if (isBookLoading) return;
+  try {
+    showStatus("CREATING LIBRARY BACKUP…");
+    await recentBooksReady;
+    savePositionNow();
+    if (typeof window.JSZip !== "function") {
+      throw new Error("ZIP support is unavailable");
+    }
+
+    const archive = new window.JSZip();
+    const manifest = {
+      format: LIBRARY_BACKUP_FORMAT,
+      version: LIBRARY_BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      localStorage: storageSnapshot(),
+      books: []
+    };
+
+    cachedRecentBooks.forEach((record, index) => {
+      const metadata = bookMetadataOnly(record);
+      if (record.bytes) {
+        metadata.epubPath = `books/${String(index + 1).padStart(2, "0")}-${
+          String(record.hash || "book").slice(0, 16)
+        }.epub`;
+        archive.file(metadata.epubPath, record.bytes, {
+          binary: true,
+          compression: "STORE"
+        });
+      }
+      manifest.books.push(metadata);
+    });
+
+    archive.file("manifest.json", JSON.stringify(manifest, null, 2));
+    const blob = await archive.generateAsync({
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: { level: 6 }
+    });
+    const createObjectURL = window.URL?.createObjectURL;
+    if (typeof createObjectURL !== "function") {
+      throw new Error("Browser downloads are unavailable");
+    }
+    const downloadUrl = createObjectURL.call(window.URL, blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `smooth-reader-library-${new Date().toISOString().slice(0, 10)}.zip`;
+    link.click();
+    window.setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 0);
+    showStatus(`LIBRARY EXPORTED · ${cachedRecentBooks.length} BOOKS`, 2200);
+  } catch (error) {
+    console.error(error);
+    showStatus(`EXPORT ERROR · ${error?.message || "Backup could not be created"}`, 3200);
+  }
+};
+
+const importLibrary = async (file) => {
+  if (!file || isBookLoading) return;
+  try {
+    showStatus("IMPORTING LIBRARY…");
+    await recentBooksReady;
+    if (typeof window.JSZip !== "function") {
+      throw new Error("ZIP support is unavailable");
+    }
+
+    const archive = await window.JSZip.loadAsync(await file.arrayBuffer());
+    const manifestEntry = archive.file("manifest.json");
+    if (!manifestEntry) throw new Error("Not a Smooth Reader backup");
+    const manifest = JSON.parse(await manifestEntry.async("string"));
+    if (
+      manifest?.format !== LIBRARY_BACKUP_FORMAT ||
+      manifest.version !== LIBRARY_BACKUP_VERSION ||
+      !Array.isArray(manifest.books)
+    ) throw new Error("Unsupported Smooth Reader backup");
+
+    const importedBooks = [];
+    let importedBytes = 0;
+    const candidates = [...manifest.books]
+      .sort((first, second) => recordOpenedAt(second) - recordOpenedAt(first))
+      .slice(0, MAX_RECENT_BOOKS);
+    for (const [index, source] of candidates.entries()) {
+      const metadata = bookMetadataOnly(source);
+      const epubEntry = typeof source.epubPath === "string"
+        ? archive.file(source.epubPath)
+        : null;
+      if (epubEntry) {
+        metadata.bytes = await epubEntry.async("arraybuffer");
+        importedBytes += metadata.bytes.byteLength;
+        if (importedBytes > MAX_LIBRARY_IMPORT_BYTES) {
+          throw new Error("Backup contains more than 512 MiB of EPUB data");
+        }
+      }
+      metadata.fileName = metadata.fileName || `Imported book ${index + 1}.epub`;
+      importedBooks.push(metadata);
+    }
+
+    mergeImportedStorage(manifest.localStorage);
+    cachedRecentBooks = mergeBookCollections(cachedRecentBooks, importedBooks);
+    recentBookInfo = mergeBookCollections(
+      recentBookInfo,
+      [
+        ...importedRecentMetadata(manifest),
+        ...importedBooks.map(recentMetadataOnly)
+      ]
+    ).map(recentMetadataOnly);
+    localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
+    if (!localStorage.getItem(LAST_BOOK_KEY) && recentBookInfo[0]) {
+      localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(recentBookInfo[0]));
+    }
+    await writeCachedBooks(cachedRecentBooks);
+    lastBookCanReopen = Boolean(
+      cachedRecentBooks.find((cached) => booksMatch(recentBookInfo[0], cached))?.bytes
+    );
+    setReopenAvailability(lastBookCanReopen);
+    renderRecentBooks();
+    applyImportedSettings();
+
+    if (activeBookKey) {
+      const position = loadPosition(activeBookKey);
+      if (Number.isFinite(Number(position?.scrollY))) {
+        readerScrollBeforeHome = Number(position.scrollY);
+      }
+    }
+    showStatus(`LIBRARY IMPORTED · ${importedBooks.length} BOOKS MERGED`, 2600);
+  } catch (error) {
+    console.error(error);
+    showStatus(`IMPORT ERROR · ${error?.message || "Backup could not be read"}`, 3600);
+  }
+};
 
 const setSettingsOpen = (isOpen) => {
   settingsPanel.hidden = !isOpen;
@@ -915,6 +1153,61 @@ const setReadingMode = (isReading) => {
   if (!isReading) setSettingsOpen(false);
   syncSpeechControls();
 };
+
+const currentAppHistoryView = () => {
+  const state = window.history?.state;
+  return state?.app === HISTORY_APP ? state.view : "";
+};
+
+const replaceHomeHistory = () => {
+  window.history?.replaceState?.({ app: HISTORY_APP, view: "home" }, "");
+};
+
+if (window.history && "scrollRestoration" in window.history) {
+  window.history.scrollRestoration = "manual";
+}
+
+const commitReaderHistory = () => {
+  if (!window.history?.pushState) return;
+  const state = { app: HISTORY_APP, view: "reader", bookKey: activeBookKey };
+  if (currentAppHistoryView() === "reader") window.history.replaceState(state, "");
+  else window.history.pushState(state, "");
+};
+
+const showHomeView = () => {
+  if (!reader.hidden) {
+    savePositionNow();
+    readerScrollBeforeHome = window.scrollY;
+  }
+  if (speechIsActive) stopSpeech();
+  clearStatus();
+  setReadingMode(false);
+  renderRecentBooks();
+  document.title = "Smooth Reader";
+  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  window.requestAnimationFrame(() => {
+    if (reader.hidden) {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  });
+};
+
+const showReaderView = () => {
+  if (!activeBookKey || viewer.children.length === 0) {
+    replaceHomeHistory();
+    showHomeView();
+    return;
+  }
+  setReadingMode(true);
+  document.title = activeBookTitle || "Smooth Reader";
+  window.requestAnimationFrame(() => {
+    window.scrollTo({ top: readerScrollBeforeHome, left: 0, behavior: "auto" });
+    captureStableResizeAnchor();
+    updateReadingProgress();
+  });
+};
+
+replaceHomeHistory();
 
 const updateReadingProgress = () => {
   if (reader.hidden) return;
@@ -1238,29 +1531,17 @@ const normalizeSpeechText = (text) => String(text || "")
   .trim();
 
 const applySpeechBounds = (nextMinimum, nextMaximum, changed = "", announce = false) => {
-  let minimum = Math.round(Math.max(
-    MIN_SPEECH_MIN_LENGTH,
-    Math.min(MAX_SPEECH_MIN_LENGTH, nextMinimum)
-  ));
-  let maximum = Math.round(Math.max(
+  const minimum = DEFAULT_SPEECH_MIN_LENGTH;
+  const maximum = Math.round(Math.max(
     MIN_SPEECH_MAX_LENGTH,
     Math.min(MAX_SPEECH_MAX_LENGTH, nextMaximum)
   ));
 
-  if (minimum > maximum) {
-    if (changed === "maximum") minimum = maximum;
-    else maximum = minimum;
-  }
   speechMinimumLength = minimum;
   speechMaximumLength = maximum;
-  localStorage.setItem(SPEECH_MIN_KEY, String(minimum));
   localStorage.setItem(SPEECH_MAX_KEY, String(maximum));
-  settingsSpeechMin.value = String(minimum);
   settingsSpeechMax.value = String(maximum);
-  settingsSpeechMinValue.textContent = `${minimum} chars`;
   settingsSpeechMaxValue.textContent = `${maximum} chars`;
-  settingsSpeechMinDown.disabled = minimum <= MIN_SPEECH_MIN_LENGTH;
-  settingsSpeechMinUp.disabled = minimum >= MAX_SPEECH_MIN_LENGTH;
   settingsSpeechMaxDown.disabled = maximum <= MIN_SPEECH_MAX_LENGTH;
   settingsSpeechMaxUp.disabled = maximum >= MAX_SPEECH_MAX_LENGTH;
 };
@@ -2437,7 +2718,8 @@ const openBook = async (file) => {
       const cachedBook = {
         ...lastBookInfo,
         bytes,
-        thumbnail: thumbnail || previousCachedBook?.thumbnail || ""
+        thumbnail: thumbnail || previousCachedBook?.thumbnail || "",
+        thumbnailVersion: COVER_THUMBNAIL_VERSION
       };
       cachedRecentBooks = [
         cachedBook,
@@ -2450,14 +2732,19 @@ const openBook = async (file) => {
     }
     renderRecentBooks();
 
-    document.title = metadata?.title
+    activeBookTitle = metadata?.title
       ? `${metadata.title} — Smooth Reader`
       : "Smooth Reader";
+    document.title = activeBookTitle;
+    readerScrollBeforeHome = window.scrollY;
+    commitReaderHistory();
   } catch (error) {
     console.error(error);
     destroyCurrentBook();
     activeBookKey = null;
-    setReadingMode(false);
+    activeBookTitle = "";
+    replaceHomeHistory();
+    showHomeView();
     showStatus("That EPUB could not be opened.");
   } finally {
     if (generation === loadGeneration) {
@@ -2535,13 +2822,12 @@ const scrollOnePage = (direction) => {
 
 const returnToHomeScreen = () => {
   if (isBookLoading) return;
-  loadGeneration += 1;
-  clearStatus();
-  destroyCurrentBook();
-  activeBookKey = null;
-  setReadingMode(false);
-  renderRecentBooks();
-  document.title = "Smooth Reader";
+  if (currentAppHistoryView() === "reader" && window.history?.back) {
+    window.history.back();
+    return;
+  }
+  replaceHomeHistory();
+  showHomeView();
 };
 
 const isEditableTarget = (target) => {
@@ -2564,7 +2850,7 @@ const handleReaderKeyDown = (event) => {
     return;
   }
 
-  if (noCommandModifier && !event.shiftKey && key === "r") {
+  if (reader.hidden && noCommandModifier && !event.shiftKey && key === "r") {
     event.preventDefault();
     if (!isBookLoading) reopenLastBook();
     return;
@@ -2700,7 +2986,8 @@ dropPicker.addEventListener("click", () => fileInput.click());
 startOpen.addEventListener("click", () => fileInput.click());
 settingsOpen.addEventListener("click", () => fileInput.click());
 startReopen.addEventListener("click", reopenLastBook);
-settingsReopen.addEventListener("click", reopenLastBook);
+startExportLibrary.addEventListener("click", () => void exportLibrary());
+startImportLibrary.addEventListener("click", () => libraryImportInput.click());
 settingsSpeechStart.addEventListener("click", startSpeech);
 settingsSpeechPause.addEventListener("click", toggleSpeechPause);
 settingsSpeechStop.addEventListener("click", stopSpeech);
@@ -2715,12 +3002,6 @@ settingsSpeechVoice.addEventListener("change", (event) => {
   saveCurrentReadingSettings();
 });
 
-settingsSpeechMin.addEventListener("input", (event) => {
-  applySpeechBounds(Number(event.target.value), speechMaximumLength, "minimum");
-});
-settingsSpeechMin.addEventListener("change", (event) => {
-  applySpeechBounds(Number(event.target.value), speechMaximumLength, "minimum", true);
-});
 settingsSpeechMax.addEventListener("input", (event) => {
   applySpeechBounds(speechMinimumLength, Number(event.target.value), "maximum");
 });
@@ -2729,22 +3010,6 @@ settingsSpeechMax.addEventListener("change", (event) => {
 });
 settingsSpeechPosition.addEventListener("input", (event) => {
   applySpeechCenterOffset(Number(event.target.value), true);
-});
-settingsSpeechMinDown.addEventListener("click", () => {
-  applySpeechBounds(
-    speechMinimumLength - 50,
-    speechMaximumLength,
-    "minimum",
-    true
-  );
-});
-settingsSpeechMinUp.addEventListener("click", () => {
-  applySpeechBounds(
-    speechMinimumLength + 50,
-    speechMaximumLength,
-    "minimum",
-    true
-  );
 });
 settingsSpeechMaxDown.addEventListener("click", () => {
   applySpeechBounds(
@@ -2769,28 +3034,16 @@ settingsSpeechPositionUp.addEventListener("click", () => {
   applySpeechCenterOffset(speechCenterOffsetPercent + 1, true);
 });
 
-startPaletteNext.addEventListener("click", () => applyPalette(paletteIndex + 1));
-startFontNext.addEventListener("click", () => applyFont(fontIndex + 1));
-startPaletteSelect.addEventListener("change", (event) => {
-  applyPalette(PALETTES.findIndex((palette) => palette.id === event.target.value));
-});
 settingsPaletteSelect.addEventListener("change", (event) => {
   applyPalette(PALETTES.findIndex((palette) => palette.id === event.target.value));
 });
 const handleContrastInput = (event, announce = false) => {
   applyContrast(Number(event.target.value), announce);
 };
-startContrast.addEventListener("input", (event) => handleContrastInput(event));
 settingsContrast.addEventListener("input", (event) => handleContrastInput(event));
-startContrast.addEventListener("change", (event) => handleContrastInput(event, true));
 settingsContrast.addEventListener("change", (event) => handleContrastInput(event, true));
-startContrastDown.addEventListener("click", () => applyContrast(contrast - 1));
 settingsContrastDown.addEventListener("click", () => applyContrast(contrast - 1));
-startContrastUp.addEventListener("click", () => applyContrast(contrast + 1));
 settingsContrastUp.addEventListener("click", () => applyContrast(contrast + 1));
-startFontSelect.addEventListener("change", (event) => {
-  applyFont(FONTS.findIndex((font) => font.id === event.target.value));
-});
 settingsFontSelect.addEventListener("change", (event) => {
   applyFont(FONTS.findIndex((font) => font.id === event.target.value));
 });
@@ -2798,18 +3051,10 @@ settingsFontSelect.addEventListener("change", (event) => {
 const handleFontSizeInput = (event, announce = false) => {
   applyFontSize(Number(event.target.value), announce);
 };
-startFontSize.addEventListener("input", (event) => handleFontSizeInput(event));
 settingsFontSize.addEventListener("input", (event) => handleFontSizeInput(event));
-startFontSize.addEventListener("change", (event) => handleFontSizeInput(event, true));
 settingsFontSize.addEventListener("change", (event) => handleFontSizeInput(event, true));
-startFontSizeDown.addEventListener("click", () => {
-  applyFontSize(fontSizePx - FONT_SIZE_STEP_PX);
-});
 settingsFontSizeDown.addEventListener("click", () => {
   applyFontSize(fontSizePx - FONT_SIZE_STEP_PX);
-});
-startFontSizeUp.addEventListener("click", () => {
-  applyFontSize(fontSizePx + FONT_SIZE_STEP_PX);
 });
 settingsFontSizeUp.addEventListener("click", () => {
   applyFontSize(fontSizePx + FONT_SIZE_STEP_PX);
@@ -2818,34 +3063,19 @@ settingsFontSizeUp.addEventListener("click", () => {
 const handleLineHeightInput = (event, announce = false) => {
   applyLineHeight(Number(event.target.value), announce);
 };
-startLineHeight.addEventListener("input", (event) => handleLineHeightInput(event));
 settingsLineHeight.addEventListener("input", (event) => handleLineHeightInput(event));
-startLineHeight.addEventListener("change", (event) => handleLineHeightInput(event, true));
 settingsLineHeight.addEventListener("change", (event) => handleLineHeightInput(event, true));
-startLineHeightDown.addEventListener("click", () => {
-  applyLineHeight(lineHeight - LINE_HEIGHT_STEP);
-});
 settingsLineHeightDown.addEventListener("click", () => {
   applyLineHeight(lineHeight - LINE_HEIGHT_STEP);
-});
-startLineHeightUp.addEventListener("click", () => {
-  applyLineHeight(lineHeight + LINE_HEIGHT_STEP);
 });
 settingsLineHeightUp.addEventListener("click", () => {
   applyLineHeight(lineHeight + LINE_HEIGHT_STEP);
 });
 
-startTrackingDown.addEventListener("click", () => {
-  applyTracking(trackingEm - TRACKING_STEP_EM);
-});
 settingsTrackingDown.addEventListener("click", () => {
   applyTracking(trackingEm - TRACKING_STEP_EM);
 });
-startTrackingReset.addEventListener("click", () => applyTracking(DEFAULT_TRACKING_EM));
 settingsTrackingReset.addEventListener("click", () => applyTracking(DEFAULT_TRACKING_EM));
-startTrackingUp.addEventListener("click", () => {
-  applyTracking(trackingEm + TRACKING_STEP_EM);
-});
 settingsTrackingUp.addEventListener("click", () => {
   applyTracking(trackingEm + TRACKING_STEP_EM);
 });
@@ -2853,23 +3083,17 @@ settingsTrackingUp.addEventListener("click", () => {
 const handleWidthInput = (event, announce = false) => {
   applyWidth(Number(event.target.value), announce);
 };
-startWidth.addEventListener("input", (event) => handleWidthInput(event));
 settingsWidth.addEventListener("input", (event) => handleWidthInput(event));
-startWidth.addEventListener("change", (event) => handleWidthInput(event, true));
 settingsWidth.addEventListener("change", (event) => handleWidthInput(event, true));
-startWidthDown.addEventListener("click", () => applyWidth(widthCh - 2));
 settingsWidthDown.addEventListener("click", () => applyWidth(widthCh - 2));
-startWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
 settingsWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
 
 settingsToggle.addEventListener("click", () => {
   setSettingsOpen(settingsPanel.hidden);
 });
 settingsHome.addEventListener("click", returnToHomeScreen);
-settingsPageUp.addEventListener("click", () => scrollOnePage(-1));
-settingsPageDown.addEventListener("click", () => scrollOnePage(1));
-startResetAll.addEventListener("click", resetAllSettings);
-settingsResetAll.addEventListener("click", resetAllSettings);
+settingsResetBook.addEventListener("click", resetCurrentBookSettings);
+settingsResetGlobal.addEventListener("click", resetGlobalSettings);
 
 window.addEventListener("click", (event) => {
   if (!settingsPanel.hidden && !event.target?.closest?.("#settings-menu")) {
@@ -2880,6 +3104,12 @@ window.addEventListener("click", (event) => {
 fileInput.addEventListener("change", () => {
   if (fileInput.files?.length) openDroppedFiles(fileInput.files);
   fileInput.value = "";
+});
+
+libraryImportInput.addEventListener("change", () => {
+  const file = libraryImportInput.files?.[0];
+  if (file) void importLibrary(file);
+  libraryImportInput.value = "";
 });
 
 const handleDragEnter = (event) => {
@@ -2938,6 +3168,11 @@ window.addEventListener("scroll", () => {
   scheduleStableResizeAnchorCapture();
 }, { passive: true });
 window.addEventListener("resize", handleViewportResize, { passive: true });
+window.addEventListener("popstate", (event) => {
+  if (event.state?.app !== HISTORY_APP) return;
+  if (event.state.view === "reader") showReaderView();
+  else showHomeView();
+});
 document.addEventListener?.("visibilitychange", () => {
   if (!pageIsVisible()) {
     if (speechScrollTargetY !== null) {
