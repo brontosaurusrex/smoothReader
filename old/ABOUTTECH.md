@@ -10,13 +10,12 @@ Smooth Reader deliberately uses a small, conventional web stack:
 - no Electron, framework, bundler, npm install, or compilation step
 - a continuous browser document with native scrolling
 - local-first EPUB handling and persistence
-- optional Piper text-to-speech and per-user server libraries through a small
-  Python bridge
+- optional Piper text-to-speech through a small Python bridge
 - the same static reader on desktop, mobile, GitHub Pages, or a private server
 
 The reader itself is HTML, CSS, and plain JavaScript. EPUB.js and JSZip are
 vendored browser libraries. Fonts are also bundled locally. The Python bridge
-is optional: without it, local reading, storage, and ZIP backup still work.
+is optional: without it, everything except text-to-speech still works.
 
 ## Project layout
 
@@ -28,8 +27,7 @@ is optional: without it, local reading, storage, and ZIP backup still work.
 | `vendor/epub.min.js` | EPUB archive/package/spine handling through EPUB.js |
 | `vendor/jszip.min.js` | ZIP support used by EPUB.js and library export/import |
 | `vendor/fonts/` | Self-hosted reading fonts and EnvyCodeR Nerd Font for the interface |
-| `piper_bridge.py` | Static HTTP server, Piper/FFmpeg speech API, audio cache, and per-user server library |
-| `serve` | Minimal executable wrapper that forwards environment variables and command-line options to the bridge |
+| `piper_bridge.py` | Static HTTP server plus Piper/FFmpeg speech API and audio cache |
 | `SERVER-INSTALL.md` | Debian, systemd, Nginx, TLS, and Basic Authentication deployment guide |
 | `test/` | Browser-logic smoke tests, real EPUB ZIP test, and Piper bridge integration test |
 
@@ -42,7 +40,6 @@ flowchart TD
     Browser <--> LS["localStorage: settings and positions"]
     Browser <--> IDB["IndexedDB: EPUB bytes and covers"]
     Browser <--> ZIP["Export/import ZIP"]
-    Browser <-. "explicit book upload and state sync" .-> Library["Per-user server library"]
     Browser -. "optional text chunks" .-> Bridge["Piper bridge"]
     Bridge --> Piper["Piper ONNX synthesis"]
     Piper --> FFmpeg["FFmpeg loudness and encoding"]
@@ -50,10 +47,8 @@ flowchart TD
     Cache --> Browser
 ```
 
-The EPUB file is uploaded only when the user explicitly chooses `STORE ON
-SERVER`. After that initial transfer, normal synchronization sends only small
-position/settings records. When Piper is enabled, spoken text chunks are also
-sent to the bridge.
+The EPUB file itself never needs to be uploaded to the server. When Piper is
+enabled, only the text chunks being spoken are sent to the bridge.
 
 ## EPUB loading and rendering
 
@@ -62,14 +57,6 @@ sent to the bridge.
 An EPUB can arrive from the file picker, drag and drop, or the browser-side
 cache. The app accepts the first dropped file whose name ends in `.epub` and
 reads it as an `ArrayBuffer`.
-
-Before replacing the currently loaded book, JSZip verifies that the input is a
-readable ZIP containing `META-INF/container.xml` and a package-document path.
-Archive validation, EPUB.js opening, individual section rendering, and metadata
-loading each have a 30-second bound. A rejection or timeout clears the loading
-lock and displays the underlying EPUB error instead of leaving `OPENING` or
-`LOADING` visible indefinitely. Validation runs before replacing the current
-book, so a damaged file does not close a book that was already open.
 
 ### 2. Stable book identity
 
@@ -199,8 +186,8 @@ Small, synchronous state is kept under keys beginning with `smooth-reader:`.
 
 | Key pattern | Stored value |
 | --- | --- |
-| `smooth-reader:position:<SHA-256>` | JSON containing a chapter/text anchor, `scrollY`, fallback `ratio`, and `savedAt` timestamp |
-| `smooth-reader:book-settings:<SHA-256>` | Palette, contrast, typography, width, Piper voice/speaker, maximum speech chunk, spoken-text offset, and `savedAt` timestamp |
+| `smooth-reader:position:<SHA-256>` | JSON containing `scrollY`, fallback `ratio`, and `savedAt` timestamp |
+| `smooth-reader:book-settings:<SHA-256>` | Palette, contrast, typography, width, Piper voice/speaker, maximum speech chunk, and spoken-text offset |
 | `smooth-reader:recent-books` | Up to 12 lightweight book metadata records |
 | `smooth-reader:last-book` | Most recently opened book metadata |
 | `smooth-reader:palette` | Legacy palette fallback used when opening an older saved book |
@@ -216,11 +203,9 @@ are upgraded in place the next time their book opens. The home view ignores book
 appearance and is always rendered in Nord with neutral contrast.
 
 Position writes are debounced by 180 ms while scrolling. A position is also
-saved before hiding or replacing the current book. The saved anchor records the
-spine index and character offset around 32% down the viewport. Restoration waits
-for fonts, images, and two animation frames, then prefers that text anchor;
-`scrollY`, ratio, and an older percentage field are fallbacks. This makes a
-server position substantially more stable across desktop/mobile reflow.
+saved before hiding or replacing the current book. Restoration waits for fonts,
+images, and two animation frames, then prefers the saved pixel `scrollY`; the
+ratio and an older percentage field are fallbacks.
 
 ### IndexedDB
 
@@ -237,12 +222,11 @@ asking the user to select the original file again. If IndexedDB is unavailable
 or a write fails, the metadata and positions can still exist, but the book must
 be dropped again.
 
-Home-screen library management uses a temporary selection set. `REMOVE FROM
-THIS DEVICE` rewrites the IndexedDB recent-books array, removes the selected
-hashes' position and settings keys from localStorage, and updates the last-book
-pointer while retaining any server copy. If the currently loaded book is
-removed locally, its hidden DOM and active identity are also discarded so
-Browser Forward cannot silently restore it.
+Home-screen library management uses a temporary selection set. Confirmed
+removal rewrites the IndexedDB recent-books array, removes the selected hashes'
+position and settings keys from localStorage, and updates the last-book pointer.
+If the currently loaded book is removed, its hidden DOM and active identity are
+also discarded so Browser Forward cannot silently restore it.
 
 ### sessionStorage
 
@@ -295,43 +279,6 @@ Import does not clear the current browser library.
 
 The import is browser-side. It does not import or change Piper voices and does
 not include the server audio cache.
-
-## Per-user server library
-
-The browser probes `GET /api/library/books` during startup. A successful reply
-enables the server actions and merges server summaries into the home grid. A
-server-stored book has a subtle inset outline. When the API is absent, as on
-GitHub Pages or the basic `python -m http.server`, server controls stay hidden
-and all local features remain unchanged.
-
-`STORE ON SERVER` sends a selected cached EPUB once, followed by its JPEG cover
-and JSON state. Upload requests have a three-minute client bound. The bridge
-streams EPUB bytes to a temporary file, checks the declared size and SHA-256,
-validates the ZIP and EPUB container, then atomically renames it. A partial,
-damaged, mismatched, or oversized upload never replaces the stored book.
-
-After storage, local position and settings writes schedule a state-only update
-after 1.5 seconds. Hiding or leaving the page also sends a small keepalive
-update. The server merges position and settings independently by their
-`savedAt` timestamps, preventing an older write for one field from overwriting
-a newer value for that field. Opening a server book merges the newest state,
-downloads the EPUB only when it is absent from IndexedDB, and then follows the
-normal validated opening path.
-
-The on-disk shape beneath `--library-dir` is:
-
-```text
-<sha256-of-authenticated-username>/<book-sha256>/
-├── book.epub
-├── cover.jpg
-└── state.json
-```
-
-The raw username is not used as a path. With `--require-library-user`, requests
-without `X-Smooth-Reader-User` are rejected. Production Nginx must overwrite
-that header with `$remote_user`; because the bridge listens only on loopback,
-clients cannot bypass Nginx and choose another namespace. Without the flag, a
-direct local bridge uses the `local` namespace for convenient personal use.
 
 ## Piper text-to-speech: browser side
 
@@ -412,19 +359,10 @@ and implements these endpoints:
 | `POST /api/piper/prepare` | Generate or retrieve one speech chunk, optionally with a fixed speaker ID |
 | `POST /api/piper/stop` | Cancel queued or active generation for one session |
 | `GET /api/piper/audio/<cache-id>` | Stream cached Opus/WAV with HTTP Range support |
-| `GET /api/library/status` | Server-library availability, authenticated username, book count, and size limit |
-| `GET /api/library/books` | List the authenticated user's server-stored books |
-| `PUT /api/library/books/<hash>/epub` | Stream, hash-check, validate, and atomically store one EPUB |
-| `PUT /api/library/books/<hash>/cover` | Store its generated JPEG thumbnail |
-| `GET /api/library/books/<hash>/state` / `PUT /api/library/books/<hash>/state` | Load or merge position, settings, and metadata |
-| `GET /api/library/books/<hash>/epub` | Download the EPUB to another device |
-| `GET /api/library/books/<hash>/cover` | Display the server cover on the home screen |
-| `DELETE /api/library/books/<hash>` | Remove the authenticated user's server copy and state |
 
-`/api/piper/speak` is retained as an alias for prepare. Piper JSON request
-bodies are limited to 32,000 bytes, library state to 512,000 bytes, covers to
-2 MiB, and speech text to 8,000 characters. Book, session, and cache IDs are
-validated against restricted character patterns.
+`/api/piper/speak` is retained as an alias for prepare. JSON request bodies are
+limited to 32,000 bytes and speech text to 8,000 characters. Session and cache
+IDs are validated against restricted character patterns.
 
 The bridge binds only to `127.0.0.1`. For a network or Internet deployment,
 Nginx should terminate HTTPS, apply authentication, and reverse-proxy to it.
@@ -494,21 +432,19 @@ and can be served concurrently. Each session has a cancellation version and an
 associated active process, so stopping one reader removes or terminates only its
 work.
 
-The audio cache is shared across users. Identical text, voice, speaker, and
-format can reuse the same audio without another synthesis. Server EPUB
-libraries are isolated by the authenticated Nginx username instead: using the
-same login on multiple devices shares books and state, while different logins
-resolve to different hashed directories. The bridge has no passwords of its
-own; access control belongs in Nginx.
+The cache is shared across users. Identical text, voice, speaker, and format can
+reuse the same audio without another synthesis. The bridge has no user accounts
+of its own; access control belongs in Nginx. An Internet-facing deployment must
+be authenticated because speech generation consumes CPU and disk.
 
 ## Browser and server data boundaries
 
 | Data | Location | Sent to server? | Included in export? |
 | --- | --- | --- | --- |
-| EPUB bytes | Browser IndexedDB; optional per-user server library | Only after `STORE ON SERVER` | Yes, when locally cached |
-| Cover thumbnails | Browser IndexedDB; optional per-user server library | With an explicitly stored book | Yes, when locally cached |
-| Reading positions | Browser localStorage; optional server `state.json` | After its book is server-stored | Yes |
-| Per-book settings and legacy fallbacks | Browser localStorage; optional server `state.json` | After its book is server-stored | Yes |
+| EPUB bytes | Browser IndexedDB | No | Yes |
+| Cover thumbnails | Browser IndexedDB | No | Yes |
+| Reading positions | Browser localStorage | No | Yes |
+| Per-book settings and legacy fallbacks | Browser localStorage | No | Yes |
 | Speech session ID | Browser sessionStorage | With speech requests | No |
 | Current speech text | Browser memory | Only when Piper is used | No |
 | Voice models | Server filesystem | Already server-side | No |
@@ -520,10 +456,8 @@ own; access control belongs in Nginx.
   calls unless it is served behind the bridge.
 - If IndexedDB quota is exhausted, recent metadata can remain but reopening may
   require dropping the EPUB again.
-- The persistent text anchor is preferred, with pixel and ratio fallbacks.
-  Heavily altered EPUB content can still make restoration approximate.
-- Two devices actively reading the same book use field-level last-update-wins
-  synchronization rather than collaborative locking.
+- The position is pixel-based first and ratio-based second; major content or
+  viewport changes can make restoration approximate.
 - Full-book DOM rendering favors scrolling simplicity over minimum memory use.
 - Publisher CSS and interactive EPUB content are intentionally discarded.
 - Browser autoplay rules require speech audio to be unlocked from a user action.
@@ -548,7 +482,6 @@ FFMPEG_BIN=/usr/bin/ffmpeg \
 python3 piper_bridge.py \
   --voice-dir /path/to/voices \
   --cache-dir /path/to/audio-cache \
-  --library-dir /path/to/server-library \
   --port 8000
 ```
 
@@ -565,8 +498,7 @@ It performs:
   visibility, layout anchoring, and export/import rules
 - a real EPUB archive test against the vendored JSZip build
 - Python bytecode compilation
-- a bridge integration test covering multi-session Piper cancellation, audio
-  caching/delivery, per-user library isolation, EPUB upload validation, state
-  conflict merging, server download/removal, HTTP ranges, and font serving
+- a Piper bridge integration test covering multi-session cancellation, cache
+  behavior, Opus/WAV delivery, loudness processing, HTTP ranges, and font serving
 
 For production deployment details, continue with [SERVER-INSTALL.md](SERVER-INSTALL.md).

@@ -477,6 +477,11 @@ body.is-dragging #drop-zone::before {
   background-image: var(--recent-book-cover);
 }
 
+#recent-book-list .recent-book.is-server-stored::before {
+  border-color: color-mix(in srgb, var(--display-text) 64%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--display-background) 24%, transparent);
+}
+
 #recent-book-list .recent-book:is(:hover, :focus-visible) {
   color: var(--display-text);
   background: var(--display-hover);
@@ -515,7 +520,7 @@ body.is-dragging #drop-zone::before {
 }
 
 #library-manage-actions {
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 #library-actions button,
@@ -542,7 +547,9 @@ body.is-dragging #drop-zone::before {
   opacity: 0.45;
 }
 
-#start-remove-books:not(:disabled) {
+#start-store-server:not(:disabled),
+#start-remove-local:not(:disabled),
+#start-remove-server:not(:disabled) {
   border-color: var(--display-link);
   color: var(--display-text);
 }

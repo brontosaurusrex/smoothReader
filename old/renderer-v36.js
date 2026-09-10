@@ -11,30 +11,13 @@ const recentBookList = document.querySelector("#recent-book-list");
 const dropPicker = document.querySelector("#drop-picker");
 const startOpen = document.querySelector("#start-open");
 const startReopen = document.querySelector("#start-reopen");
-const startPaletteNext = document.querySelector("#start-palette-next");
-const startPaletteSelect = document.querySelector("#start-palette");
-const startContrast = document.querySelector("#start-contrast");
-const startContrastValue = document.querySelector("#start-contrast-value");
-const startContrastDown = document.querySelector("#start-contrast-down");
-const startContrastUp = document.querySelector("#start-contrast-up");
-const startFontNext = document.querySelector("#start-font-next");
-const startFontSelect = document.querySelector("#start-font");
-const startFontSize = document.querySelector("#start-font-size");
-const startFontSizeValue = document.querySelector("#start-font-size-value");
-const startFontSizeDown = document.querySelector("#start-font-size-down");
-const startFontSizeUp = document.querySelector("#start-font-size-up");
-const startLineHeight = document.querySelector("#start-line-height");
-const startLineHeightValue = document.querySelector("#start-line-height-value");
-const startLineHeightDown = document.querySelector("#start-line-height-down");
-const startLineHeightUp = document.querySelector("#start-line-height-up");
-const startTrackingDown = document.querySelector("#start-tracking-down");
-const startTrackingReset = document.querySelector("#start-tracking-reset");
-const startTrackingUp = document.querySelector("#start-tracking-up");
-const startWidth = document.querySelector("#start-width");
-const startWidthValue = document.querySelector("#start-width-value");
-const startWidthDown = document.querySelector("#start-width-down");
-const startWidthUp = document.querySelector("#start-width-up");
-const startResetAll = document.querySelector("#start-reset-all");
+const startExportLibrary = document.querySelector("#start-export-library");
+const startImportLibrary = document.querySelector("#start-import-library");
+const startManageLibrary = document.querySelector("#start-manage-library");
+const libraryManageActions = document.querySelector("#library-manage-actions");
+const startRemoveBooks = document.querySelector("#start-remove-books");
+const startCancelManage = document.querySelector("#start-cancel-manage");
+const libraryImportInput = document.querySelector("#library-import-input");
 const settingsMenu = document.querySelector("#settings-menu");
 const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
@@ -61,10 +44,8 @@ const settingsWidthValue = document.querySelector("#settings-width-value");
 const settingsWidthDown = document.querySelector("#settings-width-down");
 const settingsWidthUp = document.querySelector("#settings-width-up");
 const settingsSpeechVoice = document.querySelector("#settings-speech-voice");
-const settingsSpeechMin = document.querySelector("#settings-speech-min");
-const settingsSpeechMinValue = document.querySelector("#settings-speech-min-value");
-const settingsSpeechMinDown = document.querySelector("#settings-speech-min-down");
-const settingsSpeechMinUp = document.querySelector("#settings-speech-min-up");
+const settingsSpeechSpeakerRow = document.querySelector("#settings-speech-speaker-row");
+const settingsSpeechSpeaker = document.querySelector("#settings-speech-speaker");
 const settingsSpeechMax = document.querySelector("#settings-speech-max");
 const settingsSpeechMaxValue = document.querySelector("#settings-speech-max-value");
 const settingsSpeechMaxDown = document.querySelector("#settings-speech-max-down");
@@ -80,14 +61,10 @@ const settingsSpeechStatus = document.querySelector("#settings-speech-status");
 const speechMarker = document.querySelector("#speech-marker");
 const speechAudio = document.querySelector("#speech-audio");
 const settingsHome = document.querySelector("#settings-home");
-const settingsPageUp = document.querySelector("#settings-page-up");
-const settingsPageDown = document.querySelector("#settings-page-down");
 const settingsOpen = document.querySelector("#settings-open");
-const settingsReopen = document.querySelector("#settings-reopen");
-const settingsResetAll = document.querySelector("#settings-reset-all");
+const settingsResetBook = document.querySelector("#settings-reset-book");
 const readingProgress = document.querySelector("#reading-progress");
 const speechVoice = document.querySelector("#speech-voice");
-const speechProgress = document.querySelector("#speech-progress");
 const speechControls = document.querySelector("#speech-controls");
 const speechOverlayPause = document.querySelector("#speech-overlay-pause");
 const speechOverlayStop = document.querySelector("#speech-overlay-stop");
@@ -102,9 +79,9 @@ const FONT_SIZE_KEY = "smooth-reader:font-size";
 const LINE_HEIGHT_KEY = "smooth-reader:line-height";
 const TRACKING_KEY = "smooth-reader:tracking";
 const WIDTH_KEY = "smooth-reader:text-width";
-const SPEECH_MIN_KEY = "smooth-reader:speech-minimum";
 const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
-const SPEECH_POSITION_KEY = "smooth-reader:speech-position";
+const LEGACY_SPEECH_POSITION_KEY = "smooth-reader:speech-position";
+const SPEECH_CENTER_OFFSET_KEY = "smooth-reader:speech-center-offset";
 const SPEECH_SESSION_KEY = "smooth-reader:speech-session";
 const SILENT_WAV_DATA_URL = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
@@ -113,7 +90,15 @@ const LAST_BOOK_DB = "smooth-reader-library";
 const LAST_BOOK_STORE = "books";
 const LAST_BOOK_RECORD = "last-opened";
 const RECENT_BOOKS_RECORD = "recent-books";
-const MAX_RECENT_BOOKS = 6;
+const MAX_RECENT_BOOKS = 12;
+const COVER_THUMBNAIL_VERSION = 2;
+const COVER_THUMBNAIL_MAX_WIDTH = 600;
+const COVER_THUMBNAIL_MAX_HEIGHT = 900;
+const COVER_THUMBNAIL_QUALITY = 0.86;
+const LIBRARY_BACKUP_FORMAT = "smooth-reader-library";
+const LIBRARY_BACKUP_VERSION = 1;
+const MAX_LIBRARY_IMPORT_BYTES = 512 * 1024 * 1024;
+const HISTORY_APP = "smooth-reader";
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
 const RIGHT_DRAG_SPEED = 1.35;
@@ -136,15 +121,15 @@ const MIN_LINE_HEIGHT = 1.2;
 const MAX_LINE_HEIGHT = 2.2;
 const LINE_HEIGHT_STEP = 0.04;
 const DEFAULT_SPEECH_MIN_LENGTH = 150;
-const DEFAULT_SPEECH_MAX_LENGTH = 350;
-const MIN_SPEECH_MIN_LENGTH = 100;
-const MAX_SPEECH_MIN_LENGTH = 500;
+const DEFAULT_SPEECH_MAX_LENGTH = 550;
 const MIN_SPEECH_MAX_LENGTH = 300;
 const MAX_SPEECH_MAX_LENGTH = 1200;
-const DEFAULT_SPEECH_POSITION_PERCENT = 22;
-const MIN_SPEECH_POSITION_PERCENT = 5;
-const MAX_SPEECH_POSITION_PERCENT = 50;
-const SPEECH_SCROLL_DURATION_MS = 5;
+const LEGACY_DEFAULT_SPEECH_POSITION_PERCENT = 22;
+const DEFAULT_SPEECH_CENTER_OFFSET_PERCENT = 0;
+const MIN_SPEECH_CENTER_OFFSET_PERCENT = -25;
+const MAX_SPEECH_CENTER_OFFSET_PERCENT = 25;
+const SPEECH_VIEWPORT_MARGIN_PX = 16;
+const SPEECH_SCROLL_DURATION_MS = 10;
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
   { id: "charcoal", name: "CHARCOAL" },
@@ -175,6 +160,8 @@ const FONTS = [
 
 let book = null;
 let activeBookKey = null;
+let activeBookTitle = "";
+let readerScrollBeforeHome = 0;
 let saveTimer = null;
 let statusTimer = null;
 let loadGeneration = 0;
@@ -188,8 +175,15 @@ let lastPointerType = "mouse";
 let lastBookCanReopen = false;
 let recentBookInfo = [];
 let cachedRecentBooks = [];
+let libraryManageMode = false;
+const selectedLibraryBooks = new Set();
 let pendingLayoutAnchor = null;
 let layoutChangeGeneration = 0;
+let stableResizeAnchor = null;
+let activeResizeAnchor = null;
+let resizeAnchorFrame = null;
+let resizeEndTimer = null;
+let resizeCaptureTimer = null;
 let speechGeneration = 0;
 let speechIsActive = false;
 let speechIsPaused = false;
@@ -199,8 +193,11 @@ let speechAudioFinish = null;
 let speechAudioUnlockPromise = Promise.resolve();
 let speechMarkerFrame = null;
 let speechScrollFrame = null;
+let speechScrollTargetY = null;
 let speechTextMaps = new WeakMap();
 let speechVoicePreference = "";
+let speechSpeakerPreference = "";
+let speechVoiceDetails = new Map();
 let piperAvailable = false;
 let suppressSettingsPersistence = false;
 const chapterLookup = new Map();
@@ -236,24 +233,28 @@ const savedLineHeight = Number.parseFloat(localStorage.getItem(LINE_HEIGHT_KEY))
 let lineHeight = Number.isFinite(savedLineHeight)
   ? Math.max(MIN_LINE_HEIGHT, Math.min(MAX_LINE_HEIGHT, savedLineHeight))
   : DEFAULT_LINE_HEIGHT;
-const savedSpeechMinimum = Number.parseInt(localStorage.getItem(SPEECH_MIN_KEY), 10);
 const savedSpeechMaximum = Number.parseInt(localStorage.getItem(SPEECH_MAX_KEY), 10);
-const savedSpeechPosition = Number.parseInt(localStorage.getItem(SPEECH_POSITION_KEY), 10);
-let speechMinimumLength = Number.isFinite(savedSpeechMinimum)
-  ? Math.max(MIN_SPEECH_MIN_LENGTH, Math.min(MAX_SPEECH_MIN_LENGTH, savedSpeechMinimum))
-  : DEFAULT_SPEECH_MIN_LENGTH;
+const savedSpeechCenterOffset = Number.parseInt(
+  localStorage.getItem(SPEECH_CENTER_OFFSET_KEY),
+  10
+);
+const savedLegacySpeechPosition = Number.parseInt(
+  localStorage.getItem(LEGACY_SPEECH_POSITION_KEY),
+  10
+);
+let speechMinimumLength = DEFAULT_SPEECH_MIN_LENGTH;
 let speechMaximumLength = Number.isFinite(savedSpeechMaximum)
   ? Math.max(MIN_SPEECH_MAX_LENGTH, Math.min(MAX_SPEECH_MAX_LENGTH, savedSpeechMaximum))
   : DEFAULT_SPEECH_MAX_LENGTH;
-let speechPositionPercent = Number.isFinite(savedSpeechPosition)
-  ? Math.max(
-    MIN_SPEECH_POSITION_PERCENT,
-    Math.min(MAX_SPEECH_POSITION_PERCENT, savedSpeechPosition)
-  )
-  : DEFAULT_SPEECH_POSITION_PERCENT;
-if (speechMinimumLength > speechMaximumLength) {
-  speechMinimumLength = Math.min(DEFAULT_SPEECH_MIN_LENGTH, speechMaximumLength);
-}
+const initialSpeechCenterOffset = Number.isFinite(savedSpeechCenterOffset)
+  ? savedSpeechCenterOffset
+  : Number.isFinite(savedLegacySpeechPosition)
+    ? savedLegacySpeechPosition - LEGACY_DEFAULT_SPEECH_POSITION_PERCENT
+    : DEFAULT_SPEECH_CENTER_OFFSET_PERCENT;
+let speechCenterOffsetPercent = Math.max(
+  MIN_SPEECH_CENTER_OFFSET_PERCENT,
+  Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, initialSpeechCenterOffset)
+);
 
 const speechSessionId = (() => {
   const makeId = () => crypto.randomUUID?.().replaceAll("-", "") ||
@@ -290,7 +291,6 @@ const clearStatus = () => {
 
 const setReopenAvailability = (canReopen) => {
   startReopen.disabled = isBookLoading || !canReopen;
-  settingsReopen.disabled = isBookLoading || !canReopen;
 };
 
 const loadRecentBookInfo = () => {
@@ -310,6 +310,36 @@ const booksMatch = (first, second) => {
   return Boolean(first?.fileName && first.fileName === second?.fileName);
 };
 
+const libraryBookKey = (record) => record?.hash
+  ? `hash:${record.hash}`
+  : `file:${record?.fileName || ""}`;
+
+const syncLibraryManageControls = () => {
+  startManageLibrary.disabled = isBookLoading || recentBookInfo.length === 0;
+  libraryManageActions.hidden = !libraryManageMode;
+  startRemoveBooks.disabled = isBookLoading || selectedLibraryBooks.size === 0;
+  startRemoveBooks.textContent = selectedLibraryBooks.size > 0
+    ? `REMOVE SELECTED (${selectedLibraryBooks.size})`
+    : "REMOVE SELECTED";
+  if (libraryManageMode) recentBookList.classList.add("is-managing");
+  else recentBookList.classList.remove("is-managing");
+};
+
+const setLibraryManageMode = (enabled) => {
+  libraryManageMode = Boolean(enabled && recentBookInfo.length > 0 && !isBookLoading);
+  if (!libraryManageMode) selectedLibraryBooks.clear();
+  syncLibraryManageControls();
+  renderRecentBooks();
+};
+
+const toggleLibraryBookSelection = (record) => {
+  const key = libraryBookKey(record);
+  if (selectedLibraryBooks.has(key)) selectedLibraryBooks.delete(key);
+  else selectedLibraryBooks.add(key);
+  syncLibraryManageControls();
+  renderRecentBooks();
+};
+
 const renderRecentBooks = () => {
   recentBookList.replaceChildren();
   recentBooks.hidden = recentBookInfo.length === 0;
@@ -317,9 +347,11 @@ const renderRecentBooks = () => {
   recentBookInfo.forEach((record, index) => {
     const cached = cachedRecentBooks.find((candidate) => booksMatch(record, candidate));
     const button = document.createElement("button");
+    const selectionKey = libraryBookKey(record);
+    const isSelected = selectedLibraryBooks.has(selectionKey);
     button.type = "button";
     button.className = "recent-book";
-    button.disabled = isBookLoading || !cached?.bytes;
+    button.disabled = isBookLoading || (!libraryManageMode && !cached?.bytes);
     button.textContent = record.title && record.title !== record.fileName
       ? `${record.title} — ${record.fileName}`
       : record.fileName;
@@ -327,10 +359,17 @@ const renderRecentBooks = () => {
       button.classList.add("has-cover");
       button.style.setProperty("--recent-book-cover", `url("${cached.thumbnail}")`);
     }
-    button.title = cached?.bytes
-      ? `Open ${record.title || record.fileName}`
-      : "Cached copy unavailable; drop this EPUB again";
-    button.addEventListener("click", () => reopenCachedBook(record));
+    if (libraryManageMode) {
+      if (isSelected) button.classList.add("is-selected");
+      button.setAttribute("aria-pressed", String(isSelected));
+      button.title = `${isSelected ? "Deselect" : "Select"} ${record.title || record.fileName}`;
+      button.addEventListener("click", () => toggleLibraryBookSelection(record));
+    } else {
+      button.title = cached?.bytes
+        ? `Open ${record.title || record.fileName}`
+        : "Cached copy unavailable; drop this EPUB again";
+      button.addEventListener("click", () => reopenCachedBook(record));
+    }
     recentBookList.appendChild(button);
 
     if (index === 0) {
@@ -343,6 +382,7 @@ const renderRecentBooks = () => {
     lastBookCanReopen = false;
     setReopenAvailability(false);
   }
+  syncLibraryManageControls();
 };
 
 const openLastBookDatabase = () => new Promise((resolve, reject) => {
@@ -386,7 +426,9 @@ const writeCachedBooks = async (records) => {
   try {
     await new Promise((resolve, reject) => {
       const transaction = database.transaction(LAST_BOOK_STORE, "readwrite");
-      transaction.objectStore(LAST_BOOK_STORE).put(records, RECENT_BOOKS_RECORD);
+      const store = transaction.objectStore(LAST_BOOK_STORE);
+      store.put(records, RECENT_BOOKS_RECORD);
+      store.delete(LAST_BOOK_RECORD);
       transaction.oncomplete = resolve;
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
@@ -421,7 +463,11 @@ const createCoverThumbnail = async (bookInstance) => {
     if (!blob?.type?.startsWith("image/")) return "";
 
     const bitmap = await window.createImageBitmap(blob);
-    const scale = Math.min(1, 160 / bitmap.width, 240 / bitmap.height);
+    const scale = Math.min(
+      1,
+      COVER_THUMBNAIL_MAX_WIDTH / bitmap.width,
+      COVER_THUMBNAIL_MAX_HEIGHT / bitmap.height
+    );
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -432,9 +478,11 @@ const createCoverThumbnail = async (bookInstance) => {
     }
     canvasContext.fillStyle = "#ffffff";
     canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+    canvasContext.imageSmoothingEnabled = true;
+    canvasContext.imageSmoothingQuality = "high";
     canvasContext.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close?.();
-    return canvas.toDataURL?.("image/jpeg", 0.78) || "";
+    return canvas.toDataURL?.("image/jpeg", COVER_THUMBNAIL_QUALITY) || "";
   } catch (error) {
     console.warn("Could not create an EPUB cover thumbnail.", error);
     return "";
@@ -442,9 +490,17 @@ const createCoverThumbnail = async (bookInstance) => {
 };
 
 const backfillRecentThumbnails = async () => {
+  if (
+    typeof window.fetch !== "function" ||
+    typeof window.createImageBitmap !== "function"
+  ) return;
+
   let changed = false;
   for (const cached of cachedRecentBooks) {
-    if (cached.thumbnail || !cached.bytes) continue;
+    if (
+      !cached.bytes ||
+      (cached.thumbnail && cached.thumbnailVersion === COVER_THUMBNAIL_VERSION)
+    ) continue;
     let coverBook = null;
     try {
       coverBook = ePub(cached.bytes);
@@ -453,9 +509,10 @@ const backfillRecentThumbnails = async () => {
       const thumbnail = await createCoverThumbnail(coverBook);
       if (thumbnail) {
         cached.thumbnail = thumbnail;
-        changed = true;
         renderRecentBooks();
       }
+      cached.thumbnailVersion = COVER_THUMBNAIL_VERSION;
+      changed = true;
     } catch (error) {
       console.warn("Could not inspect a cached EPUB cover.", error);
     } finally {
@@ -482,7 +539,70 @@ const initializeRecentBooks = async () => {
   }
 };
 
-initializeRecentBooks();
+const recentBooksReady = initializeRecentBooks();
+
+const removeSelectedLibraryBooks = async () => {
+  if (isBookLoading || selectedLibraryBooks.size === 0) return;
+  const selectedRecords = recentBookInfo.filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record))
+  );
+  if (selectedRecords.length === 0) return;
+
+  const count = selectedRecords.length;
+  const prompt = count === 1
+    ? "Remove this book, its reading position, and its settings from this browser?"
+    : `Remove these ${count} books, their reading positions, and their settings from this browser?`;
+  if (!window.confirm(prompt)) return;
+
+  const removedHashes = new Set();
+  selectedRecords.forEach((record) => {
+    if (record.hash) removedHashes.add(record.hash);
+    const cached = cachedRecentBooks.find((candidate) => booksMatch(record, candidate));
+    if (cached?.hash) removedHashes.add(cached.hash);
+  });
+  const activeBookWasRemoved = Boolean(
+    activeBookKey && removedHashes.has(activeBookKey)
+  );
+  const retainedCachedBooks = cachedRecentBooks.filter((cached) =>
+    !selectedRecords.some((record) => booksMatch(record, cached))
+  );
+
+  try {
+    await writeCachedBooks(retainedCachedBooks);
+    if (activeBookWasRemoved) {
+      destroyCurrentBook();
+      activeBookKey = null;
+      activeBookTitle = "";
+      readerScrollBeforeHome = 0;
+      replaceHomeHistory();
+    }
+
+    removedHashes.forEach((hash) => {
+      localStorage.removeItem(positionKey(hash));
+      localStorage.removeItem(bookSettingsKey(hash));
+    });
+    recentBookInfo = recentBookInfo.filter((record) =>
+      !selectedLibraryBooks.has(libraryBookKey(record))
+    );
+    cachedRecentBooks = retainedCachedBooks;
+    if (recentBookInfo.length > 0) {
+      localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
+      localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(recentBookInfo[0]));
+    } else {
+      localStorage.removeItem(RECENT_BOOKS_KEY);
+      localStorage.removeItem(LAST_BOOK_KEY);
+    }
+    lastBookCanReopen = Boolean(
+      cachedRecentBooks.find((cached) => booksMatch(recentBookInfo[0], cached))?.bytes
+    );
+    setLibraryManageMode(false);
+    setReopenAvailability(lastBookCanReopen);
+    showStatus(`${count} ${count === 1 ? "BOOK" : "BOOKS"} REMOVED`, 1800);
+  } catch (error) {
+    console.error(error);
+    showStatus("BOOKS COULD NOT BE REMOVED", 2400);
+  }
+};
 
 const populateSelect = (select, choices) => {
   choices.forEach((choice) => {
@@ -493,9 +613,7 @@ const populateSelect = (select, choices) => {
   });
 };
 
-populateSelect(startPaletteSelect, PALETTES);
 populateSelect(settingsPaletteSelect, PALETTES);
-populateSelect(startFontSelect, FONTS);
 populateSelect(settingsFontSelect, FONTS);
 
 const getAnchorViewportTop = (anchor) => {
@@ -577,26 +695,68 @@ const scheduleLayoutAnchorRestore = (anchor) => {
     });
 };
 
+const captureStableResizeAnchor = () => {
+  stableResizeAnchor = captureLayoutAnchor();
+};
+
+const scheduleStableResizeAnchorCapture = () => {
+  window.clearTimeout(resizeCaptureTimer);
+  if (activeResizeAnchor || reader.hidden) return;
+  resizeCaptureTimer = window.setTimeout(captureStableResizeAnchor, 80);
+};
+
+const handleViewportResize = () => {
+  scheduleSpeechMarkerRefresh();
+  if (reader.hidden || viewer.children.length === 0) return;
+  if (!activeResizeAnchor) {
+    activeResizeAnchor = stableResizeAnchor || captureLayoutAnchor();
+  }
+  const anchor = activeResizeAnchor;
+  if (resizeAnchorFrame !== null) window.cancelAnimationFrame(resizeAnchorFrame);
+  resizeAnchorFrame = window.requestAnimationFrame(() => {
+    resizeAnchorFrame = null;
+    const currentTop = getAnchorViewportTop(anchor);
+    if (!Number.isFinite(currentTop)) return;
+    const correction = currentTop - anchor.viewportTop;
+    if (Math.abs(correction) > 0.5) {
+      window.scrollBy({ top: correction, left: 0, behavior: "auto" });
+    }
+    updateReadingProgress();
+    schedulePositionSave();
+  });
+
+  window.clearTimeout(resizeEndTimer);
+  resizeEndTimer = window.setTimeout(() => {
+    activeResizeAnchor = null;
+    captureStableResizeAnchor();
+  }, 160);
+};
+
 const bookSettingsKey = (hash) => `${BOOK_SETTINGS_PREFIX}${hash}`;
 
 const captureReadingSettings = () => ({
+  palette: PALETTES[paletteIndex].id,
+  contrast,
   font: FONTS[fontIndex].id,
   fontSize: fontSizePx,
   lineHeight,
   tracking: trackingEm,
   width: widthCh,
-  voice: speechVoicePreference
+  voice: speechVoicePreference,
+  speaker: speechSpeakerPreference,
+  speechMaximum: speechMaximumLength,
+  speechCenterOffset: speechCenterOffsetPercent
 });
 
-const saveCurrentReadingSettings = (globalKey = "", globalValue = "") => {
+const saveCurrentReadingSettings = (fallbackKey = "", fallbackValue = "") => {
   if (suppressSettingsPersistence) return;
   if (activeBookKey) {
     localStorage.setItem(
       bookSettingsKey(activeBookKey),
       JSON.stringify(captureReadingSettings())
     );
-  } else if (globalKey) {
-    localStorage.setItem(globalKey, String(globalValue));
+  } else if (fallbackKey) {
+    localStorage.setItem(fallbackKey, String(fallbackValue));
   }
 };
 
@@ -612,12 +772,28 @@ const readBookSettings = (hash) => {
 const applyStoredBookSettings = (hash) => {
   const stored = readBookSettings(hash);
   if (!stored) {
+    suppressSettingsPersistence = true;
+    try {
+      applyDefaultReadingSettings();
+    } finally {
+      suppressSettingsPersistence = false;
+    }
     saveCurrentReadingSettings();
     return;
   }
 
   suppressSettingsPersistence = true;
   try {
+    const paletteId = typeof stored.palette === "string"
+      ? stored.palette
+      : localStorage.getItem(PALETTE_KEY);
+    const storedPalette = PALETTES.findIndex((palette) => palette.id === paletteId);
+    if (storedPalette >= 0) applyPalette(storedPalette, false);
+    const storedContrast = stored.contrast ?? localStorage.getItem(CONTRAST_KEY);
+    if (storedContrast !== null && storedContrast !== "" &&
+        Number.isFinite(Number(storedContrast))) {
+      applyContrast(Number(storedContrast), false);
+    }
     const storedFont = FONTS.findIndex((font) => font.id === stored.font);
     if (storedFont >= 0) applyFont(storedFont, false);
     if (Number.isFinite(Number(stored.fontSize))) {
@@ -633,10 +809,28 @@ const applyStoredBookSettings = (hash) => {
       applyWidth(Number(stored.width), false);
     }
     speechVoicePreference = typeof stored.voice === "string" ? stored.voice : "";
+    const storedSpeaker = String(stored.speaker ?? "");
+    speechSpeakerPreference = /^\d+$/.test(storedSpeaker) ? storedSpeaker : "";
     settingsSpeechVoice.value = speechVoicePreference;
+    syncSpeechSpeakerOptions();
+    const storedSpeechMaximum = stored.speechMaximum ?? localStorage.getItem(SPEECH_MAX_KEY);
+    if (storedSpeechMaximum !== null && storedSpeechMaximum !== "" &&
+        Number.isFinite(Number(storedSpeechMaximum))) {
+      applySpeechBounds(DEFAULT_SPEECH_MIN_LENGTH, Number(storedSpeechMaximum));
+    }
+    const storedSpeechOffset = stored.speechCenterOffset ??
+      localStorage.getItem(SPEECH_CENTER_OFFSET_KEY);
+    if (storedSpeechOffset !== null && storedSpeechOffset !== "" &&
+        Number.isFinite(Number(storedSpeechOffset))) {
+      applySpeechCenterOffset(
+        Number(storedSpeechOffset),
+        Boolean(speechActiveJob)
+      );
+    }
   } finally {
     suppressSettingsPersistence = false;
   }
+  saveCurrentReadingSettings();
 };
 
 const syncSettingsControls = () => {
@@ -648,42 +842,24 @@ const syncSettingsControls = () => {
   const lineHeightText = lineHeight.toFixed(2);
   const contrastText = `${contrast > 0 ? "+" : ""}${contrast}%`;
 
-  startPaletteSelect.value = paletteId;
   settingsPaletteSelect.value = paletteId;
-  startContrast.value = String(contrast);
   settingsContrast.value = String(contrast);
-  startContrastValue.textContent = contrastText;
   settingsContrastValue.textContent = contrastText;
-  startContrastDown.disabled = contrast <= MIN_CONTRAST;
   settingsContrastDown.disabled = contrast <= MIN_CONTRAST;
-  startContrastUp.disabled = contrast >= MAX_CONTRAST;
   settingsContrastUp.disabled = contrast >= MAX_CONTRAST;
-  startFontSelect.value = fontId;
   settingsFontSelect.value = fontId;
   settingsTrackingValue.textContent = trackingText;
-  startWidth.value = String(widthCh);
   settingsWidth.value = String(widthCh);
-  startWidthValue.textContent = widthText;
   settingsWidthValue.textContent = widthText;
-  startWidthDown.disabled = widthCh <= MIN_WIDTH_CH;
   settingsWidthDown.disabled = widthCh <= MIN_WIDTH_CH;
-  startWidthUp.disabled = widthCh >= MAX_WIDTH_CH;
   settingsWidthUp.disabled = widthCh >= MAX_WIDTH_CH;
-  startFontSize.value = String(fontSizePx);
   settingsFontSize.value = String(fontSizePx);
-  startFontSizeValue.textContent = fontSizeText;
   settingsFontSizeValue.textContent = fontSizeText;
-  startFontSizeDown.disabled = fontSizePx <= MIN_FONT_SIZE_PX;
   settingsFontSizeDown.disabled = fontSizePx <= MIN_FONT_SIZE_PX;
-  startFontSizeUp.disabled = fontSizePx >= MAX_FONT_SIZE_PX;
   settingsFontSizeUp.disabled = fontSizePx >= MAX_FONT_SIZE_PX;
-  startLineHeight.value = String(lineHeight);
   settingsLineHeight.value = String(lineHeight);
-  startLineHeightValue.textContent = lineHeightText;
   settingsLineHeightValue.textContent = lineHeightText;
-  startLineHeightDown.disabled = lineHeight <= MIN_LINE_HEIGHT;
   settingsLineHeightDown.disabled = lineHeight <= MIN_LINE_HEIGHT;
-  startLineHeightUp.disabled = lineHeight >= MAX_LINE_HEIGHT;
   settingsLineHeightUp.disabled = lineHeight >= MAX_LINE_HEIGHT;
 };
 
@@ -691,7 +867,7 @@ const applyPalette = (nextIndex, announce = true) => {
   paletteIndex = (nextIndex + PALETTES.length) % PALETTES.length;
   const palette = PALETTES[paletteIndex];
   document.documentElement.dataset.palette = palette.id;
-  localStorage.setItem(PALETTE_KEY, palette.id);
+  saveCurrentReadingSettings(PALETTE_KEY, palette.id);
   syncSettingsControls();
 
   if (announce) {
@@ -711,7 +887,7 @@ const applyContrast = (nextContrast, announce = true) => {
     "--contrast-soften",
     `${Math.max(0, -contrast)}%`
   );
-  localStorage.setItem(CONTRAST_KEY, String(contrast));
+  saveCurrentReadingSettings(CONTRAST_KEY, contrast);
   syncSettingsControls();
 
   if (announce) {
@@ -796,20 +972,9 @@ const applyLineHeight = (nextLineHeight, announce = true) => {
   if (announce) showStatus(`LINE HEIGHT · ${lineHeight.toFixed(2)}`, 900);
 };
 
-const resetAllSettings = () => {
-  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
-    const key = localStorage.key(index);
-    if (key?.startsWith(BOOK_SETTINGS_PREFIX)) localStorage.removeItem(key);
-  }
-
-  const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
+function applyDefaultReadingSettings() {
   const defaultFontIndex = FONTS.findIndex((font) => font.id === "alegreya");
-  localStorage.setItem(FONT_KEY, "alegreya");
-  localStorage.setItem(FONT_SIZE_KEY, String(DEFAULT_FONT_SIZE_PX));
-  localStorage.setItem(LINE_HEIGHT_KEY, String(DEFAULT_LINE_HEIGHT));
-  localStorage.setItem(TRACKING_KEY, String(DEFAULT_TRACKING_EM));
-  localStorage.setItem(WIDTH_KEY, String(DEFAULT_WIDTH_CH));
-
+  const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
   applyPalette(defaultPaletteIndex, false);
   applyContrast(DEFAULT_CONTRAST, false);
   applyFont(defaultFontIndex, false);
@@ -818,14 +983,27 @@ const resetAllSettings = () => {
   applyTracking(DEFAULT_TRACKING_EM, false);
   applyWidth(DEFAULT_WIDTH_CH, false);
   speechVoicePreference = "";
+  speechSpeakerPreference = "";
   settingsSpeechVoice.value = "";
-  applySpeechBounds(
-    DEFAULT_SPEECH_MIN_LENGTH,
-    DEFAULT_SPEECH_MAX_LENGTH
+  syncSpeechSpeakerOptions();
+  applySpeechBounds(DEFAULT_SPEECH_MIN_LENGTH, DEFAULT_SPEECH_MAX_LENGTH);
+  applySpeechCenterOffset(
+    DEFAULT_SPEECH_CENTER_OFFSET_PERCENT,
+    Boolean(speechActiveJob)
   );
-  applySpeechPosition(DEFAULT_SPEECH_POSITION_PERCENT, Boolean(speechActiveJob));
+}
+
+const resetCurrentBookSettings = () => {
+  if (!activeBookKey) return;
+
+  suppressSettingsPersistence = true;
+  try {
+    applyDefaultReadingSettings();
+  } finally {
+    suppressSettingsPersistence = false;
+  }
   saveCurrentReadingSettings();
-  showStatus("ALL SETTINGS RESET · BOOKS AND POSITIONS KEPT", 1800);
+  showStatus("ALL SETTINGS FOR THIS BOOK RESET · POSITION KEPT", 1800);
 };
 
 applyPalette(paletteIndex, false);
@@ -839,6 +1017,272 @@ if (recentBookInfo[0]?.hash && readBookSettings(recentBookInfo[0].hash)) {
   applyStoredBookSettings(recentBookInfo[0].hash);
 }
 
+const storageSnapshot = () => {
+  const values = {};
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith("smooth-reader:")) continue;
+    const value = localStorage.getItem(key);
+    if (value !== null) values[key] = value;
+  }
+  return values;
+};
+
+const bookMetadataOnly = (record) => {
+  const { bytes, epubPath, ...metadata } = record || {};
+  return metadata;
+};
+
+const recentMetadataOnly = (record) => {
+  const { bytes, epubPath, thumbnail, thumbnailVersion, ...metadata } = record || {};
+  return metadata;
+};
+
+const recordOpenedAt = (record) => {
+  const openedAt = Number(record?.openedAt);
+  return Number.isFinite(openedAt) ? openedAt : 0;
+};
+
+const mergeBookCollections = (existingRecords, importedRecords) => {
+  const merged = (existingRecords || []).map((record) => ({ ...record }));
+  for (const imported of importedRecords || []) {
+    if (!imported?.fileName && !imported?.hash) continue;
+    const index = merged.findIndex((record) => booksMatch(record, imported));
+    if (index < 0) {
+      merged.push({ ...imported });
+      continue;
+    }
+
+    const existing = merged[index];
+    merged[index] = {
+      ...imported,
+      ...existing,
+      fileName: existing.fileName || imported.fileName,
+      title: existing.title || imported.title,
+      openedAt: Math.max(recordOpenedAt(existing), recordOpenedAt(imported)),
+      bytes: existing.bytes || imported.bytes,
+      thumbnail: existing.thumbnail || imported.thumbnail,
+      thumbnailVersion: existing.thumbnail
+        ? existing.thumbnailVersion
+        : imported.thumbnailVersion
+    };
+  }
+  return merged
+    .sort((first, second) => recordOpenedAt(second) - recordOpenedAt(first))
+    .slice(0, MAX_RECENT_BOOKS);
+};
+
+const positionSavedAt = (value) => {
+  try {
+    const savedAt = Number(JSON.parse(value)?.savedAt);
+    return Number.isFinite(savedAt) ? savedAt : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const mergeImportedStorage = (importedValues) => {
+  if (!importedValues || typeof importedValues !== "object") return;
+  for (const [key, value] of Object.entries(importedValues)) {
+    if (
+      !key.startsWith("smooth-reader:") ||
+      typeof value !== "string" ||
+      key === RECENT_BOOKS_KEY ||
+      key === LAST_BOOK_KEY
+    ) continue;
+
+    if (key.startsWith(POSITION_PREFIX)) {
+      const existing = localStorage.getItem(key);
+      if (existing && positionSavedAt(existing) > positionSavedAt(value)) continue;
+    }
+    localStorage.setItem(key, value);
+  }
+};
+
+const importedRecentMetadata = (manifest) => {
+  try {
+    const storedRecent = JSON.parse(manifest.localStorage?.[RECENT_BOOKS_KEY] || "null");
+    if (Array.isArray(storedRecent)) return storedRecent;
+  } catch {
+    // Fall back to the book records in the manifest.
+  }
+  return (manifest.books || []).map(recentMetadataOnly);
+};
+
+const applyImportedSettings = () => {
+  if (activeBookKey) {
+    applyStoredBookSettings(activeBookKey);
+  } else {
+    const importedPaletteIndex = PALETTES.findIndex(
+      (palette) => palette.id === localStorage.getItem(PALETTE_KEY)
+    );
+    const importedContrast = Number.parseInt(localStorage.getItem(CONTRAST_KEY), 10);
+    const importedSpeechMaximum = Number.parseInt(localStorage.getItem(SPEECH_MAX_KEY), 10);
+    const importedSpeechOffset = Number.parseInt(
+      localStorage.getItem(SPEECH_CENTER_OFFSET_KEY),
+      10
+    );
+    const importedFontIndex = FONTS.findIndex(
+      (font) => font.id === localStorage.getItem(FONT_KEY)
+    );
+    suppressSettingsPersistence = true;
+    try {
+      if (importedPaletteIndex >= 0) applyPalette(importedPaletteIndex, false);
+      if (Number.isFinite(importedContrast)) applyContrast(importedContrast, false);
+      applySpeechBounds(
+        DEFAULT_SPEECH_MIN_LENGTH,
+        Number.isFinite(importedSpeechMaximum)
+          ? importedSpeechMaximum
+          : DEFAULT_SPEECH_MAX_LENGTH
+      );
+      if (Number.isFinite(importedSpeechOffset)) {
+        applySpeechCenterOffset(importedSpeechOffset, Boolean(speechActiveJob));
+      }
+      if (importedFontIndex >= 0) applyFont(importedFontIndex, false);
+      const importedFontSize = Number.parseInt(localStorage.getItem(FONT_SIZE_KEY), 10);
+      const importedLineHeight = Number.parseFloat(localStorage.getItem(LINE_HEIGHT_KEY));
+      const importedTracking = Number.parseFloat(localStorage.getItem(TRACKING_KEY));
+      const importedWidth = Number.parseInt(localStorage.getItem(WIDTH_KEY), 10);
+      if (Number.isFinite(importedFontSize)) applyFontSize(importedFontSize, false);
+      if (Number.isFinite(importedLineHeight)) applyLineHeight(importedLineHeight, false);
+      if (Number.isFinite(importedTracking)) applyTracking(importedTracking, false);
+      if (Number.isFinite(importedWidth)) applyWidth(importedWidth, false);
+    } finally {
+      suppressSettingsPersistence = false;
+    }
+  }
+};
+
+const exportLibrary = async () => {
+  if (isBookLoading) return;
+  try {
+    showStatus("CREATING LIBRARY BACKUP…");
+    await recentBooksReady;
+    savePositionNow();
+    if (typeof window.JSZip !== "function") {
+      throw new Error("ZIP support is unavailable");
+    }
+
+    const archive = new window.JSZip();
+    const manifest = {
+      format: LIBRARY_BACKUP_FORMAT,
+      version: LIBRARY_BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      localStorage: storageSnapshot(),
+      books: []
+    };
+
+    cachedRecentBooks.forEach((record, index) => {
+      const metadata = bookMetadataOnly(record);
+      if (record.bytes) {
+        metadata.epubPath = `books/${String(index + 1).padStart(2, "0")}-${
+          String(record.hash || "book").slice(0, 16)
+        }.epub`;
+        archive.file(metadata.epubPath, record.bytes, {
+          binary: true,
+          compression: "STORE"
+        });
+      }
+      manifest.books.push(metadata);
+    });
+
+    archive.file("manifest.json", JSON.stringify(manifest, null, 2));
+    const blob = await archive.generateAsync({
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: { level: 6 }
+    });
+    const createObjectURL = window.URL?.createObjectURL;
+    if (typeof createObjectURL !== "function") {
+      throw new Error("Browser downloads are unavailable");
+    }
+    const downloadUrl = createObjectURL.call(window.URL, blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `smooth-reader-library-${new Date().toISOString().slice(0, 10)}.zip`;
+    link.click();
+    window.setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 0);
+    showStatus(`LIBRARY EXPORTED · ${cachedRecentBooks.length} BOOKS`, 2200);
+  } catch (error) {
+    console.error(error);
+    showStatus(`EXPORT ERROR · ${error?.message || "Backup could not be created"}`, 3200);
+  }
+};
+
+const importLibrary = async (file) => {
+  if (!file || isBookLoading) return;
+  try {
+    showStatus("IMPORTING LIBRARY…");
+    await recentBooksReady;
+    if (typeof window.JSZip !== "function") {
+      throw new Error("ZIP support is unavailable");
+    }
+
+    const archive = await window.JSZip.loadAsync(await file.arrayBuffer());
+    const manifestEntry = archive.file("manifest.json");
+    if (!manifestEntry) throw new Error("Not a Smooth Reader backup");
+    const manifest = JSON.parse(await manifestEntry.async("string"));
+    if (
+      manifest?.format !== LIBRARY_BACKUP_FORMAT ||
+      manifest.version !== LIBRARY_BACKUP_VERSION ||
+      !Array.isArray(manifest.books)
+    ) throw new Error("Unsupported Smooth Reader backup");
+
+    const importedBooks = [];
+    let importedBytes = 0;
+    const candidates = [...manifest.books]
+      .sort((first, second) => recordOpenedAt(second) - recordOpenedAt(first))
+      .slice(0, MAX_RECENT_BOOKS);
+    for (const [index, source] of candidates.entries()) {
+      const metadata = bookMetadataOnly(source);
+      const epubEntry = typeof source.epubPath === "string"
+        ? archive.file(source.epubPath)
+        : null;
+      if (epubEntry) {
+        metadata.bytes = await epubEntry.async("arraybuffer");
+        importedBytes += metadata.bytes.byteLength;
+        if (importedBytes > MAX_LIBRARY_IMPORT_BYTES) {
+          throw new Error("Backup contains more than 512 MiB of EPUB data");
+        }
+      }
+      metadata.fileName = metadata.fileName || `Imported book ${index + 1}.epub`;
+      importedBooks.push(metadata);
+    }
+
+    mergeImportedStorage(manifest.localStorage);
+    cachedRecentBooks = mergeBookCollections(cachedRecentBooks, importedBooks);
+    recentBookInfo = mergeBookCollections(
+      recentBookInfo,
+      [
+        ...importedRecentMetadata(manifest),
+        ...importedBooks.map(recentMetadataOnly)
+      ]
+    ).map(recentMetadataOnly);
+    localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
+    if (!localStorage.getItem(LAST_BOOK_KEY) && recentBookInfo[0]) {
+      localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(recentBookInfo[0]));
+    }
+    await writeCachedBooks(cachedRecentBooks);
+    lastBookCanReopen = Boolean(
+      cachedRecentBooks.find((cached) => booksMatch(recentBookInfo[0], cached))?.bytes
+    );
+    setReopenAvailability(lastBookCanReopen);
+    renderRecentBooks();
+    applyImportedSettings();
+
+    if (activeBookKey) {
+      const position = loadPosition(activeBookKey);
+      if (Number.isFinite(Number(position?.scrollY))) {
+        readerScrollBeforeHome = Number(position.scrollY);
+      }
+    }
+    showStatus(`LIBRARY IMPORTED · ${importedBooks.length} BOOKS MERGED`, 2600);
+  } catch (error) {
+    console.error(error);
+    showStatus(`IMPORT ERROR · ${error?.message || "Backup could not be read"}`, 3600);
+  }
+};
+
 const setSettingsOpen = (isOpen) => {
   settingsPanel.hidden = !isOpen;
   document.body.classList[isOpen ? "add" : "remove"]("settings-open");
@@ -850,6 +1294,12 @@ const setSettingsOpen = (isOpen) => {
 };
 
 const setReadingMode = (isReading) => {
+  if (isReading && libraryManageMode) {
+    libraryManageMode = false;
+    selectedLibraryBooks.clear();
+    syncLibraryManageControls();
+  }
+  document.documentElement.dataset.view = isReading ? "reader" : "home";
   dropZone.hidden = isReading;
   reader.hidden = !isReading;
   settingsMenu.hidden = !isReading;
@@ -857,6 +1307,61 @@ const setReadingMode = (isReading) => {
   if (!isReading) setSettingsOpen(false);
   syncSpeechControls();
 };
+
+const currentAppHistoryView = () => {
+  const state = window.history?.state;
+  return state?.app === HISTORY_APP ? state.view : "";
+};
+
+const replaceHomeHistory = () => {
+  window.history?.replaceState?.({ app: HISTORY_APP, view: "home" }, "");
+};
+
+if (window.history && "scrollRestoration" in window.history) {
+  window.history.scrollRestoration = "manual";
+}
+
+const commitReaderHistory = () => {
+  if (!window.history?.pushState) return;
+  const state = { app: HISTORY_APP, view: "reader", bookKey: activeBookKey };
+  if (currentAppHistoryView() === "reader") window.history.replaceState(state, "");
+  else window.history.pushState(state, "");
+};
+
+const showHomeView = () => {
+  if (!reader.hidden) {
+    savePositionNow();
+    readerScrollBeforeHome = window.scrollY;
+  }
+  if (speechIsActive) stopSpeech();
+  clearStatus();
+  setReadingMode(false);
+  renderRecentBooks();
+  document.title = "Smooth Reader";
+  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  window.requestAnimationFrame(() => {
+    if (reader.hidden) {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  });
+};
+
+const showReaderView = () => {
+  if (!activeBookKey || viewer.children.length === 0) {
+    replaceHomeHistory();
+    showHomeView();
+    return;
+  }
+  setReadingMode(true);
+  document.title = activeBookTitle || "Smooth Reader";
+  window.requestAnimationFrame(() => {
+    window.scrollTo({ top: readerScrollBeforeHome, left: 0, behavior: "auto" });
+    captureStableResizeAnchor();
+    updateReadingProgress();
+  });
+};
+
+replaceHomeHistory();
 
 const updateReadingProgress = () => {
   if (reader.hidden) return;
@@ -911,6 +1416,12 @@ const hashBook = async (arrayBuffer) => {
 
 const destroyCurrentBook = () => {
   window.clearTimeout(saveTimer);
+  window.clearTimeout(resizeEndTimer);
+  window.clearTimeout(resizeCaptureTimer);
+  if (resizeAnchorFrame !== null) window.cancelAnimationFrame(resizeAnchorFrame);
+  resizeAnchorFrame = null;
+  stableResizeAnchor = null;
+  activeResizeAnchor = null;
   savePositionNow();
   stopRightDrag();
   layoutChangeGeneration += 1;
@@ -1173,54 +1684,47 @@ const normalizeSpeechText = (text) => String(text || "")
   .replace(/\s+/g, " ")
   .trim();
 
-const applySpeechBounds = (nextMinimum, nextMaximum, changed = "", announce = false) => {
-  let minimum = Math.round(Math.max(
-    MIN_SPEECH_MIN_LENGTH,
-    Math.min(MAX_SPEECH_MIN_LENGTH, nextMinimum)
-  ));
-  let maximum = Math.round(Math.max(
+function applySpeechBounds(nextMinimum, nextMaximum, changed = "", announce = false) {
+  const minimum = DEFAULT_SPEECH_MIN_LENGTH;
+  const maximum = Math.round(Math.max(
     MIN_SPEECH_MAX_LENGTH,
     Math.min(MAX_SPEECH_MAX_LENGTH, nextMaximum)
   ));
 
-  if (minimum > maximum) {
-    if (changed === "maximum") minimum = maximum;
-    else maximum = minimum;
-  }
   speechMinimumLength = minimum;
   speechMaximumLength = maximum;
-  localStorage.setItem(SPEECH_MIN_KEY, String(minimum));
-  localStorage.setItem(SPEECH_MAX_KEY, String(maximum));
-  settingsSpeechMin.value = String(minimum);
+  saveCurrentReadingSettings(SPEECH_MAX_KEY, maximum);
   settingsSpeechMax.value = String(maximum);
-  settingsSpeechMinValue.textContent = `${minimum} chars`;
   settingsSpeechMaxValue.textContent = `${maximum} chars`;
-  settingsSpeechMinDown.disabled = minimum <= MIN_SPEECH_MIN_LENGTH;
-  settingsSpeechMinUp.disabled = minimum >= MAX_SPEECH_MIN_LENGTH;
   settingsSpeechMaxDown.disabled = maximum <= MIN_SPEECH_MAX_LENGTH;
   settingsSpeechMaxUp.disabled = maximum >= MAX_SPEECH_MAX_LENGTH;
-};
+}
 
 applySpeechBounds(speechMinimumLength, speechMaximumLength);
 
-const applySpeechPosition = (nextPosition, followCurrent = false) => {
-  speechPositionPercent = Math.round(Math.max(
-    MIN_SPEECH_POSITION_PERCENT,
-    Math.min(MAX_SPEECH_POSITION_PERCENT, nextPosition)
+function applySpeechCenterOffset(nextOffset, followCurrent = false) {
+  speechCenterOffsetPercent = Math.round(Math.max(
+    MIN_SPEECH_CENTER_OFFSET_PERCENT,
+    Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, nextOffset)
   ));
-  localStorage.setItem(SPEECH_POSITION_KEY, String(speechPositionPercent));
-  settingsSpeechPosition.value = String(speechPositionPercent);
-  settingsSpeechPositionValue.textContent = `${speechPositionPercent}%`;
+  saveCurrentReadingSettings(
+    SPEECH_CENTER_OFFSET_KEY,
+    speechCenterOffsetPercent
+  );
+  settingsSpeechPosition.value = String(speechCenterOffsetPercent);
+  settingsSpeechPositionValue.textContent = (
+    `${speechCenterOffsetPercent > 0 ? "+" : ""}${speechCenterOffsetPercent}%`
+  );
   settingsSpeechPositionDown.disabled = (
-    speechPositionPercent <= MIN_SPEECH_POSITION_PERCENT
+    speechCenterOffsetPercent <= MIN_SPEECH_CENTER_OFFSET_PERCENT
   );
   settingsSpeechPositionUp.disabled = (
-    speechPositionPercent >= MAX_SPEECH_POSITION_PERCENT
+    speechCenterOffsetPercent >= MAX_SPEECH_CENTER_OFFSET_PERCENT
   );
   if (followCurrent && speechActiveJob) positionSpeechMarker(true);
-};
+}
 
-applySpeechPosition(speechPositionPercent);
+applySpeechCenterOffset(speechCenterOffsetPercent);
 
 const speechSourceFromEntries = (entries) => {
   let text = "";
@@ -1245,7 +1749,8 @@ const speechSourceFromEntries = (entries) => {
 const buildSpeechJobs = (
   entries,
   minimumLength = speechMinimumLength,
-  maximumLength = speechMaximumLength
+  maximumLength = speechMaximumLength,
+  appendTerminalPunctuation = true
 ) => {
   const source = speechSourceFromEntries(entries);
   const totalLength = source.text.length;
@@ -1298,7 +1803,11 @@ const buildSpeechJobs = (
 
   const jobs = groups.map(({ start, end }) => {
     let text = source.text.slice(start, end).trim();
-    if (!/[.!?,;:]["'’”)]*$/.test(text) && text.length < maximum) text += ".";
+    if (
+      appendTerminalPunctuation &&
+      !/[.!?,;:]["'’”)]*$/.test(text) &&
+      text.length < maximum
+    ) text += ".";
     const segments = source.segments.filter((segment) => (
       segment.end > start && segment.start < end
     ));
@@ -1310,6 +1819,18 @@ const buildSpeechJobs = (
       segments
     };
   });
+  return jobs;
+};
+
+const buildViewportSpeechJobs = (
+  entries,
+  minimumLength = speechMinimumLength,
+  maximumLength = speechMaximumLength
+) => {
+  const jobs = buildSpeechJobs(entries, minimumLength, maximumLength, false);
+  if (jobs.length > 1 && jobs.at(-1).text.length < minimumLength) {
+    jobs.pop();
+  }
   return jobs;
 };
 
@@ -1458,10 +1979,14 @@ const clearSpeechVisuals = () => {
   speechMarker.hidden = true;
 };
 
+const pageIsVisible = () => (
+  document.hidden !== true && document.visibilityState !== "hidden"
+);
+
 const cancelSpeechScroll = () => {
-  if (speechScrollFrame === null) return;
-  window.cancelAnimationFrame(speechScrollFrame);
+  if (speechScrollFrame !== null) window.cancelAnimationFrame(speechScrollFrame);
   speechScrollFrame = null;
+  speechScrollTargetY = null;
 };
 
 const animateSpeechScrollBy = (offset) => {
@@ -1476,9 +2001,22 @@ const animateSpeechScrollBy = (offset) => {
   const targetY = Math.max(0, Math.min(scrollLimit, startY + offset));
   const distance = targetY - startY;
   if (Math.abs(distance) <= 1) return;
+  speechScrollTargetY = targetY;
+
+  if (!pageIsVisible()) {
+    window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
+    speechScrollTargetY = null;
+    return;
+  }
 
   let startTime = null;
   const step = (time) => {
+    if (!pageIsVisible()) {
+      window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
+      speechScrollFrame = null;
+      speechScrollTargetY = null;
+      return;
+    }
     if (startTime === null) startTime = time;
     const progress = Math.min(1, (time - startTime) / SPEECH_SCROLL_DURATION_MS);
     const eased = 1 - ((1 - progress) ** 3);
@@ -1491,10 +2029,63 @@ const animateSpeechScrollBy = (offset) => {
       speechScrollFrame = window.requestAnimationFrame(step);
     } else {
       speechScrollFrame = null;
+      speechScrollTargetY = null;
     }
   };
 
   speechScrollFrame = window.requestAnimationFrame(step);
+};
+
+const speechViewportBounds = (rangeHeight = 0) => {
+  const fittingMargin = Math.max(0, (window.innerHeight - rangeHeight) / 2);
+  const margin = Math.min(
+    SPEECH_VIEWPORT_MARGIN_PX,
+    window.innerHeight / 4,
+    fittingMargin
+  );
+  return {
+    top: margin,
+    bottom: Math.max(margin, window.innerHeight - margin)
+  };
+};
+
+const speechRectsBounds = (rects) => {
+  if (!rects?.length) return null;
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return { top, bottom, height: Math.max(0, bottom - top) };
+};
+
+const speechTargetCenterY = (rangeHeight = 0) => {
+  const viewport = speechViewportBounds(rangeHeight);
+  const availableHeight = viewport.bottom - viewport.top;
+  const desiredCenter = (
+    window.innerHeight / 2 +
+    window.innerHeight * (speechCenterOffsetPercent / 100)
+  );
+  if (rangeHeight >= availableHeight) {
+    return viewport.top + availableHeight / 2;
+  }
+  return Math.max(
+    viewport.top + rangeHeight / 2,
+    Math.min(viewport.bottom - rangeHeight / 2, desiredCenter)
+  );
+};
+
+const speechScrollOffsetForRects = (rects) => {
+  const range = speechRectsBounds(rects);
+  if (!range) return 0;
+  const viewport = speechViewportBounds(range.height);
+  const availableHeight = viewport.bottom - viewport.top;
+  if (range.height >= availableHeight) return range.top - viewport.top;
+  const currentCenter = range.top + range.height / 2;
+  return currentCenter - speechTargetCenterY(range.height);
+};
+
+const speechPlanningTopY = () => {
+  const viewport = speechViewportBounds();
+  const assumedRangeHeight = (viewport.bottom - viewport.top) / 2;
+  return speechTargetCenterY(assumedRangeHeight) - assumedRangeHeight / 2;
 };
 
 const positionSpeechMarker = (followText = false) => {
@@ -1517,7 +2108,7 @@ const positionSpeechMarker = (followText = false) => {
     speechMarker.style.height = `${Math.max(18, lastRect.bottom - firstRect.top)}px`;
     speechMarker.hidden = false;
 
-    const scrollOffset = firstRect.top - window.innerHeight * (speechPositionPercent / 100);
+    const scrollOffset = speechScrollOffsetForRects(rects);
     if (followText && Math.abs(scrollOffset) > 1) {
       animateSpeechScrollBy(scrollOffset);
     }
@@ -1530,7 +2121,7 @@ const positionSpeechMarker = (followText = false) => {
 
   const rect = firstElement?.getBoundingClientRect?.();
   if (followText && rects.length === 0 && rect) {
-    const fallbackOffset = rect.top - window.innerHeight * (speechPositionPercent / 100);
+    const fallbackOffset = speechScrollOffsetForRects([rect]);
     if (Math.abs(fallbackOffset) > 1) {
       animateSpeechScrollBy(fallbackOffset);
     }
@@ -1558,11 +2149,62 @@ const clearSpeechSelection = () => {
 const setSpeechActiveJob = (job) => {
   clearSpeechSelection();
   speechActiveJob = job;
-  positionSpeechMarker(true);
+  positionSpeechMarker(job?.followText !== false);
 };
 
-const updateSpeechVoices = (voices) => {
+function syncSpeechSpeakerOptions() {
+  settingsSpeechSpeaker.replaceChildren();
+  const randomOption = document.createElement("option");
+  randomOption.value = "";
+  randomOption.textContent = "RANDOM ID";
+  settingsSpeechSpeaker.appendChild(randomOption);
+
+  const details = speechVoiceDetails.get(speechVoicePreference);
+  const speakerCount = Math.max(1, Number(details?.speakerCount) || 1);
+  const shouldShow = Boolean(speechVoicePreference && details && speakerCount > 1);
+  settingsSpeechSpeakerRow.hidden = !shouldShow;
+  settingsSpeechSpeaker.disabled = !shouldShow;
+  if (!shouldShow) {
+    if (!speechVoicePreference || details) speechSpeakerPreference = "";
+    settingsSpeechSpeaker.value = "";
+    return;
+  }
+
+  const selectedId = Number(speechSpeakerPreference);
+  if (
+    speechSpeakerPreference !== "" &&
+    (!Number.isInteger(selectedId) || selectedId < 0 || selectedId >= speakerCount)
+  ) speechSpeakerPreference = "";
+
+  for (let speakerId = 0; speakerId < speakerCount; speakerId += 1) {
+    const option = document.createElement("option");
+    const id = String(speakerId);
+    const name = typeof details.speakerNames?.[id] === "string"
+      ? details.speakerNames[id].trim()
+      : "";
+    option.value = id;
+    option.textContent = name ? `ID ${id} — ${name}` : `ID ${id}`;
+    settingsSpeechSpeaker.appendChild(option);
+  }
+  settingsSpeechSpeaker.value = speechSpeakerPreference;
+}
+
+const updateSpeechVoices = (voices, voiceDetails = []) => {
   const selected = speechVoicePreference;
+  const detailLookup = new Map(
+    (Array.isArray(voiceDetails) ? voiceDetails : [])
+      .filter((details) => typeof details?.id === "string")
+      .map((details) => [details.id, details])
+  );
+  speechVoiceDetails = new Map(voices.map((voice) => {
+    const details = detailLookup.get(voice);
+    return [voice, {
+      speakerCount: Math.max(1, Number(details?.speakerCount) || 1),
+      speakerNames: details?.speakerNames && typeof details.speakerNames === "object"
+        ? details.speakerNames
+        : {}
+    }];
+  }));
   settingsSpeechVoice.replaceChildren();
   const randomOption = document.createElement("option");
   randomOption.value = "";
@@ -1575,9 +2217,22 @@ const updateSpeechVoices = (voices) => {
     option.textContent = voice.replace(/\.onnx$/i, "").toUpperCase();
     settingsSpeechVoice.appendChild(option);
   });
-  speechVoicePreference = voices.includes(selected) ? selected : "";
+  const legacyMatches = selected
+    ? voices.filter((voice) => voice.split("/").pop() === selected)
+    : [];
+  speechVoicePreference = voices.includes(selected)
+    ? selected
+    : legacyMatches.length === 1
+      ? legacyMatches[0]
+      : "";
+  if (selected && !speechVoicePreference) speechSpeakerPreference = "";
   settingsSpeechVoice.value = speechVoicePreference;
-  if (selected && !speechVoicePreference) saveCurrentReadingSettings();
+  const previousSpeaker = speechSpeakerPreference;
+  syncSpeechSpeakerOptions();
+  if (
+    (selected && selected !== speechVoicePreference) ||
+    previousSpeaker !== speechSpeakerPreference
+  ) saveCurrentReadingSettings();
 };
 
 const requestPiper = async (path, options = {}) => {
@@ -1600,7 +2255,7 @@ const requestPiper = async (path, options = {}) => {
 const inspectPiperBridge = async () => {
   const bridge = await requestPiper("/api/piper/status");
   if (!bridge.available) throw new Error(bridge.error || "Piper or FFmpeg was not found.");
-  updateSpeechVoices(bridge.voices || []);
+  updateSpeechVoices(bridge.voices || [], bridge.voiceDetails || []);
   const format = speechAudioFormat === "opus" ? "Opus 48 kbps" : "WAV compatibility mode";
   settingsSpeechStatus.textContent = `${bridge.voices.length} local voice${bridge.voices.length === 1 ? "" : "s"} ready · ${format}.`;
   return bridge;
@@ -1614,26 +2269,284 @@ const formatSpeechVoice = (prepared) => {
     : voiceName;
 };
 
-const speechBlocksFromViewport = () => {
-  const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)]
-    .filter((element) => normalizeSpeechText(element.textContent));
-  if (blocks.length === 0) return [];
+const mappedSpeechRangeRects = (mapped, startOffset, endOffset) => {
+  if (!mapped?.map.length || !document.createRange || endOffset <= startOffset) return [];
+  const startBoundary = domBoundaryForOffset(mapped, startOffset, false);
+  const endBoundary = domBoundaryForOffset(mapped, endOffset, true);
+  if (!startBoundary || !endBoundary) return [];
 
-  const x = window.innerWidth / 2;
-  const y = Math.max(64, Math.min(window.innerHeight - 64, window.innerHeight * 0.32));
-  const pointedBlock = document.elementFromPoint?.(x, y)?.closest?.(SPEECH_BLOCK_SELECTOR);
-  let startIndex = pointedBlock ? blocks.indexOf(pointedBlock) : -1;
-  if (startIndex < 0) {
-    startIndex = blocks.findIndex((element) => element.getBoundingClientRect().bottom > 60);
+  try {
+    const range = document.createRange();
+    range.setStart(startBoundary.node, startBoundary.offset);
+    range.setEnd(endBoundary.node, endBoundary.offset);
+    return [...(range.getClientRects?.() || [])]
+      .filter((rect) => rect.height > 0 && rect.width > 0);
+  } catch {
+    return [];
   }
-  return blocks.slice(Math.max(0, startIndex));
+};
+
+const visibleSpeechEntry = (element, viewportTop, viewportBottom) => {
+  const blockRect = element.getBoundingClientRect?.();
+  if (
+    !blockRect ||
+    blockRect.bottom <= viewportTop ||
+    blockRect.top >= viewportBottom
+  ) return null;
+
+  const mapped = createSpeechTextMap(element);
+  if (!mapped?.text) return null;
+  if (blockRect.top >= viewportTop && blockRect.bottom <= viewportBottom) {
+    return { element, text: mapped.text, mapBaseOffset: 0 };
+  }
+
+  const words = [...mapped.text.matchAll(/\S+/g)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length
+  }));
+  if (words.length === 0) return null;
+
+  const rectCache = new Map();
+  const wordRect = (index) => {
+    if (rectCache.has(index)) return rectCache.get(index);
+    const rects = mappedSpeechRangeRects(mapped, words[index].start, words[index].end);
+    const rect = rects.length > 0
+      ? {
+        top: Math.min(...rects.map((item) => item.top)),
+        bottom: Math.max(...rects.map((item) => item.bottom)),
+        left: Math.min(...rects.map((item) => item.left)),
+        right: Math.max(...rects.map((item) => item.right))
+      }
+      : null;
+    rectCache.set(index, rect);
+    return rect;
+  };
+
+  let low = 0;
+  let high = words.length - 1;
+  let firstCandidate = words.length;
+  let lastCandidate = words.length - 1;
+  let binarySearchFailed = false;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const rect = wordRect(middle);
+    if (!rect) {
+      binarySearchFailed = true;
+      break;
+    }
+    if (rect.top >= viewportTop) {
+      firstCandidate = middle;
+      high = middle - 1;
+    } else {
+      low = middle + 1;
+    }
+  }
+
+  if (!binarySearchFailed) {
+    low = firstCandidate;
+    high = words.length - 1;
+    lastCandidate = -1;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const rect = wordRect(middle);
+      if (!rect) {
+        binarySearchFailed = true;
+        break;
+      }
+      if (rect.bottom <= viewportBottom) {
+        lastCandidate = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+  }
+
+  if (binarySearchFailed) {
+    firstCandidate = 0;
+    lastCandidate = words.length - 1;
+  }
+  const isVisible = (index) => {
+    const rect = wordRect(index);
+    return Boolean(
+      rect &&
+      rect.top >= viewportTop &&
+      rect.bottom <= viewportBottom &&
+      rect.right > 0 &&
+      rect.left < window.innerWidth
+    );
+  };
+  while (firstCandidate <= lastCandidate && !isVisible(firstCandidate)) {
+    firstCandidate += 1;
+  }
+  while (lastCandidate >= firstCandidate && !isVisible(lastCandidate)) {
+    lastCandidate -= 1;
+  }
+  if (firstCandidate > lastCandidate) return null;
+
+  const start = words[firstCandidate].start;
+  const end = words[lastCandidate].end;
+  return {
+    element,
+    text: mapped.text.slice(start, end),
+    mapBaseOffset: start
+  };
+};
+
+const speechEntriesInViewport = (viewportTop, viewportBottom, afterCursor = null) => {
+  const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)];
+  const cursorIndex = afterCursor?.element
+    ? blocks.indexOf(afterCursor.element)
+    : -1;
+  return blocks
+    .map((element, index) => {
+      if (cursorIndex >= 0 && index < cursorIndex) return null;
+      const entry = visibleSpeechEntry(element, viewportTop, viewportBottom);
+      if (!entry || index !== cursorIndex) return entry;
+
+      const mapped = createSpeechTextMap(element);
+      const entryEnd = entry.mapBaseOffset + entry.text.length;
+      let start = Math.max(entry.mapBaseOffset, afterCursor.offset);
+      while (start < entryEnd && /\s/.test(mapped.text[start])) start += 1;
+      if (start >= entryEnd) return null;
+      return {
+        element,
+        text: mapped.text.slice(start, entryEnd),
+        mapBaseOffset: start
+      };
+    })
+    .filter(Boolean);
+};
+
+const speechEntriesFromViewport = (afterCursor = null) => speechEntriesInViewport(
+  8,
+  Math.max(8, window.innerHeight - 8),
+  afterCursor
+);
+
+const clipSpeechEntriesAtSourceOffset = (entries, sourceEnd) => {
+  const source = speechSourceFromEntries(entries);
+  return source.segments.flatMap((segment) => {
+    if (segment.start >= sourceEnd) return [];
+    const segmentEnd = Math.min(segment.end, sourceEnd);
+    const text = source.text.slice(segment.start, segmentEnd).trimEnd();
+    if (!text) return [];
+    return [{
+      element: segment.element,
+      text,
+      selectedRange: segment.selectedRange,
+      mapBaseOffset: segment.mapBaseOffset
+    }];
+  });
+};
+
+const sentenceBoundedViewportEntries = (entries) => {
+  const source = speechSourceFromEntries(entries);
+  if (!source.text || /[.!?]+["'’”)]*$/.test(source.text)) return entries;
+
+  let sentenceEnd = -1;
+  for (const match of source.text.matchAll(/[.!?]+["'’”)]*(?=\s|$)/g)) {
+    sentenceEnd = match.index + match[0].length;
+  }
+  if (sentenceEnd <= 0) return entries;
+  return clipSpeechEntriesAtSourceOffset(entries, sentenceEnd);
+};
+
+const speechCursorFromJob = (job) => {
+  const segment = [...(job?.segments || [])].reverse().find((candidate) => (
+    candidate.element && candidate.end > job.sourceStart && candidate.start < job.sourceEnd
+  ));
+  if (!segment) return null;
+  return {
+    element: segment.element,
+    offset: segment.mapBaseOffset + Math.min(segment.end, job.sourceEnd) - segment.start
+  };
+};
+
+const waitForSpeechScroll = () => new Promise((resolve) => {
+  if (!pageIsVisible()) {
+    resolve();
+    return;
+  }
+  window.setTimeout(resolve, SPEECH_SCROLL_DURATION_MS + 40);
+});
+
+const scrollBySpeechOffset = async (offset) => {
+  if (!Number.isFinite(offset) || Math.abs(offset) <= 1) return false;
+  animateSpeechScrollBy(offset);
+  await waitForSpeechScroll();
+  return true;
+};
+
+const ensureSpeechJobVisible = async (job) => {
+  if (!pageIsVisible()) return true;
+  const renderedRects = () => [...(createSpeechRange(job)?.getClientRects?.() || [])]
+    .filter((rect) => rect.height > 0 && rect.width > 0);
+  let rects = renderedRects();
+  if (rects.length === 0) return false;
+
+  await scrollBySpeechOffset(speechScrollOffsetForRects(rects));
+  if (!pageIsVisible()) return true;
+  positionSpeechMarker(false);
+  rects = renderedRects();
+  const range = speechRectsBounds(rects);
+  if (!range) return false;
+  const viewport = speechViewportBounds(range.height);
+  if (range.height > window.innerHeight) {
+    return range.top < viewport.bottom && range.bottom > viewport.top;
+  }
+  const fitsPreferredBounds = (
+    range.top >= viewport.top - 1 && range.bottom <= viewport.bottom + 1
+  );
+  const fitsPhysicalViewport = (
+    range.top >= -1 && range.bottom <= window.innerHeight + 1
+  );
+  return fitsPreferredBounds || fitsPhysicalViewport;
+};
+
+const scrollDownAfterSpeechJob = async (job) => {
+  const rects = [...(createSpeechRange(job)?.getClientRects?.() || [])]
+    .filter((rect) => rect.height > 0 && rect.width > 0);
+  const lastRect = rects.at(-1);
+  if (!lastRect) return false;
+  const targetY = speechPlanningTopY();
+  const offset = Math.max(0, lastRect.bottom - targetY);
+  return scrollBySpeechOffset(offset);
+};
+
+const nextSpeechViewport = (cursor) => {
+  if (!cursor?.element) return null;
+  const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)];
+  const cursorIndex = blocks.indexOf(cursor.element);
+  if (cursorIndex < 0) return false;
+
+  for (let index = cursorIndex; index < blocks.length; index += 1) {
+    const element = blocks[index];
+    const mapped = createSpeechTextMap(element);
+    if (!mapped?.text) continue;
+    let start = index === cursorIndex ? cursor.offset : 0;
+    while (start < mapped.text.length && /\s/.test(mapped.text[start])) start += 1;
+    if (start >= mapped.text.length) continue;
+    let end = start + 1;
+    while (end < mapped.text.length && !/\s/.test(mapped.text[end])) end += 1;
+    const firstRect = mappedSpeechRangeRects(mapped, start, end)[0];
+    if (!firstRect) continue;
+
+    const targetY = speechPlanningTopY();
+    const offset = Math.max(0, firstRect.top - targetY);
+    const entries = sentenceBoundedViewportEntries(speechEntriesInViewport(
+      8 + offset,
+      Math.max(8 + offset, window.innerHeight - 8 + offset),
+      cursor
+    ));
+    if (entries.length > 0) return { entries, offset };
+  }
+  return null;
 };
 
 const clearSpeechIndicators = () => {
   speechVoice.hidden = true;
   speechVoice.textContent = "";
-  speechProgress.hidden = true;
-  speechProgress.textContent = "";
 };
 
 const syncSpeechControls = () => {
@@ -1804,30 +2717,30 @@ const startSpeech = async () => {
     const selectedMap = selectedElement ? createSpeechTextMap(selectedElement) : null;
     const selectedMapOffset = selectedMap?.text.indexOf(selectedText) ?? -1;
     if (selectedText) currentSelection?.removeAllRanges();
-    const entries = selectedText
+    let entries = selectedText
       ? [{
         element: selectedMapOffset >= 0 ? selectedElement : null,
         text: selectedText,
         selectedRange,
         mapBaseOffset: Math.max(0, selectedMapOffset)
       }]
-      : speechBlocksFromViewport().map((element) => ({
-        element,
-        text: normalizeSpeechText(element.textContent)
-      }));
-    if (entries.length === 0) throw new Error("No readable text was found here.");
-    const jobs = buildSpeechJobs(entries);
-    if (jobs.length === 0) throw new Error("No readable text was found here.");
-    speechProgress.textContent = `1/${jobs.length}`;
-    speechProgress.hidden = false;
-
+      : sentenceBoundedViewportEntries(speechEntriesFromViewport());
+    if (entries.length === 0) {
+      throw new Error(selectedText
+        ? "No readable text was found in the selection."
+        : "No readable text is visible. Scroll to some text and try again.");
+    }
     const requestedVoice = speechVoicePreference || null;
+    const requestedSpeaker = speechSpeakerPreference === ""
+      ? null
+      : Number(speechSpeakerPreference);
     const prepareJob = (job) => requestPiper("/api/piper/prepare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text: job.text,
         voice: requestedVoice,
+        speaker: requestedSpeaker,
         sessionId: speechSessionId,
         audioFormat: speechAudioFormat
       })
@@ -1835,34 +2748,94 @@ const startSpeech = async () => {
     const settlePreparation = (job) => prepareJob(job)
       .then((value) => ({ value }), (error) => ({ error }));
 
-    settingsSpeechStatus.textContent = "Generating first chunk…";
-    let prepared = await prepareJob(jobs[0]);
-
-    for (let index = 0; index < jobs.length; index += 1) {
-      if (generation !== speechGeneration) return;
-      speechProgress.textContent = `${index + 1}/${jobs.length}`;
-      const nextPreparation = index + 1 < jobs.length
-        ? settlePreparation(jobs[index + 1])
-        : null;
-      const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
-      speechVoice.textContent = formatSpeechVoice(prepared);
-      speechVoice.hidden = false;
-      setSpeechActiveJob(jobs[index]);
-      settingsSpeechStatus.textContent = nextPreparation
-        ? `Playing with ${voiceName}; generating next…`
-        : `Playing with ${voiceName}…`;
-      syncSpeechControls();
-
-      await playPreparedAudio(prepared);
-      speechIsPaused = false;
-      syncSpeechControls();
-      if (generation !== speechGeneration) return;
-
-      if (nextPreparation) {
-        const settled = await nextPreparation;
+    const viewportReading = !selectedText;
+    let viewportCursor = null;
+    let firstBatch = true;
+    let queuedBatch = null;
+    while (entries.length > 0) {
+      const jobs = queuedBatch?.jobs || (viewportReading
+        ? buildViewportSpeechJobs(entries)
+        : buildSpeechJobs(entries));
+      if (jobs.length === 0) break;
+      if (viewportReading) jobs.forEach((job) => { job.followText = false; });
+      settingsSpeechStatus.textContent = queuedBatch
+        ? "Next visible text is ready."
+        : firstBatch
+          ? "Generating first chunk…"
+          : "Generating newly visible text…";
+      firstBatch = false;
+      let prepared;
+      if (queuedBatch) {
+        const settled = await queuedBatch.firstPreparation;
         if (settled.error) throw settled.error;
         prepared = settled.value;
+        queuedBatch = null;
+      } else {
+        prepared = await prepareJob(jobs[0]);
       }
+      let futureBatch = null;
+
+      for (let index = 0; index < jobs.length; index += 1) {
+        if (generation !== speechGeneration) return;
+        const currentJob = jobs[index];
+        let nextPreparation = index + 1 < jobs.length
+          ? settlePreparation(jobs[index + 1])
+          : null;
+        if (viewportReading && !nextPreparation) {
+          const futureCursor = speechCursorFromJob(currentJob) || viewportCursor;
+          const plan = nextSpeechViewport(futureCursor);
+          if (plan) {
+            const futureJobs = buildViewportSpeechJobs(plan.entries);
+            futureJobs.forEach((job) => { job.followText = false; });
+            if (futureJobs.length > 0) {
+              futureBatch = {
+                entries: plan.entries,
+                jobs: futureJobs,
+                offset: plan.offset,
+                cursor: futureCursor,
+                firstPreparation: settlePreparation(futureJobs[0])
+              };
+            }
+          }
+        }
+        const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
+        speechVoice.textContent = formatSpeechVoice(prepared);
+        speechVoice.hidden = false;
+        setSpeechActiveJob(currentJob);
+        const backgroundGeneration = nextPreparation || futureBatch?.firstPreparation;
+        settingsSpeechStatus.textContent = backgroundGeneration
+          ? `Playing with ${voiceName}; generating next…`
+          : `Playing with ${voiceName}…`;
+        syncSpeechControls();
+
+        const visible = await ensureSpeechJobVisible(currentJob);
+        if (!visible) throw new Error("The next spoken text could not be brought into view.");
+        await playPreparedAudio(prepared);
+        speechIsPaused = false;
+        syncSpeechControls();
+        if (generation !== speechGeneration) return;
+
+        if (viewportReading) {
+          viewportCursor = speechCursorFromJob(currentJob) || viewportCursor;
+          if (futureBatch && index === jobs.length - 1) {
+            await scrollBySpeechOffset(futureBatch.offset);
+          } else {
+            await scrollDownAfterSpeechJob(currentJob);
+          }
+          if (generation !== speechGeneration) return;
+        }
+
+        if (nextPreparation) {
+          const settled = await nextPreparation;
+          if (settled.error) throw settled.error;
+          prepared = settled.value;
+        }
+      }
+
+      if (!viewportReading || !viewportCursor) break;
+      if (!futureBatch) break;
+      entries = futureBatch.entries;
+      queuedBatch = futureBatch;
     }
 
     if (generation !== speechGeneration) return;
@@ -1896,6 +2869,7 @@ const openBook = async (file) => {
 
   const generation = ++loadGeneration;
   savePositionNow();
+  setLibraryManageMode(false);
   isBookLoading = true;
   positionPersistenceSuspended = true;
   setReopenAvailability(lastBookCanReopen);
@@ -1933,6 +2907,7 @@ const openBook = async (file) => {
 
     if (generation !== loadGeneration) return;
     await restorePosition(savedPosition);
+    captureStableResizeAnchor();
     showStatus(
       `NATIVE SCROLL · ${sections.length} SECTIONS · HOME · PAGE UP / PAGE DOWN`,
       2800
@@ -1962,7 +2937,8 @@ const openBook = async (file) => {
       const cachedBook = {
         ...lastBookInfo,
         bytes,
-        thumbnail: thumbnail || previousCachedBook?.thumbnail || ""
+        thumbnail: thumbnail || previousCachedBook?.thumbnail || "",
+        thumbnailVersion: COVER_THUMBNAIL_VERSION
       };
       cachedRecentBooks = [
         cachedBook,
@@ -1975,14 +2951,19 @@ const openBook = async (file) => {
     }
     renderRecentBooks();
 
-    document.title = metadata?.title
+    activeBookTitle = metadata?.title
       ? `${metadata.title} — Smooth Reader`
       : "Smooth Reader";
+    document.title = activeBookTitle;
+    readerScrollBeforeHome = window.scrollY;
+    commitReaderHistory();
   } catch (error) {
     console.error(error);
     destroyCurrentBook();
     activeBookKey = null;
-    setReadingMode(false);
+    activeBookTitle = "";
+    replaceHomeHistory();
+    showHomeView();
     showStatus("That EPUB could not be opened.");
   } finally {
     if (generation === loadGeneration) {
@@ -2060,13 +3041,12 @@ const scrollOnePage = (direction) => {
 
 const returnToHomeScreen = () => {
   if (isBookLoading) return;
-  loadGeneration += 1;
-  clearStatus();
-  destroyCurrentBook();
-  activeBookKey = null;
-  setReadingMode(false);
-  renderRecentBooks();
-  document.title = "Smooth Reader";
+  if (currentAppHistoryView() === "reader" && window.history?.back) {
+    window.history.back();
+    return;
+  }
+  replaceHomeHistory();
+  showHomeView();
 };
 
 const isEditableTarget = (target) => {
@@ -2089,11 +3069,13 @@ const handleReaderKeyDown = (event) => {
     return;
   }
 
-  if (noCommandModifier && !event.shiftKey && key === "r") {
+  if (reader.hidden && noCommandModifier && !event.shiftKey && key === "r") {
     event.preventDefault();
     if (!isBookLoading) reopenLastBook();
     return;
   }
+
+  if (reader.hidden) return;
 
   if (noCommandModifier && !event.shiftKey && !event.repeat && key === "v") {
     event.preventDefault();
@@ -2225,7 +3207,11 @@ dropPicker.addEventListener("click", () => fileInput.click());
 startOpen.addEventListener("click", () => fileInput.click());
 settingsOpen.addEventListener("click", () => fileInput.click());
 startReopen.addEventListener("click", reopenLastBook);
-settingsReopen.addEventListener("click", reopenLastBook);
+startExportLibrary.addEventListener("click", () => void exportLibrary());
+startImportLibrary.addEventListener("click", () => libraryImportInput.click());
+startManageLibrary.addEventListener("click", () => setLibraryManageMode(true));
+startCancelManage.addEventListener("click", () => setLibraryManageMode(false));
+startRemoveBooks.addEventListener("click", () => void removeSelectedLibraryBooks());
 settingsSpeechStart.addEventListener("click", startSpeech);
 settingsSpeechPause.addEventListener("click", toggleSpeechPause);
 settingsSpeechStop.addEventListener("click", stopSpeech);
@@ -2237,15 +3223,17 @@ speechOverlayStop.addEventListener("click", stopSpeech);
 speechOverlayHome.addEventListener("click", returnToHomeScreen);
 settingsSpeechVoice.addEventListener("change", (event) => {
   speechVoicePreference = event.target.value || "";
+  speechSpeakerPreference = "";
+  syncSpeechSpeakerOptions();
+  saveCurrentReadingSettings();
+});
+settingsSpeechSpeaker.addEventListener("change", (event) => {
+  speechSpeakerPreference = /^\d+$/.test(event.target.value)
+    ? event.target.value
+    : "";
   saveCurrentReadingSettings();
 });
 
-settingsSpeechMin.addEventListener("input", (event) => {
-  applySpeechBounds(Number(event.target.value), speechMaximumLength, "minimum");
-});
-settingsSpeechMin.addEventListener("change", (event) => {
-  applySpeechBounds(Number(event.target.value), speechMaximumLength, "minimum", true);
-});
 settingsSpeechMax.addEventListener("input", (event) => {
   applySpeechBounds(speechMinimumLength, Number(event.target.value), "maximum");
 });
@@ -2253,23 +3241,7 @@ settingsSpeechMax.addEventListener("change", (event) => {
   applySpeechBounds(speechMinimumLength, Number(event.target.value), "maximum", true);
 });
 settingsSpeechPosition.addEventListener("input", (event) => {
-  applySpeechPosition(Number(event.target.value), true);
-});
-settingsSpeechMinDown.addEventListener("click", () => {
-  applySpeechBounds(
-    speechMinimumLength - 50,
-    speechMaximumLength,
-    "minimum",
-    true
-  );
-});
-settingsSpeechMinUp.addEventListener("click", () => {
-  applySpeechBounds(
-    speechMinimumLength + 50,
-    speechMaximumLength,
-    "minimum",
-    true
-  );
+  applySpeechCenterOffset(Number(event.target.value), true);
 });
 settingsSpeechMaxDown.addEventListener("click", () => {
   applySpeechBounds(
@@ -2288,34 +3260,22 @@ settingsSpeechMaxUp.addEventListener("click", () => {
   );
 });
 settingsSpeechPositionDown.addEventListener("click", () => {
-  applySpeechPosition(speechPositionPercent - 1, true);
+  applySpeechCenterOffset(speechCenterOffsetPercent - 1, true);
 });
 settingsSpeechPositionUp.addEventListener("click", () => {
-  applySpeechPosition(speechPositionPercent + 1, true);
+  applySpeechCenterOffset(speechCenterOffsetPercent + 1, true);
 });
 
-startPaletteNext.addEventListener("click", () => applyPalette(paletteIndex + 1));
-startFontNext.addEventListener("click", () => applyFont(fontIndex + 1));
-startPaletteSelect.addEventListener("change", (event) => {
-  applyPalette(PALETTES.findIndex((palette) => palette.id === event.target.value));
-});
 settingsPaletteSelect.addEventListener("change", (event) => {
   applyPalette(PALETTES.findIndex((palette) => palette.id === event.target.value));
 });
 const handleContrastInput = (event, announce = false) => {
   applyContrast(Number(event.target.value), announce);
 };
-startContrast.addEventListener("input", (event) => handleContrastInput(event));
 settingsContrast.addEventListener("input", (event) => handleContrastInput(event));
-startContrast.addEventListener("change", (event) => handleContrastInput(event, true));
 settingsContrast.addEventListener("change", (event) => handleContrastInput(event, true));
-startContrastDown.addEventListener("click", () => applyContrast(contrast - 1));
 settingsContrastDown.addEventListener("click", () => applyContrast(contrast - 1));
-startContrastUp.addEventListener("click", () => applyContrast(contrast + 1));
 settingsContrastUp.addEventListener("click", () => applyContrast(contrast + 1));
-startFontSelect.addEventListener("change", (event) => {
-  applyFont(FONTS.findIndex((font) => font.id === event.target.value));
-});
 settingsFontSelect.addEventListener("change", (event) => {
   applyFont(FONTS.findIndex((font) => font.id === event.target.value));
 });
@@ -2323,18 +3283,10 @@ settingsFontSelect.addEventListener("change", (event) => {
 const handleFontSizeInput = (event, announce = false) => {
   applyFontSize(Number(event.target.value), announce);
 };
-startFontSize.addEventListener("input", (event) => handleFontSizeInput(event));
 settingsFontSize.addEventListener("input", (event) => handleFontSizeInput(event));
-startFontSize.addEventListener("change", (event) => handleFontSizeInput(event, true));
 settingsFontSize.addEventListener("change", (event) => handleFontSizeInput(event, true));
-startFontSizeDown.addEventListener("click", () => {
-  applyFontSize(fontSizePx - FONT_SIZE_STEP_PX);
-});
 settingsFontSizeDown.addEventListener("click", () => {
   applyFontSize(fontSizePx - FONT_SIZE_STEP_PX);
-});
-startFontSizeUp.addEventListener("click", () => {
-  applyFontSize(fontSizePx + FONT_SIZE_STEP_PX);
 });
 settingsFontSizeUp.addEventListener("click", () => {
   applyFontSize(fontSizePx + FONT_SIZE_STEP_PX);
@@ -2343,34 +3295,19 @@ settingsFontSizeUp.addEventListener("click", () => {
 const handleLineHeightInput = (event, announce = false) => {
   applyLineHeight(Number(event.target.value), announce);
 };
-startLineHeight.addEventListener("input", (event) => handleLineHeightInput(event));
 settingsLineHeight.addEventListener("input", (event) => handleLineHeightInput(event));
-startLineHeight.addEventListener("change", (event) => handleLineHeightInput(event, true));
 settingsLineHeight.addEventListener("change", (event) => handleLineHeightInput(event, true));
-startLineHeightDown.addEventListener("click", () => {
-  applyLineHeight(lineHeight - LINE_HEIGHT_STEP);
-});
 settingsLineHeightDown.addEventListener("click", () => {
   applyLineHeight(lineHeight - LINE_HEIGHT_STEP);
-});
-startLineHeightUp.addEventListener("click", () => {
-  applyLineHeight(lineHeight + LINE_HEIGHT_STEP);
 });
 settingsLineHeightUp.addEventListener("click", () => {
   applyLineHeight(lineHeight + LINE_HEIGHT_STEP);
 });
 
-startTrackingDown.addEventListener("click", () => {
-  applyTracking(trackingEm - TRACKING_STEP_EM);
-});
 settingsTrackingDown.addEventListener("click", () => {
   applyTracking(trackingEm - TRACKING_STEP_EM);
 });
-startTrackingReset.addEventListener("click", () => applyTracking(DEFAULT_TRACKING_EM));
 settingsTrackingReset.addEventListener("click", () => applyTracking(DEFAULT_TRACKING_EM));
-startTrackingUp.addEventListener("click", () => {
-  applyTracking(trackingEm + TRACKING_STEP_EM);
-});
 settingsTrackingUp.addEventListener("click", () => {
   applyTracking(trackingEm + TRACKING_STEP_EM);
 });
@@ -2378,23 +3315,16 @@ settingsTrackingUp.addEventListener("click", () => {
 const handleWidthInput = (event, announce = false) => {
   applyWidth(Number(event.target.value), announce);
 };
-startWidth.addEventListener("input", (event) => handleWidthInput(event));
 settingsWidth.addEventListener("input", (event) => handleWidthInput(event));
-startWidth.addEventListener("change", (event) => handleWidthInput(event, true));
 settingsWidth.addEventListener("change", (event) => handleWidthInput(event, true));
-startWidthDown.addEventListener("click", () => applyWidth(widthCh - 2));
 settingsWidthDown.addEventListener("click", () => applyWidth(widthCh - 2));
-startWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
 settingsWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
 
 settingsToggle.addEventListener("click", () => {
   setSettingsOpen(settingsPanel.hidden);
 });
 settingsHome.addEventListener("click", returnToHomeScreen);
-settingsPageUp.addEventListener("click", () => scrollOnePage(-1));
-settingsPageDown.addEventListener("click", () => scrollOnePage(1));
-startResetAll.addEventListener("click", resetAllSettings);
-settingsResetAll.addEventListener("click", resetAllSettings);
+settingsResetBook.addEventListener("click", resetCurrentBookSettings);
 
 window.addEventListener("click", (event) => {
   if (!settingsPanel.hidden && !event.target?.closest?.("#settings-menu")) {
@@ -2405,6 +3335,12 @@ window.addEventListener("click", (event) => {
 fileInput.addEventListener("change", () => {
   if (fileInput.files?.length) openDroppedFiles(fileInput.files);
   fileInput.value = "";
+});
+
+libraryImportInput.addEventListener("change", () => {
+  const file = libraryImportInput.files?.[0];
+  if (file) void importLibrary(file);
+  libraryImportInput.value = "";
 });
 
 const handleDragEnter = (event) => {
@@ -2460,8 +3396,26 @@ window.addEventListener("keydown", handleReaderKeyDown, true);
 window.addEventListener("scroll", () => {
   schedulePositionSave();
   updateReadingProgress();
+  scheduleStableResizeAnchorCapture();
 }, { passive: true });
-window.addEventListener("resize", scheduleSpeechMarkerRefresh, { passive: true });
+window.addEventListener("resize", handleViewportResize, { passive: true });
+window.addEventListener("popstate", (event) => {
+  if (event.state?.app !== HISTORY_APP) return;
+  if (event.state.view === "reader") showReaderView();
+  else showHomeView();
+});
+document.addEventListener?.("visibilitychange", () => {
+  if (!pageIsVisible()) {
+    if (speechScrollTargetY !== null) {
+      const targetY = speechScrollTargetY;
+      cancelSpeechScroll();
+      window.scrollTo({ top: targetY, left: 0, behavior: "auto" });
+      updateReadingProgress();
+    }
+    return;
+  }
+  scheduleSpeechMarkerRefresh();
+});
 if (typeof window.ResizeObserver === "function") {
   const speechLayoutObserver = new window.ResizeObserver(scheduleSpeechMarkerRefresh);
   speechLayoutObserver.observe(viewer);

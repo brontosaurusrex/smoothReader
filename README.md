@@ -2,7 +2,7 @@
 
 > This software was vibe coded through conversation, rapid experiments, and iterative testing.
 
-A small, install-free EPUB reader built around one continuous, native-scrolling document. It runs in a browser on desktop and mobile; the optional local bridge adds Piper text-to-speech.
+A small, install-free EPUB reader built around one continuous, native-scrolling document. It runs in a browser on desktop and mobile; the optional bridge adds Piper text-to-speech and private cross-device libraries.
 
 For a detailed explanation of the EPUB pipeline, browser storage, backup format,
 scroll/reflow handling, and Piper architecture, see [ABOUTTECH.md](ABOUTTECH.md).
@@ -39,9 +39,11 @@ Open `http://127.0.0.1:8000`, then drop or choose an EPUB. `make run` does the s
 
 The opening screen shows up to 12 recently opened books with sharp cover thumbnails generated from each EPUB at up to 600 × 900 px. EPUB files, reading positions, and preferences stay in that browser's local storage/IndexedDB. Browser Back returns from a book to the opening screen; Forward returns to the loaded book.
 
-`MANAGE LIBRARY` on the opening screen lets you select and remove one or more
-books. Removal deletes their cached EPUBs, thumbnails, positions, and per-book
-settings from that browser.
+`MANAGE LIBRARY` on the opening screen lets you select one or more books.
+`REMOVE FROM THIS DEVICE` deletes their local EPUBs, thumbnails, positions, and
+per-book settings. When the server library is available, it also provides
+`STORE ON SERVER` and `REMOVE FROM SERVER`. A thin outline identifies books
+stored on the server.
 
 ## Settings
 
@@ -75,6 +77,24 @@ Import merges the backup into the current browser rather than clearing it. Dupli
 
 This backs up browser-side Smooth Reader data. It does not export generated audio from the server-side Piper cache.
 
+## Server library and cross-device reading
+
+When Smooth Reader is served by `piper_bridge.py`, selected books can be stored
+in a private server library. Each authenticated Nginx username gets an isolated
+library. Sign in with the same username on another device and its server books
+appear on the home screen; clicking one downloads, caches, and opens it.
+
+After the initial EPUB upload, Smooth Reader synchronizes only the small
+per-book state: reading position and every reader setting. Position records also
+include a chapter/text anchor so restoration survives different viewport sizes
+and text reflow better than a pixel offset alone. Newer timestamps win when two
+devices have saved the same book. Simultaneously reading the same book on two
+devices is therefore last-update-wins.
+
+The existing ZIP export remains a backup of the current browser's local data.
+Back up the server library directory separately as part of normal server
+backups.
+
 ## Piper text-to-speech
 
 Run the included bridge instead of the basic server:
@@ -91,6 +111,7 @@ FFMPEG_BIN=/usr/bin/ffmpeg \
 python3 piper_bridge.py \
   --voice-dir /path/to/voices \
   --cache-dir /path/to/audio-cache \
+  --library-dir /path/to/server-library \
   --port 8000
 ```
 
@@ -111,8 +132,12 @@ For an internet-facing Debian installation using systemd, Nginx, HTTPS, and pass
 - The complete EPUB spine is placed into one DOM document, so very large or image-heavy books use more memory.
 - Chapter and fragment links inside an EPUB scroll to their target.
 - EPUB contents are hashed, so renaming a file does not lose its position.
+- Broken EPUB archives are rejected with a visible error; archive, package,
+  opening, section, and metadata operations have bounded timeouts.
 - Clearing browser site data removes cached books, positions, and settings.
-- EPUB.js, JSZip, and fonts are bundled; ebook contents never leave the browser. With Piper enabled, only current text chunks are sent to the configured bridge.
+- EPUB.js, JSZip, and fonts are bundled. Ebook contents remain in the browser
+  unless the user explicitly chooses `STORE ON SERVER`. With Piper enabled,
+  current text chunks are also sent to the configured bridge.
 
 ## Verify
 

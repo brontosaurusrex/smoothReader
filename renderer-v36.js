@@ -15,7 +15,9 @@ const startExportLibrary = document.querySelector("#start-export-library");
 const startImportLibrary = document.querySelector("#start-import-library");
 const startManageLibrary = document.querySelector("#start-manage-library");
 const libraryManageActions = document.querySelector("#library-manage-actions");
-const startRemoveBooks = document.querySelector("#start-remove-books");
+const startStoreServer = document.querySelector("#start-store-server");
+const startRemoveLocal = document.querySelector("#start-remove-local");
+const startRemoveServer = document.querySelector("#start-remove-server");
 const startCancelManage = document.querySelector("#start-cancel-manage");
 const libraryImportInput = document.querySelector("#library-import-input");
 const settingsMenu = document.querySelector("#settings-menu");
@@ -98,6 +100,10 @@ const COVER_THUMBNAIL_QUALITY = 0.86;
 const LIBRARY_BACKUP_FORMAT = "smooth-reader-library";
 const LIBRARY_BACKUP_VERSION = 1;
 const MAX_LIBRARY_IMPORT_BYTES = 512 * 1024 * 1024;
+const EPUB_OPEN_TIMEOUT_MS = 30_000;
+const SERVER_LIBRARY_REQUEST_TIMEOUT_MS = 30_000;
+const SERVER_LIBRARY_UPLOAD_TIMEOUT_MS = 180_000;
+const SERVER_STATE_SYNC_DELAY_MS = 1_500;
 const HISTORY_APP = "smooth-reader";
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
@@ -177,6 +183,12 @@ let recentBookInfo = [];
 let cachedRecentBooks = [];
 let libraryManageMode = false;
 const selectedLibraryBooks = new Set();
+let serverLibraryAvailable = false;
+let serverLibraryBusy = false;
+let serverBookInfo = [];
+const serverBookHashes = new Set();
+let serverStateSyncTimer = null;
+const serverStateSyncing = new Map();
 let pendingLayoutAnchor = null;
 let layoutChangeGeneration = 0;
 let stableResizeAnchor = null;
@@ -289,6 +301,107 @@ const clearStatus = () => {
   status.textContent = "";
 };
 
+const withTimeout = (promise, milliseconds, message) => {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error(message)), milliseconds);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
+};
+
+const serverRequest = async (path, options = {}, timeout = SERVER_LIBRARY_REQUEST_TIMEOUT_MS) => {
+  if (typeof window.fetch !== "function") throw new Error("Server library is unavailable");
+  const { expectBinary = false, ...fetchOptions } = options;
+  const response = await withTimeout(
+    window.fetch(path, { credentials: "same-origin", ...fetchOptions }),
+    timeout,
+    "Server library request timed out"
+  );
+  let payload = null;
+  if (expectBinary) {
+    if (!response.ok) {
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      throw new Error(payload?.error || `Server library returned HTTP ${response.status}`);
+    }
+    return response.arrayBuffer();
+  }
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.error || `Server library returned HTTP ${response.status}`);
+  }
+  return payload;
+};
+
+const serverRecordFor = (record) => serverBookInfo.find((candidate) =>
+  booksMatch(record, candidate)
+);
+
+const cachedRecordFor = (record) => cachedRecentBooks.find((candidate) =>
+  booksMatch(record, candidate)
+);
+
+const displayedLibraryBooks = () => {
+  const combined = recentBookInfo.map((record) => ({ ...record }));
+  serverBookInfo.forEach((serverRecord) => {
+    const index = combined.findIndex((record) => booksMatch(record, serverRecord));
+    if (index < 0) {
+      combined.push({ ...serverRecord, serverStored: true });
+      return;
+    }
+    const existing = combined[index];
+    combined[index] = {
+      ...serverRecord,
+      ...existing,
+      title: existing.title || serverRecord.title,
+      fileName: existing.fileName || serverRecord.fileName,
+      openedAt: Math.max(
+        Number(existing.openedAt) || 0,
+        Number(serverRecord.openedAt) || 0
+      ),
+      coverUrl: serverRecord.coverUrl || "",
+      serverStored: true
+    };
+  });
+  return combined
+    .sort((first, second) => (Number(second.openedAt) || 0) - (Number(first.openedAt) || 0))
+    .slice(0, MAX_RECENT_BOOKS);
+};
+
+const setServerLibraryAvailable = (available) => {
+  serverLibraryAvailable = Boolean(available);
+  startStoreServer.hidden = !serverLibraryAvailable;
+  startRemoveServer.hidden = !serverLibraryAvailable;
+};
+
+const refreshServerLibrary = async (silent = false) => {
+  try {
+    const payload = await serverRequest("/api/library/books");
+    serverBookInfo = Array.isArray(payload.books) ? payload.books : [];
+    serverBookHashes.clear();
+    serverBookInfo.forEach((record) => {
+      if (/^[a-f0-9]{64}$/.test(record?.hash || "")) serverBookHashes.add(record.hash);
+    });
+    setServerLibraryAvailable(true);
+    renderRecentBooks();
+    return true;
+  } catch (error) {
+    setServerLibraryAvailable(false);
+    serverBookInfo = [];
+    serverBookHashes.clear();
+    renderRecentBooks();
+    if (!silent) showStatus(`SERVER LIBRARY ERROR · ${error.message}`, 3200);
+    return false;
+  }
+};
+
 const setReopenAvailability = (canReopen) => {
   startReopen.disabled = isBookLoading || !canReopen;
 };
@@ -315,18 +428,37 @@ const libraryBookKey = (record) => record?.hash
   : `file:${record?.fileName || ""}`;
 
 const syncLibraryManageControls = () => {
-  startManageLibrary.disabled = isBookLoading || recentBookInfo.length === 0;
+  const displayed = displayedLibraryBooks();
+  const selected = displayed.filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record))
+  );
+  const hasLocalSelection = selected.some((record) =>
+    recentBookInfo.some((candidate) => booksMatch(candidate, record)) ||
+    Boolean(cachedRecordFor(record)?.bytes)
+  );
+  const hasUploadSelection = selected.some((record) =>
+    Boolean(cachedRecordFor(record)?.bytes) && !serverBookHashes.has(record.hash)
+  );
+  const hasServerSelection = selected.some((record) =>
+    serverBookHashes.has(record.hash)
+  );
+  const busy = isBookLoading || serverLibraryBusy;
+  startManageLibrary.disabled = busy || displayed.length === 0;
   libraryManageActions.hidden = !libraryManageMode;
-  startRemoveBooks.disabled = isBookLoading || selectedLibraryBooks.size === 0;
-  startRemoveBooks.textContent = selectedLibraryBooks.size > 0
-    ? `REMOVE SELECTED (${selectedLibraryBooks.size})`
-    : "REMOVE SELECTED";
+  startStoreServer.disabled = busy || !hasUploadSelection;
+  startRemoveLocal.disabled = busy || !hasLocalSelection;
+  startRemoveServer.disabled = busy || !hasServerSelection;
+  startStoreServer.textContent = selectedLibraryBooks.size > 0
+    ? `STORE ON SERVER (${selectedLibraryBooks.size})`
+    : "STORE ON SERVER";
   if (libraryManageMode) recentBookList.classList.add("is-managing");
   else recentBookList.classList.remove("is-managing");
 };
 
 const setLibraryManageMode = (enabled) => {
-  libraryManageMode = Boolean(enabled && recentBookInfo.length > 0 && !isBookLoading);
+  libraryManageMode = Boolean(
+    enabled && displayedLibraryBooks().length > 0 && !isBookLoading && !serverLibraryBusy
+  );
   if (!libraryManageMode) selectedLibraryBooks.clear();
   syncLibraryManageControls();
   renderRecentBooks();
@@ -342,43 +474,50 @@ const toggleLibraryBookSelection = (record) => {
 
 const renderRecentBooks = () => {
   recentBookList.replaceChildren();
-  recentBooks.hidden = recentBookInfo.length === 0;
+  const displayed = displayedLibraryBooks();
+  recentBooks.hidden = displayed.length === 0;
 
-  recentBookInfo.forEach((record, index) => {
-    const cached = cachedRecentBooks.find((candidate) => booksMatch(record, candidate));
+  displayed.forEach((record, index) => {
+    const cached = cachedRecordFor(record);
+    const serverRecord = serverRecordFor(record);
+    const serverStored = Boolean(serverRecord || serverBookHashes.has(record.hash));
     const button = document.createElement("button");
     const selectionKey = libraryBookKey(record);
     const isSelected = selectedLibraryBooks.has(selectionKey);
     button.type = "button";
     button.className = "recent-book";
-    button.disabled = isBookLoading || (!libraryManageMode && !cached?.bytes);
+    button.disabled = isBookLoading || serverLibraryBusy || (
+      !libraryManageMode && !cached?.bytes && !serverStored
+    );
     button.textContent = record.title && record.title !== record.fileName
       ? `${record.title} — ${record.fileName}`
       : record.fileName;
-    if (cached?.thumbnail) {
+    const cover = cached?.thumbnail || serverRecord?.coverUrl || "";
+    if (cover) {
       button.classList.add("has-cover");
-      button.style.setProperty("--recent-book-cover", `url("${cached.thumbnail}")`);
+      button.style.setProperty("--recent-book-cover", `url("${cover}")`);
     }
+    if (serverStored) button.classList.add("is-server-stored");
     if (libraryManageMode) {
       if (isSelected) button.classList.add("is-selected");
       button.setAttribute("aria-pressed", String(isSelected));
       button.title = `${isSelected ? "Deselect" : "Select"} ${record.title || record.fileName}`;
       button.addEventListener("click", () => toggleLibraryBookSelection(record));
     } else {
-      button.title = cached?.bytes
-        ? `Open ${record.title || record.fileName}`
-        : "Cached copy unavailable; drop this EPUB again";
-      button.addEventListener("click", () => reopenCachedBook(record));
+      button.title = `${serverStored ? "Server stored · " : ""}Open ${
+        record.title || record.fileName
+      }`;
+      button.addEventListener("click", () => void openLibraryBook(record));
     }
     recentBookList.appendChild(button);
 
     if (index === 0) {
-      lastBookCanReopen = Boolean(cached?.bytes);
+      lastBookCanReopen = Boolean(cached?.bytes || serverStored);
       setReopenAvailability(lastBookCanReopen);
     }
   });
 
-  if (recentBookInfo.length === 0) {
+  if (displayed.length === 0) {
     lastBookCanReopen = false;
     setReopenAvailability(false);
   }
@@ -539,19 +678,25 @@ const initializeRecentBooks = async () => {
   }
 };
 
-const recentBooksReady = initializeRecentBooks();
+const recentBooksReady = Promise.all([
+  initializeRecentBooks(),
+  refreshServerLibrary(true)
+]);
 
-const removeSelectedLibraryBooks = async () => {
+const removeSelectedClientBooks = async () => {
   if (isBookLoading || selectedLibraryBooks.size === 0) return;
-  const selectedRecords = recentBookInfo.filter((record) =>
-    selectedLibraryBooks.has(libraryBookKey(record))
+  const selectedRecords = displayedLibraryBooks().filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record)) && (
+      recentBookInfo.some((candidate) => booksMatch(candidate, record)) ||
+      Boolean(cachedRecordFor(record)?.bytes)
+    )
   );
   if (selectedRecords.length === 0) return;
 
   const count = selectedRecords.length;
   const prompt = count === 1
-    ? "Remove this book, its reading position, and its settings from this browser?"
-    : `Remove these ${count} books, their reading positions, and their settings from this browser?`;
+    ? "Remove this book, its reading position, and its settings from this device? Any server copy will be kept."
+    : `Remove these ${count} books, their reading positions, and their settings from this device? Any server copies will be kept.`;
   if (!window.confirm(prompt)) return;
 
   const removedHashes = new Set();
@@ -568,6 +713,9 @@ const removeSelectedLibraryBooks = async () => {
   );
 
   try {
+    if (activeBookWasRemoved && serverBookHashes.has(activeBookKey)) {
+      await syncServerBookState(activeBookKey);
+    }
     await writeCachedBooks(retainedCachedBooks);
     if (activeBookWasRemoved) {
       destroyCurrentBook();
@@ -597,7 +745,10 @@ const removeSelectedLibraryBooks = async () => {
     );
     setLibraryManageMode(false);
     setReopenAvailability(lastBookCanReopen);
-    showStatus(`${count} ${count === 1 ? "BOOK" : "BOOKS"} REMOVED`, 1800);
+    showStatus(
+      `${count} ${count === 1 ? "BOOK" : "BOOKS"} REMOVED FROM THIS DEVICE`,
+      2200
+    );
   } catch (error) {
     console.error(error);
     showStatus("BOOKS COULD NOT BE REMOVED", 2400);
@@ -734,6 +885,15 @@ const handleViewportResize = () => {
 
 const bookSettingsKey = (hash) => `${BOOK_SETTINGS_PREFIX}${hash}`;
 
+const scheduleServerStateSync = (hash = activeBookKey, immediate = false) => {
+  window.clearTimeout(serverStateSyncTimer);
+  if (!hash || !serverLibraryAvailable || !serverBookHashes.has(hash)) return;
+  serverStateSyncTimer = window.setTimeout(
+    () => void syncServerBookState(hash),
+    immediate ? 0 : SERVER_STATE_SYNC_DELAY_MS
+  );
+};
+
 const captureReadingSettings = () => ({
   palette: PALETTES[paletteIndex].id,
   contrast,
@@ -753,8 +913,9 @@ const saveCurrentReadingSettings = (fallbackKey = "", fallbackValue = "") => {
   if (activeBookKey) {
     localStorage.setItem(
       bookSettingsKey(activeBookKey),
-      JSON.stringify(captureReadingSettings())
+      JSON.stringify({ ...captureReadingSettings(), savedAt: Date.now() })
     );
+    scheduleServerStateSync(activeBookKey);
   } else if (fallbackKey) {
     localStorage.setItem(fallbackKey, String(fallbackValue));
   }
@@ -1386,6 +1547,72 @@ const loadPosition = (hash) => {
   }
 };
 
+const captureTextPositionAnchor = () => {
+  if (reader.hidden || typeof document.createRange !== "function") return null;
+  const x = window.innerWidth / 2;
+  const y = Math.max(32, Math.min(window.innerHeight - 32, window.innerHeight * 0.32));
+  const caret = document.caretPositionFromPoint?.(x, y);
+  const legacyCaret = caret ? null : document.caretRangeFromPoint?.(x, y);
+  const node = caret?.offsetNode || legacyCaret?.startContainer;
+  const offset = caret?.offset ?? legacyCaret?.startOffset ?? 0;
+  const element = node?.nodeType === 1 ? node : node?.parentElement;
+  const chapter = element?.closest?.(".book-section");
+  if (!node || !chapter || typeof chapter.dataset?.spineIndex !== "string") return null;
+
+  try {
+    const range = document.createRange();
+    if (typeof range.selectNodeContents !== "function") return null;
+    range.selectNodeContents(chapter);
+    range.setEnd(node, offset);
+    return {
+      spineIndex: Number(chapter.dataset.spineIndex),
+      textOffset: range.toString().length,
+      viewportRatio: y / Math.max(1, window.innerHeight)
+    };
+  } catch {
+    return null;
+  }
+};
+
+const restoreTextPositionAnchor = (anchor) => {
+  if (
+    !anchor ||
+    !Number.isInteger(Number(anchor.spineIndex)) ||
+    !Number.isFinite(Number(anchor.textOffset)) ||
+    typeof viewer.querySelector !== "function"
+  ) return false;
+  const chapter = viewer.querySelector(
+    `.book-section[data-spine-index="${Number(anchor.spineIndex)}"]`
+  );
+  if (!chapter) return false;
+  let remaining = Math.max(0, Number(anchor.textOffset));
+  const walker = document.createTreeWalker(chapter, 4);
+  let node = walker.nextNode();
+  while (node && remaining > (node.textContent?.length || 0)) {
+    remaining -= node.textContent?.length || 0;
+    node = walker.nextNode();
+  }
+  if (!node) return false;
+  try {
+    const range = document.createRange();
+    const offset = Math.max(0, Math.min(remaining, node.textContent?.length || 0));
+    range.setStart(node, offset);
+    range.setEnd(node, Math.min(offset + 1, node.textContent?.length || 0));
+    const rectangle = range.getBoundingClientRect();
+    if (!Number.isFinite(rectangle?.top)) return false;
+    const viewportRatio = Number.isFinite(Number(anchor.viewportRatio))
+      ? Math.max(0.08, Math.min(0.8, Number(anchor.viewportRatio)))
+      : 0.32;
+    window.scrollTo(
+      0,
+      Math.max(0, window.scrollY + rectangle.top - window.innerHeight * viewportRatio)
+    );
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const savePositionNow = () => {
   if (positionPersistenceSuspended || !activeBookKey || reader.hidden) return;
 
@@ -1394,17 +1621,215 @@ const savePositionNow = () => {
     document.documentElement.scrollHeight - window.innerHeight
   );
 
+  const capturedAnchor = captureTextPositionAnchor();
+  const previousAnchor = document.visibilityState === "hidden"
+    ? loadPosition(activeBookKey)?.anchor || null
+    : null;
   localStorage.setItem(positionKey(activeBookKey), JSON.stringify({
     scrollY: window.scrollY,
     ratio: scrollRange > 0 ? window.scrollY / scrollRange : 0,
+    anchor: capturedAnchor || previousAnchor,
     savedAt: Date.now()
   }));
+  scheduleServerStateSync(activeBookKey);
 };
 
 const schedulePositionSave = () => {
   window.clearTimeout(saveTimer);
   if (positionPersistenceSuspended) return;
   saveTimer = window.setTimeout(savePositionNow, SAVE_DELAY_MS);
+};
+
+const settingsSavedAt = (settings) => {
+  const savedAt = Number(settings?.savedAt);
+  return Number.isFinite(savedAt) ? savedAt : 0;
+};
+
+const mergeServerBookState = (bookHash, state) => {
+  if (!state || state.hash !== bookHash) return;
+  const remotePosition = state.position;
+  const localPosition = loadPosition(bookHash);
+  if (
+    remotePosition &&
+    Number(remotePosition.savedAt) >= Number(localPosition?.savedAt || 0)
+  ) {
+    localStorage.setItem(positionKey(bookHash), JSON.stringify(remotePosition));
+  }
+
+  const remoteSettings = state.settings;
+  const localSettings = readBookSettings(bookHash);
+  if (remoteSettings && settingsSavedAt(remoteSettings) >= settingsSavedAt(localSettings)) {
+    localStorage.setItem(bookSettingsKey(bookHash), JSON.stringify(remoteSettings));
+  }
+};
+
+const serverStateForBook = (bookHash) => {
+  const metadata = recentBookInfo.find((record) => record.hash === bookHash) ||
+    cachedRecentBooks.find((record) => record.hash === bookHash) ||
+    serverBookInfo.find((record) => record.hash === bookHash) || {};
+  return {
+    version: 1,
+    hash: bookHash,
+    fileName: metadata.fileName || `${bookHash.slice(0, 12)}.epub`,
+    title: metadata.title || "",
+    openedAt: Number(metadata.openedAt) || 0,
+    position: loadPosition(bookHash) || {},
+    settings: readBookSettings(bookHash) || {}
+  };
+};
+
+const syncServerBookState = (bookHash = activeBookKey, keepalive = false) => {
+  if (!bookHash || !serverLibraryAvailable || !serverBookHashes.has(bookHash)) {
+    return Promise.resolve(false);
+  }
+  const previous = serverStateSyncing.get(bookHash) || Promise.resolve();
+  const operation = previous
+    .catch(() => {})
+    .then(() => serverRequest(
+      `/api/library/books/${bookHash}/state`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(serverStateForBook(bookHash)),
+        keepalive
+      }
+    ))
+    .then(() => true)
+    .catch((error) => {
+      console.warn("Could not synchronize server book state.", error);
+      return false;
+    });
+  serverStateSyncing.set(bookHash, operation);
+  operation.finally(() => {
+    if (serverStateSyncing.get(bookHash) === operation) serverStateSyncing.delete(bookHash);
+  });
+  return operation;
+};
+
+const flushServerBookState = (bookHash = activeBookKey) => {
+  window.clearTimeout(serverStateSyncTimer);
+  if (
+    !bookHash ||
+    !serverLibraryAvailable ||
+    !serverBookHashes.has(bookHash) ||
+    typeof window.fetch !== "function"
+  ) return;
+  void window.fetch(`/api/library/books/${bookHash}/state`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(serverStateForBook(bookHash)),
+    keepalive: true
+  }).catch(() => {});
+};
+
+const jpegBytesFromDataUrl = (dataUrl) => {
+  const match = /^data:image\/jpeg;base64,(.+)$/i.exec(dataUrl || "");
+  if (!match || typeof window.atob !== "function") return null;
+  const decoded = window.atob(match[1]);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index += 1) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+  return bytes;
+};
+
+const storeSelectedBooksOnServer = async () => {
+  if (!serverLibraryAvailable || serverLibraryBusy || isBookLoading) return;
+  const selected = displayedLibraryBooks().filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record)) &&
+    Boolean(cachedRecordFor(record)?.bytes) &&
+    !serverBookHashes.has(record.hash)
+  );
+  if (selected.length === 0) return;
+
+  serverLibraryBusy = true;
+  syncLibraryManageControls();
+  try {
+    for (const [index, record] of selected.entries()) {
+      const cached = cachedRecordFor(record);
+      showStatus(`UPLOADING ${index + 1} / ${selected.length} · ${record.title || record.fileName}`);
+      await serverRequest(
+        `/api/library/books/${record.hash}/epub`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/epub+zip" },
+          body: cached.bytes
+        },
+        SERVER_LIBRARY_UPLOAD_TIMEOUT_MS
+      );
+      const cover = jpegBytesFromDataUrl(cached.thumbnail);
+      if (cover?.byteLength) {
+        try {
+          await serverRequest(
+            `/api/library/books/${record.hash}/cover`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "image/jpeg" },
+              body: cover
+            },
+            SERVER_LIBRARY_UPLOAD_TIMEOUT_MS
+          );
+        } catch (error) {
+          console.warn("The book was stored without its cover.", error);
+        }
+      }
+      await serverRequest(`/api/library/books/${record.hash}/state`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(serverStateForBook(record.hash))
+      });
+      serverBookHashes.add(record.hash);
+    }
+    await refreshServerLibrary(true);
+    setLibraryManageMode(false);
+    showStatus(
+      `${selected.length} ${selected.length === 1 ? "BOOK" : "BOOKS"} STORED ON SERVER`,
+      2400
+    );
+  } catch (error) {
+    console.error(error);
+    showStatus(`SERVER UPLOAD ERROR · ${error.message}`, 5200);
+  } finally {
+    serverLibraryBusy = false;
+    renderRecentBooks();
+    syncLibraryManageControls();
+  }
+};
+
+const removeSelectedServerBooks = async () => {
+  if (!serverLibraryAvailable || serverLibraryBusy || isBookLoading) return;
+  const selected = displayedLibraryBooks().filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record)) && serverBookHashes.has(record.hash)
+  );
+  if (selected.length === 0) return;
+  const prompt = selected.length === 1
+    ? "Remove this book and its synchronized state from the server? The copy on this device will be kept."
+    : `Remove these ${selected.length} books and their synchronized state from the server? Copies on this device will be kept.`;
+  if (!window.confirm(prompt)) return;
+
+  serverLibraryBusy = true;
+  syncLibraryManageControls();
+  try {
+    for (const [index, record] of selected.entries()) {
+      showStatus(`REMOVING FROM SERVER ${index + 1} / ${selected.length}`);
+      await serverRequest(`/api/library/books/${record.hash}`, { method: "DELETE" });
+      serverBookHashes.delete(record.hash);
+    }
+    await refreshServerLibrary(true);
+    setLibraryManageMode(false);
+    showStatus(
+      `${selected.length} ${selected.length === 1 ? "BOOK" : "BOOKS"} REMOVED FROM SERVER`,
+      2400
+    );
+  } catch (error) {
+    console.error(error);
+    showStatus(`SERVER REMOVE ERROR · ${error.message}`, 4200);
+  } finally {
+    serverLibraryBusy = false;
+    renderRecentBooks();
+    syncLibraryManageControls();
+  }
 };
 
 const hashBook = async (arrayBuffer) => {
@@ -1663,6 +2088,11 @@ const restorePosition = async (savedPosition) => {
   const legacyRatio = Number(savedPosition?.percentage);
   const storedRatio = Number(savedPosition?.ratio);
   const storedY = Number(savedPosition?.scrollY);
+
+  if (restoreTextPositionAnchor(savedPosition?.anchor)) {
+    updateReadingProgress();
+    return;
+  }
 
   let target = 0;
   if (Number.isFinite(storedY)) {
@@ -2860,6 +3290,30 @@ const startSpeech = async () => {
   }
 };
 
+const validateEpubBytes = async (bytes) => {
+  if (typeof window.JSZip !== "function") return;
+  let archive;
+  try {
+    archive = await withTimeout(
+      window.JSZip.loadAsync(bytes),
+      EPUB_OPEN_TIMEOUT_MS,
+      "EPUB archive validation timed out"
+    );
+  } catch (error) {
+    throw new Error(`Invalid or damaged EPUB archive: ${error.message}`);
+  }
+  const container = archive.file("META-INF/container.xml");
+  if (!container) throw new Error("Invalid EPUB: META-INF/container.xml is missing");
+  const containerXml = await withTimeout(
+    container.async("string"),
+    EPUB_OPEN_TIMEOUT_MS,
+    "EPUB package validation timed out"
+  );
+  if (!/<rootfile\b[^>]*\bfull-path\s*=\s*["'][^"']+["']/i.test(containerXml)) {
+    throw new Error("Invalid EPUB: package document is missing");
+  }
+};
+
 const openBook = async (file) => {
   if (!file?.name?.toLowerCase().endsWith(".epub")) {
     showStatus("Please drop an EPUB file.");
@@ -2868,6 +3322,7 @@ const openBook = async (file) => {
   if (isBookLoading) return;
 
   const generation = ++loadGeneration;
+  let replacedCurrentBook = false;
   savePositionNow();
   setLibraryManageMode(false);
   isBookLoading = true;
@@ -2881,15 +3336,21 @@ const openBook = async (file) => {
     const bytes = await file.arrayBuffer();
     const hash = await hashBook(bytes);
     if (generation !== loadGeneration) return;
+    await validateEpubBytes(bytes);
+    if (generation !== loadGeneration) return;
 
     destroyCurrentBook();
+    replacedCurrentBook = true;
     activeBookKey = hash;
     applyStoredBookSettings(hash);
     const savedPosition = loadPosition(hash);
 
     book = ePub(bytes);
-    await book.opened;
-    await book.ready;
+    await withTimeout(
+      Promise.all([book.opened, book.ready]),
+      EPUB_OPEN_TIMEOUT_MS,
+      "EPUB opening timed out"
+    );
     if (generation !== loadGeneration) return;
     const coverThumbnailPromise = createCoverThumbnail(book);
 
@@ -2897,12 +3358,17 @@ const openBook = async (file) => {
     book.spine.each((section) => {
       sections.push(section);
     });
+    if (sections.length === 0) throw new Error("EPUB contains no readable sections");
 
     setReadingMode(true);
     for (let index = 0; index < sections.length; index += 1) {
       if (generation !== loadGeneration) return;
       showStatus(`LOADING ${index + 1} / ${sections.length}`);
-      await appendChapter(sections[index], index);
+      await withTimeout(
+        appendChapter(sections[index], index),
+        EPUB_OPEN_TIMEOUT_MS,
+        `EPUB section ${index + 1} could not be loaded`
+      );
     }
 
     if (generation !== loadGeneration) return;
@@ -2913,10 +3379,11 @@ const openBook = async (file) => {
       2800
     );
 
-    const [metadata, thumbnail] = await Promise.all([
-      book.loaded.metadata,
-      coverThumbnailPromise
-    ]);
+    const [metadata, thumbnail] = await withTimeout(
+      Promise.all([book.loaded.metadata, coverThumbnailPromise]),
+      EPUB_OPEN_TIMEOUT_MS,
+      "EPUB metadata could not be loaded"
+    );
     const lastBookInfo = {
       hash,
       fileName: file.name,
@@ -2957,14 +3424,19 @@ const openBook = async (file) => {
     document.title = activeBookTitle;
     readerScrollBeforeHome = window.scrollY;
     commitReaderHistory();
+    scheduleServerStateSync(hash);
+    return true;
   } catch (error) {
     console.error(error);
-    destroyCurrentBook();
-    activeBookKey = null;
-    activeBookTitle = "";
-    replaceHomeHistory();
-    showHomeView();
-    showStatus("That EPUB could not be opened.");
+    if (replacedCurrentBook) {
+      destroyCurrentBook();
+      activeBookKey = null;
+      activeBookTitle = "";
+      replaceHomeHistory();
+      showHomeView();
+    }
+    showStatus(`EPUB ERROR · ${error?.message || "This book could not be opened"}`, 6000);
+    return false;
   } finally {
     if (generation === loadGeneration) {
       positionPersistenceSuspended = false;
@@ -2975,6 +3447,52 @@ const openBook = async (file) => {
       schedulePositionSave();
     }
   }
+};
+
+const openLibraryBook = async (record) => {
+  if (isBookLoading || serverLibraryBusy) return;
+  const serverRecord = serverRecordFor(record);
+  const cached = cachedRecordFor(record);
+  if (!serverRecord && !serverBookHashes.has(record?.hash)) {
+    reopenCachedBook(record);
+    return;
+  }
+
+  serverLibraryBusy = true;
+  renderRecentBooks();
+  showStatus(`LOADING FROM SERVER · ${record.title || record.fileName}`);
+  let bytes = cached?.bytes || null;
+  try {
+    try {
+      const statePayload = await serverRequest(
+        `/api/library/books/${record.hash}/state`
+      );
+      mergeServerBookState(record.hash, statePayload.state);
+    } catch (error) {
+      if (!bytes) throw error;
+      console.warn("Server state was unavailable; opening the device copy.", error);
+    }
+    if (!bytes) {
+      bytes = await serverRequest(
+        `/api/library/books/${record.hash}/epub`,
+        { expectBinary: true },
+        SERVER_LIBRARY_UPLOAD_TIMEOUT_MS
+      );
+    }
+  } catch (error) {
+    console.error(error);
+    showStatus(`SERVER LIBRARY ERROR · ${error.message}`, 5200);
+    return;
+  } finally {
+    serverLibraryBusy = false;
+    renderRecentBooks();
+  }
+
+  const opened = await openBook({
+    name: record.fileName || serverRecord?.fileName || `${record.hash.slice(0, 12)}.epub`,
+    arrayBuffer: async () => bytes.slice(0)
+  });
+  if (opened) scheduleServerStateSync(record.hash, true);
 };
 
 const firstEpub = (fileList) =>
@@ -2994,29 +3512,20 @@ const reopenCachedBook = (record) => {
     return;
   }
 
-  openBook({
+  void openBook({
     name: cached.fileName,
     arrayBuffer: async () => cached.bytes.slice(0)
-  }).catch((error) => {
-    console.error(error);
-    cachedRecentBooks = cachedRecentBooks.filter(
-      (candidate) => !booksMatch(record, candidate)
-    );
-    lastBookCanReopen = Boolean(
-      cachedRecentBooks.find((candidate) => booksMatch(recentBookInfo[0], candidate))?.bytes
-    );
-    renderRecentBooks();
-    showStatus("CACHED BOOK COULD NOT BE REOPENED · DROP IT AGAIN", 2200);
   });
 };
 
 const reopenLastBook = () => {
   if (isBookLoading) return;
-  if (!lastBookCanReopen || recentBookInfo.length === 0) {
+  const firstBook = displayedLibraryBooks()[0];
+  if (!lastBookCanReopen || !firstBook) {
     showStatus("LAST BOOK IS NOT CACHED · DROP IT AGAIN", 1800);
     return;
   }
-  reopenCachedBook(recentBookInfo[0]);
+  void openLibraryBook(firstBook);
 };
 
 const scrollToBookStart = () => {
@@ -3211,7 +3720,9 @@ startExportLibrary.addEventListener("click", () => void exportLibrary());
 startImportLibrary.addEventListener("click", () => libraryImportInput.click());
 startManageLibrary.addEventListener("click", () => setLibraryManageMode(true));
 startCancelManage.addEventListener("click", () => setLibraryManageMode(false));
-startRemoveBooks.addEventListener("click", () => void removeSelectedLibraryBooks());
+startStoreServer.addEventListener("click", () => void storeSelectedBooksOnServer());
+startRemoveLocal.addEventListener("click", () => void removeSelectedClientBooks());
+startRemoveServer.addEventListener("click", () => void removeSelectedServerBooks());
 settingsSpeechStart.addEventListener("click", startSpeech);
 settingsSpeechPause.addEventListener("click", toggleSpeechPause);
 settingsSpeechStop.addEventListener("click", stopSpeech);
@@ -3406,6 +3917,8 @@ window.addEventListener("popstate", (event) => {
 });
 document.addEventListener?.("visibilitychange", () => {
   if (!pageIsVisible()) {
+    savePositionNow();
+    flushServerBookState();
     if (speechScrollTargetY !== null) {
       const targetY = speechScrollTargetY;
       cancelSpeechScroll();
@@ -3421,6 +3934,9 @@ if (typeof window.ResizeObserver === "function") {
   speechLayoutObserver.observe(viewer);
 }
 window.addEventListener("blur", () => stopRightDrag());
-window.addEventListener("beforeunload", savePositionNow);
+window.addEventListener("beforeunload", () => {
+  savePositionNow();
+  flushServerBookState();
+});
 syncSpeechControls();
 void probePiperBridge();

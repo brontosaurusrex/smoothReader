@@ -1,1 +1,5 @@
-./piper_bridge.py
+# PIPER_BIN=/path/to/piper
+# FFMPEG_BIN=/usr/bin/ffmpeg
+
+./piper_bridge.py # --voice-dir /path/to/voices --cache-dir /path/to/audio-cache --port 8000
+

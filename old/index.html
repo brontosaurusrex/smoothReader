@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-view="home">
   <head>
     <meta charset="UTF-8">
     <meta
@@ -9,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smooth Reader</title>
     <link rel="stylesheet" href="vendor/fonts/reader-fonts.css?v=20260903-fonts1">
-    <link rel="stylesheet" href="styles-v36-mobile7.css">
+    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260909-homecenter1">
   </head>
   <body>
     <main id="app">
@@ -22,6 +22,15 @@
           <small>RECENT BOOKS</small>
           <div id="recent-book-list"></div>
         </div>
+        <div id="library-actions" aria-label="Library actions">
+          <button id="start-export-library" type="button">EXPORT LIBRARY</button>
+          <button id="start-import-library" type="button">IMPORT LIBRARY</button>
+          <button id="start-manage-library" type="button" disabled>MANAGE LIBRARY</button>
+        </div>
+        <div id="library-manage-actions" aria-label="Manage selected books" hidden>
+          <button id="start-remove-books" type="button" disabled>REMOVE SELECTED</button>
+          <button id="start-cancel-manage" type="button">CANCEL</button>
+        </div>
         <div id="start-hotkeys" aria-label="Keyboard shortcuts">
           <button id="start-open" type="button"><kbd>O</kbd> open another book</button>
           <button id="start-reopen" type="button" disabled><kbd>R</kbd> reopen last book</button>
@@ -29,52 +38,16 @@
           <span><kbd>Right-drag</kbd> scroll in the drag direction</span>
           <span><kbd>Home</kbd> / <kbd>End</kbd> book start / end</span>
           <span><kbd>PgUp</kbd> / <kbd>PgDn</kbd> move one screen</span>
-          <button id="start-palette-next" type="button"><kbd>P</kbd> / <kbd>Shift+P</kbd> cycle palette</button>
-          <label class="start-select"><span><kbd>Alt+1…9/0</kbd> palette</span><select id="start-palette" aria-label="Color palette"></select></label>
-          <div class="start-range start-contrast">
-            <span><label for="start-contrast">Contrast</label> <output id="start-contrast-value"></output></span>
-            <div class="range-stepper">
-              <button id="start-contrast-down" type="button" aria-label="Decrease palette contrast">−</button>
-              <input id="start-contrast" type="range" min="-30" max="30" step="1" aria-label="Palette contrast">
-              <button id="start-contrast-up" type="button" aria-label="Increase palette contrast">+</button>
-            </div>
-          </div>
-          <button id="start-font-next" type="button"><kbd>F</kbd> / <kbd>Shift+F</kbd> cycle font</button>
-          <label class="start-select"><span><kbd>Alt+Shift+1…9/0</kbd> font · <kbd>Alt+Shift+M</kbd> mono</span><select id="start-font" aria-label="Reading font"></select></label>
-          <div class="start-range">
-            <span><label for="start-font-size">Font size <kbd>[</kbd> / <kbd>]</kbd></label> <output id="start-font-size-value"></output></span>
-            <div class="range-stepper">
-              <button id="start-font-size-down" type="button" aria-label="Decrease book font size">−</button>
-              <input id="start-font-size" type="range" min="14" max="80" step="2" aria-label="Book font size">
-              <button id="start-font-size-up" type="button" aria-label="Increase book font size">+</button>
-            </div>
-          </div>
-          <div class="start-range">
-            <span><label for="start-line-height">Line height <kbd>{</kbd> / <kbd>}</kbd></label> <output id="start-line-height-value"></output></span>
-            <div class="range-stepper">
-              <button id="start-line-height-down" type="button" aria-label="Decrease book line height">−</button>
-              <input id="start-line-height" type="range" min="1.20" max="2.20" step="0.04" aria-label="Book line height">
-              <button id="start-line-height-up" type="button" aria-label="Increase book line height">+</button>
-            </div>
-          </div>
+          <span><kbd>P</kbd> / <kbd>Shift+P</kbd> next / previous palette</span>
+          <span><kbd>Alt+1…9/0</kbd> select palette directly</span>
+          <span><kbd>F</kbd> / <kbd>Shift+F</kbd> next / previous font</span>
+          <span><kbd>Alt+Shift+1…9/0</kbd> font · <kbd>Alt+Shift+M</kbd> mono</span>
+          <span><kbd>[</kbd> / <kbd>]</kbd> decrease / increase font size</span>
+          <span><kbd>{</kbd> / <kbd>}</kbd> decrease / increase line height</span>
+          <span><kbd>−</kbd> / <kbd>+</kbd> letter spacing · <kbd>0</kbd> reset</span>
           <span><kbd>Ctrl + wheel</kbd> or <kbd>Ctrl + +/−</kbd> zoom</span>
           <span><kbd>V</kbd> read aloud from here · <kbd>Esc</kbd> stop</span>
-          <span>During speech: use the bottom-right play/pause and stop controls</span>
-          <span class="start-tracking">
-            <span>Letter spacing</span>
-            <button id="start-tracking-down" type="button" aria-label="Decrease letter spacing"><kbd>−</kbd></button>
-            <button id="start-tracking-reset" type="button" aria-label="Reset letter spacing"><kbd>0</kbd></button>
-            <button id="start-tracking-up" type="button" aria-label="Increase letter spacing"><kbd>+</kbd></button>
-          </span>
-          <div class="start-range">
-            <span><label for="start-width">Text width</label> <output id="start-width-value"></output></span>
-            <div class="range-stepper">
-              <button id="start-width-down" type="button" aria-label="Decrease text width">−</button>
-              <input id="start-width" type="range" min="8" max="100" step="2" aria-label="Approximate characters per line">
-              <button id="start-width-up" type="button" aria-label="Increase text width">+</button>
-            </div>
-          </div>
-          <button id="start-reset-all" class="start-wide" type="button">RESET ALL SETTINGS</button>
+          <span>During speech, use the bottom-right play/pause and stop buttons</span>
         </div>
       </section>
 
@@ -139,14 +112,7 @@
           </div>
           <span class="settings-label">Local Piper</span>
           <label>Voice<select id="settings-speech-voice"><option value="">RANDOM VOICE</option></select></label>
-          <div class="settings-control">
-            <span class="settings-label"><label for="settings-speech-min">Minimum chunk</label><output id="settings-speech-min-value"></output></span>
-            <div class="range-stepper">
-              <button id="settings-speech-min-down" type="button" aria-label="Decrease minimum speech chunk">−</button>
-              <input id="settings-speech-min" type="range" min="100" max="500" step="50" aria-label="Minimum speech chunk">
-              <button id="settings-speech-min-up" type="button" aria-label="Increase minimum speech chunk">+</button>
-            </div>
-          </div>
+          <label id="settings-speech-speaker-row" hidden>Embedded voice<select id="settings-speech-speaker"><option value="">RANDOM ID</option></select></label>
           <div class="settings-control">
             <span class="settings-label"><label for="settings-speech-max">Maximum chunk</label><output id="settings-speech-max-value"></output></span>
             <div class="range-stepper">
@@ -156,11 +122,11 @@
             </div>
           </div>
           <div class="settings-control">
-            <span class="settings-label"><label for="settings-speech-position">Spoken line position</label><output id="settings-speech-position-value"></output></span>
+            <span class="settings-label"><label for="settings-speech-position">Spoken text center offset</label><output id="settings-speech-position-value"></output></span>
             <div class="range-stepper">
-              <button id="settings-speech-position-down" type="button" aria-label="Move spoken line upward">−</button>
-              <input id="settings-speech-position" type="range" min="5" max="50" step="1" aria-label="Spoken line position">
-              <button id="settings-speech-position-up" type="button" aria-label="Move spoken line downward">+</button>
+              <button id="settings-speech-position-down" type="button" aria-label="Move spoken text upward">−</button>
+              <input id="settings-speech-position" type="range" min="-25" max="25" step="1" aria-label="Spoken text center offset">
+              <button id="settings-speech-position-up" type="button" aria-label="Move spoken text downward">+</button>
             </div>
           </div>
           <div class="settings-row settings-speech">
@@ -169,15 +135,9 @@
             <button id="settings-speech-stop" type="button" disabled>STOP</button>
           </div>
           <small id="settings-speech-status">Run piper_bridge.py to enable local speech.</small>
-          <span class="settings-label">Navigation</span>
-          <div class="settings-row settings-navigation">
-            <button id="settings-home" type="button">HOME</button>
-            <button id="settings-page-up" type="button">PAGE ↑</button>
-            <button id="settings-page-down" type="button">PAGE ↓</button>
-          </div>
+          <button id="settings-home" class="settings-wide" type="button">HOME</button>
           <button id="settings-open" class="settings-wide" type="button">OPEN ANOTHER EPUB</button>
-          <button id="settings-reopen" class="settings-wide" type="button" disabled>REOPEN LAST EPUB</button>
-          <button id="settings-reset-all" class="settings-wide" type="button">RESET ALL SETTINGS</button>
+          <button id="settings-reset-book" class="settings-wide" type="button">RESET THIS BOOK</button>
         </div>
       </aside>
 
@@ -193,17 +153,17 @@
           <button id="speech-overlay-home" type="button" aria-label="Return to home screen" title="Home">⌂</button>
         </div>
         <output id="reading-progress" aria-label="Reading progress" hidden>0%</output>
-        <output id="speech-progress" aria-label="Piper chunk progress" hidden></output>
         <output id="speech-voice" aria-label="Active Piper voice" hidden></output>
       </div>
       <div id="speech-marker" aria-hidden="true" hidden></div>
       <audio id="speech-audio" preload="auto" hidden></audio>
       <input id="file-input" type="file" accept=".epub,application/epub+zip" hidden>
+      <input id="library-import-input" type="file" accept=".zip,application/zip" hidden>
     </main>
 
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260903-recent6"></script>
+    <script src="renderer-v36.js?v=20260909-newdefaults1"></script>
   </body>
 </html>

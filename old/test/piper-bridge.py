@@ -35,6 +35,18 @@ with tempfile.TemporaryDirectory() as temporary_directory:
     model = voice_dir / "test-voice.onnx"
     model.write_bytes(b"fake model")
     Path(f"{model}.json").write_text(
+        json.dumps({
+            "num_speakers": 2,
+            "speaker_id_map": {"ALPHA": 0, "BETA": 1},
+            "audio": {"sample_rate": 24_000},
+        }),
+        encoding="utf-8",
+    )
+    nested_voice_dir = voice_dir / "english" / "regional"
+    nested_voice_dir.mkdir(parents=True)
+    nested_model = nested_voice_dir / "nested-voice.onnx"
+    nested_model.write_bytes(b"fake nested model")
+    Path(f"{nested_model}.json").write_text(
         json.dumps({"num_speakers": 2, "audio": {"sample_rate": 24_000}}),
         encoding="utf-8",
     )
@@ -75,6 +87,26 @@ with tempfile.TemporaryDirectory() as temporary_directory:
 
     status = controller.status()
     assert status["available"] is True
+    assert status["voices"] == [
+        "english/regional/nested-voice.onnx",
+        "test-voice.onnx",
+    ]
+    assert status["voiceDetails"] == [
+        {
+            "id": "english/regional/nested-voice.onnx",
+            "speakerCount": 2,
+            "speakerNames": {},
+        },
+        {
+            "id": "test-voice.onnx",
+            "speakerCount": 2,
+            "speakerNames": {"0": "ALPHA", "1": "BETA"},
+        },
+    ]
+    assert controller._select_voice(
+        "english/regional/nested-voice.onnx", "Nested voice test"
+    ) == nested_model
+    assert controller._select_voice("nested-voice.onnx", "Legacy voice test") == nested_model
     assert status["loudnorm"] == BRIDGE.LOUDNORM_FILTER
     assert status["audioCodec"] == "opus"
     assert status["audioBitrateKbps"] == 48
@@ -96,6 +128,34 @@ with tempfile.TemporaryDirectory() as temporary_directory:
     )
     assert cached["cached"] is True
     assert cached["speakerCount"] == 2
+
+    fixed_speaker = controller.prepare(
+        "A fixed embedded speaker selection.",
+        "test-voice.onnx",
+        "session_fixed",
+        "opus",
+        1,
+    )
+    assert fixed_speaker["speaker"] == 1
+    assert fixed_speaker["speakerCount"] == 2
+    assert controller.prepare(
+        "A fixed embedded speaker selection.",
+        "test-voice.onnx",
+        "session_fixed",
+        "opus",
+        "1",
+    )["cached"] is True
+    try:
+        controller.prepare(
+            "An invalid embedded speaker selection.",
+            "test-voice.onnx",
+            "session_fixed",
+            "opus",
+            2,
+        )
+        raise AssertionError("Out-of-range Piper speaker ID was accepted")
+    except ValueError as error:
+        assert "between 0 and 1" in str(error)
 
     ffmpeg_arguments = json.loads(ffmpeg_log.read_text(encoding="utf-8").splitlines()[0])
     assert ffmpeg_arguments[ffmpeg_arguments.index("-af") + 1] == BRIDGE.LOUDNORM_FILTER
@@ -182,8 +242,9 @@ with tempfile.TemporaryDirectory() as temporary_directory:
         prepare_request = urllib.request.Request(
             base_url + "/api/piper/prepare",
             data=json.dumps({
-                "text": "The first normalized cached chunk.",
-                "voice": None,
+                "text": "A fixed embedded speaker selection.",
+                "voice": "test-voice.onnx",
+                "speaker": 1,
                 "sessionId": "session_http",
                 "audioFormat": "opus",
             }).encode("utf-8"),
@@ -194,6 +255,7 @@ with tempfile.TemporaryDirectory() as temporary_directory:
             prepared_payload = json.loads(response.read())
             assert prepared_payload["cached"] is True
             assert prepared_payload["audioFormat"] == "opus"
+            assert prepared_payload["speaker"] == 1
 
         stop_request = urllib.request.Request(
             base_url + "/api/piper/stop",

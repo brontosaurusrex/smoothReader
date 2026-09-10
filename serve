@@ -1,5 +1,7 @@
-# PIPER_BIN=/path/to/piper
-# FFMPEG_BIN=/usr/bin/ffmpeg
+#!/bin/sh
+set -eu
 
-./piper_bridge.py # --voice-dir /path/to/voices --cache-dir /path/to/audio-cache --port 8000
-
+# Environment variables such as PIPER_BIN, FFMPEG_BIN, PIPER_VOICE_DIR,
+# PIPER_CACHE_DIR, and SMOOTH_READER_LIBRARY_DIR are inherited automatically.
+# Extra bridge options can be passed directly to this script.
+exec ./piper_bridge.py "$@"

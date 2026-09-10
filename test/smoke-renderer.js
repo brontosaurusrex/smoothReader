@@ -107,7 +107,9 @@ const elements = {
   "#start-import-library": makeElement(),
   "#start-manage-library": makeElement(),
   "#library-manage-actions": makeElement(),
-  "#start-remove-books": makeElement(),
+  "#start-store-server": makeElement(),
+  "#start-remove-local": makeElement(),
+  "#start-remove-server": makeElement(),
   "#start-cancel-manage": makeElement(),
   "#library-import-input": makeElement(),
   "#settings-menu": makeElement(),
@@ -171,6 +173,8 @@ elements["#settings-menu"].hidden = true;
 elements["#settings-panel"].hidden = true;
 elements["#settings-speech-speaker-row"].hidden = true;
 elements["#library-manage-actions"].hidden = true;
+elements["#start-store-server"].hidden = true;
+elements["#start-remove-server"].hidden = true;
 elements["#reading-progress"].hidden = true;
 elements["#speech-voice"].hidden = true;
 elements["#speech-controls"].hidden = true;
@@ -433,8 +437,16 @@ const context = vm.createContext({
     clearTimeout,
     fetch(path) {
       fetchCalls.push(path);
+      if (path === "/api/library/books") {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: async () => ({ ok: false, error: "Not found" })
+        });
+      }
       return Promise.resolve({
         ok: true,
+        status: 200,
         json: async () => path === "/api/piper/status"
           ? {
             ok: true,
@@ -531,7 +543,9 @@ assert.match(indexSource, /id="start-export-library"[^>]*>EXPORT LIBRARY</);
 assert.match(indexSource, /id="start-import-library"[^>]*>IMPORT LIBRARY</);
 assert.match(indexSource, /id="start-manage-library"[^>]*>MANAGE LIBRARY</);
 assert.match(indexSource, /id="library-manage-actions"[^>]*hidden/);
-assert.match(indexSource, /id="start-remove-books"[^>]*>REMOVE SELECTED</);
+assert.match(indexSource, /id="start-store-server"[^>]*>STORE ON SERVER</);
+assert.match(indexSource, /id="start-remove-local"[^>]*>REMOVE FROM THIS DEVICE</);
+assert.match(indexSource, /id="start-remove-server"[^>]*>REMOVE FROM SERVER</);
 assert.match(indexSource, /id="start-cancel-manage"[^>]*>CANCEL</);
 assert.match(indexSource, /id="library-import-input"[^>]*accept="\.zip,application\/zip"/);
 assert.match(indexSource, /id="library-actions"/);
@@ -588,8 +602,8 @@ assert.doesNotMatch(indexSource, /id="start-settings-scope"/);
 assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260909-homecenter1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260909-newdefaults1/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260910-serverlibrary1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260910-serverlibrary1/);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
@@ -606,6 +620,14 @@ assert.match(rendererSource, /BOOK_SETTINGS_PREFIX/);
 assert.match(rendererSource, /LIBRARY_BACKUP_FORMAT = "smooth-reader-library"/);
 assert.match(rendererSource, /const exportLibrary = async/);
 assert.match(rendererSource, /const importLibrary = async/);
+assert.match(rendererSource, /\/api\/library\/books/);
+assert.match(rendererSource, /const storeSelectedBooksOnServer = async/);
+assert.match(rendererSource, /const removeSelectedServerBooks = async/);
+assert.match(rendererSource, /const removeSelectedClientBooks = async/);
+assert.match(rendererSource, /const EPUB_OPEN_TIMEOUT_MS = 30_000/);
+assert.match(rendererSource, /const validateEpubBytes = async/);
+assert.match(rendererSource, /captureTextPositionAnchor/);
+assert.match(rendererSource, /restoreTextPositionAnchor/);
 assert.match(rendererSource, /savePositionNow\(\);[\s\S]*storageSnapshot\(\)/);
 assert.match(rendererSource, /key\.startsWith\(POSITION_PREFIX\)/);
 assert.match(rendererSource, /positionSavedAt\(existing\) > positionSavedAt\(value\)/);
@@ -727,6 +749,7 @@ assert.match(stylesSource, /#recent-book-list \.recent-book::before[^{]*\{[^}]*w
 assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*text-align:\s*left/s);
 assert.match(stylesSource, /#recent-book-list\.is-managing \.recent-book\.is-selected/);
 assert.match(stylesSource, /#library-manage-actions/);
+assert.match(stylesSource, /\.recent-book\.is-server-stored::before/);
 
 assert.equal(
   JSON.stringify(vm.runInContext("splitSpeechText('Dr. One. Mr. Two.', 1, 12)", context)),
@@ -1060,6 +1083,63 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#start-reopen"].disabled, false);
   assert.equal(elements["#start-manage-library"].disabled, false);
   assert.equal(elements["#library-manage-actions"].hidden, true);
+  assert.equal(elements["#start-store-server"].hidden, true);
+  assert.equal(elements["#start-remove-server"].hidden, true);
+
+  const serverHashFixture = "a".repeat(64);
+  context.serverBookFixture = {
+    hash: serverHashFixture,
+    fileName: "remote.epub",
+    title: "Remote Book",
+    openedAt: Date.now() + 10_000,
+    coverUrl: `/api/library/books/${serverHashFixture}/cover`,
+    serverStored: true
+  };
+  vm.runInContext(`
+    serverBookInfo = [serverBookFixture];
+    serverBookHashes.add(serverBookFixture.hash);
+    setServerLibraryAvailable(true);
+    renderRecentBooks();
+  `, context);
+  assert.equal(elements["#start-store-server"].hidden, false);
+  assert.equal(elements["#start-remove-server"].hidden, false);
+  assert.equal(elements["#recent-book-list"].children.length, 2);
+  assert.equal(
+    elements["#recent-book-list"].children[0].classList.contains("is-server-stored"),
+    true
+  );
+  context.serverStateFixture = {
+    hash: serverHashFixture,
+    position: { scrollY: 840, ratio: 0.5, savedAt: 900 },
+    settings: { palette: "paper", font: "noto-serif", savedAt: 901 }
+  };
+  vm.runInContext("mergeServerBookState(serverBookFixture.hash, serverStateFixture)", context);
+  assert.equal(
+    JSON.parse(stored.get(`smooth-reader:position:${serverHashFixture}`)).scrollY,
+    840
+  );
+  assert.equal(
+    JSON.parse(stored.get(`smooth-reader:book-settings:${serverHashFixture}`)).font,
+    "noto-serif"
+  );
+  stored.delete(`smooth-reader:position:${serverHashFixture}`);
+  stored.delete(`smooth-reader:book-settings:${serverHashFixture}`);
+  vm.runInContext(`
+    serverBookInfo = [];
+    serverBookHashes.clear();
+    setServerLibraryAvailable(false);
+    renderRecentBooks();
+  `, context);
+
+  context.window.JSZip = function JSZipFixture() {};
+  context.window.JSZip.loadAsync = async () => {
+    throw new Error("corrupt central directory");
+  };
+  await assert.rejects(
+    vm.runInContext("validateEpubBytes(new Uint8Array([1, 2, 3]).buffer)", context),
+    /Invalid or damaged EPUB archive/
+  );
+  delete context.window.JSZip;
   assert.equal(elements["#settings-palette"].children.length, 10);
   assert.equal(elements["#settings-font"].children.length, 12);
   assert.equal(elements["#settings-contrast-value"].textContent, "0%");
@@ -1388,7 +1468,9 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#start-export-library"].listeners.has("click"), true);
   assert.equal(elements["#start-import-library"].listeners.has("click"), true);
   assert.equal(elements["#start-manage-library"].listeners.has("click"), true);
-  assert.equal(elements["#start-remove-books"].listeners.has("click"), true);
+  assert.equal(elements["#start-store-server"].listeners.has("click"), true);
+  assert.equal(elements["#start-remove-local"].listeners.has("click"), true);
+  assert.equal(elements["#start-remove-server"].listeners.has("click"), true);
   assert.equal(elements["#start-cancel-manage"].listeners.has("click"), true);
   assert.equal(elements["#library-import-input"].listeners.has("change"), true);
   assert.equal(elements["#settings-speech-start"].listeners.has("click"), true);
@@ -1607,7 +1689,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
   assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
   const activeSettingsKey = `smooth-reader:book-settings:${vm.runInContext("activeBookKey", context)}`;
-  assert.deepEqual(JSON.parse(stored.get(activeSettingsKey)), {
+  const resetSettings = JSON.parse(stored.get(activeSettingsKey));
+  assert.equal(Number.isFinite(resetSettings.savedAt), true);
+  delete resetSettings.savedAt;
+  assert.deepEqual(resetSettings, {
     palette: "nord",
     contrast: 0,
     font: "alegreya",
@@ -1643,11 +1728,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#recent-book-list"].classList.contains("is-managing"), true);
   elements["#recent-book-list"].children[0].listeners.get("click")();
   elements["#recent-book-list"].children[1].listeners.get("click")();
-  assert.equal(elements["#start-remove-books"].textContent, "REMOVE SELECTED (2)");
-  assert.equal(elements["#start-remove-books"].disabled, false);
+  assert.equal(elements["#start-remove-local"].disabled, false);
   assert.equal(elements["#recent-book-list"].children[0].getAttribute("aria-pressed"), "true");
   assert.equal(elements["#recent-book-list"].children[1].getAttribute("aria-pressed"), "true");
-  elements["#start-remove-books"].listeners.get("click")();
+  elements["#start-remove-local"].listeners.get("click")();
   await wait(30);
   assert.match(confirmPrompts.at(-1), /Remove these 2 books/);
   assert.equal(elements["#recent-book-list"].children.length, 3);

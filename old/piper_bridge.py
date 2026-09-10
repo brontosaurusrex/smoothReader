@@ -55,10 +55,24 @@ class PiperController:
     def voices(self) -> list[Path]:
         if not self.voice_dir.is_dir():
             return []
-        return sorted(self.voice_dir.glob("*.onnx"), key=lambda path: path.name.lower())
+        return sorted(
+            self.voice_dir.rglob("*.onnx"),
+            key=lambda path: self._voice_id(path).lower(),
+        )
+
+    def _voice_id(self, model: Path) -> str:
+        return model.relative_to(self.voice_dir).as_posix()
 
     def status(self) -> dict[str, Any]:
         voices = self.voices()
+        voice_details = []
+        for voice in voices:
+            speaker_count, _, speaker_names = self._voice_metadata(voice)
+            voice_details.append({
+                "id": self._voice_id(voice),
+                "speakerCount": speaker_count,
+                "speakerNames": speaker_names,
+            })
         missing = []
         if not self.piper_bin:
             missing.append("piper")
@@ -72,7 +86,8 @@ class PiperController:
         return {
             "ok": True,
             "available": not missing,
-            "voices": [voice.name for voice in voices],
+            "voices": [self._voice_id(voice) for voice in voices],
+            "voiceDetails": voice_details,
             "voiceDirectory": str(self.voice_dir),
             "cacheDirectory": str(self.cache_dir),
             "loudnorm": LOUDNORM_FILTER,
@@ -89,8 +104,16 @@ class PiperController:
         if not voices:
             raise RuntimeError(f"No .onnx voices found in {self.voice_dir}")
         if requested:
-            requested_name = Path(requested).name
-            match = next((voice for voice in voices if voice.name == requested_name), None)
+            requested_id = requested.replace("\\", "/")
+            match = next(
+                (voice for voice in voices if self._voice_id(voice) == requested_id),
+                None,
+            )
+            if not match:
+                legacy_matches = [
+                    voice for voice in voices if voice.name == Path(requested_id).name
+                ]
+                match = legacy_matches[0] if len(legacy_matches) == 1 else None
             if not match:
                 raise RuntimeError("The selected Piper voice is no longer available")
             return match
@@ -98,20 +121,66 @@ class PiperController:
         return voices[seed % len(voices)]
 
     @staticmethod
-    def _voice_config(model: Path) -> tuple[int, int]:
+    def _voice_metadata(model: Path) -> tuple[int, int, dict[str, str]]:
         config_path = Path(f"{model}.json")
         try:
             config = json.loads(config_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return 1, 22_050
-        speakers = max(1, int(config.get("num_speakers", 1) or 1))
-        sample_rate = int(config.get("audio", {}).get("sample_rate", 22_050) or 22_050)
-        return speakers, sample_rate
+            return 1, 22_050, {}
+        try:
+            speakers = max(1, int(config.get("num_speakers", 1) or 1))
+        except (TypeError, ValueError):
+            speakers = 1
+        try:
+            sample_rate = int(
+                config.get("audio", {}).get("sample_rate", 22_050) or 22_050
+            )
+        except (AttributeError, TypeError, ValueError):
+            sample_rate = 22_050
 
-    @staticmethod
-    def _speaker_for_text(text: str, model: Path, speaker_count: int) -> int:
-        digest = hashlib.sha256(f"{model.name}\0{text}".encode("utf-8")).digest()
+        speaker_names: dict[str, str] = {}
+        raw_speaker_map = config.get("speaker_id_map", {})
+        if isinstance(raw_speaker_map, dict):
+            for name, speaker_id in raw_speaker_map.items():
+                try:
+                    numeric_id = int(speaker_id)
+                except (TypeError, ValueError):
+                    continue
+                if 0 <= numeric_id < speakers and str(name).strip():
+                    speaker_names.setdefault(str(numeric_id), str(name).strip())
+        return speakers, max(1, sample_rate), speaker_names
+
+    @classmethod
+    def _voice_config(cls, model: Path) -> tuple[int, int]:
+        speaker_count, sample_rate, _ = cls._voice_metadata(model)
+        return speaker_count, sample_rate
+
+    def _speaker_for_text(self, text: str, model: Path, speaker_count: int) -> int:
+        digest = hashlib.sha256(
+            f"{self._voice_id(model)}\0{text}".encode("utf-8")
+        ).digest()
         return int.from_bytes(digest[:8], "big") % speaker_count
+
+    def _select_speaker(
+        self,
+        requested: Any,
+        text: str,
+        model: Path,
+        speaker_count: int,
+    ) -> int:
+        if requested is None or requested == "":
+            return self._speaker_for_text(text, model, speaker_count)
+        if isinstance(requested, bool):
+            raise ValueError("Invalid Piper speaker ID")
+        try:
+            speaker = int(requested)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Invalid Piper speaker ID") from error
+        if str(requested).strip() != str(speaker) or not 0 <= speaker < speaker_count:
+            raise ValueError(
+                f"Piper speaker ID must be between 0 and {speaker_count - 1}"
+            )
+        return speaker
 
     def _cache_identity(
         self,
@@ -123,9 +192,13 @@ class PiperController:
     ) -> str:
         try:
             model_stat = model.stat()
-            model_identity = [model.name, model_stat.st_size, model_stat.st_mtime_ns]
+            model_identity = [
+                self._voice_id(model),
+                model_stat.st_size,
+                model_stat.st_mtime_ns,
+            ]
         except OSError:
-            model_identity = [model.name, 0, 0]
+            model_identity = [self._voice_id(model), 0, 0]
         identity = {
             "version": CACHE_FORMAT_VERSION,
             "text": text,
@@ -271,6 +344,7 @@ class PiperController:
         requested_voice: str | None,
         session_id: str,
         audio_format: str,
+        requested_speaker: Any = None,
     ) -> dict[str, Any]:
         if not self.piper_bin:
             raise RuntimeError("piper must be installed")
@@ -282,7 +356,9 @@ class PiperController:
             raise ValueError("Unsupported speech audio format")
         model = self._select_voice(requested_voice, text)
         speaker_count, sample_rate = self._voice_config(model)
-        speaker = self._speaker_for_text(text, model, speaker_count)
+        speaker = self._select_speaker(
+            requested_speaker, text, model, speaker_count
+        )
         cache_id = self._cache_identity(
             text, model, speaker, sample_rate, audio_format
         )
@@ -389,7 +465,7 @@ class PiperController:
 
                 metadata = {
                     "cacheId": cache_id,
-                    "voice": model.name,
+                    "voice": self._voice_id(model),
                     "speaker": speaker,
                     "speakerCount": speaker_count,
                     "sampleRate": actual_sample_rate,
@@ -588,6 +664,7 @@ class SmoothReaderHandler(SimpleHTTPRequestHandler):
                     payload.get("voice"),
                     str(payload.get("sessionId", "")),
                     str(payload.get("audioFormat", "opus")),
+                    payload.get("speaker"),
                 )
                 self._json_response(HTTPStatus.OK, result)
                 return
@@ -613,7 +690,7 @@ def parse_args() -> argparse.Namespace:
         "--voice-dir",
         type=Path,
         default=Path(os.environ.get("PIPER_VOICE_DIR", "~/piper")),
-        help="directory containing Piper .onnx and .onnx.json files",
+        help="root directory recursively containing Piper .onnx and .onnx.json files",
     )
     parser.add_argument(
         "--cache-dir",
