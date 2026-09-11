@@ -213,6 +213,8 @@ let speechActiveJob = null;
 let speechActiveElements = [];
 let speechAudioFinish = null;
 let speechAudioUnlockPromise = Promise.resolve();
+const speechPrefetchControllers = new Set();
+const speechPrefetchedUrls = new Set();
 let speechMarkerFrame = null;
 let speechScrollFrame = null;
 let speechScrollTargetY = null;
@@ -3137,6 +3139,53 @@ const releaseSpeechAudio = () => {
   syncSpeechControls();
 };
 
+const releasePrefetchedAudio = (prepared) => {
+  const blobUrl = prepared?.prefetchedAudioUrl;
+  if (!blobUrl || !speechPrefetchedUrls.has(blobUrl)) return;
+  URL.revokeObjectURL(blobUrl);
+  speechPrefetchedUrls.delete(blobUrl);
+};
+
+const cancelSpeechPreloads = () => {
+  speechPrefetchControllers.forEach((controller) => controller.abort());
+  speechPrefetchControllers.clear();
+  speechPrefetchedUrls.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
+  speechPrefetchedUrls.clear();
+};
+
+const preloadPreparedAudio = async (prepared, generation) => {
+  if (
+    prepared?.audioFormat !== "opus" ||
+    !prepared.audioUrl ||
+    generation !== speechGeneration ||
+    typeof AbortController !== "function" ||
+    typeof URL === "undefined" ||
+    typeof URL.createObjectURL !== "function"
+  ) return prepared;
+
+  const controller = new AbortController();
+  speechPrefetchControllers.add(controller);
+  try {
+    const response = await window.fetch(prepared.audioUrl, {
+      signal: controller.signal,
+      credentials: "same-origin"
+    });
+    if (!response.ok || typeof response.blob !== "function") return prepared;
+    const blob = await response.blob();
+    if (controller.signal.aborted || generation !== speechGeneration || blob.size === 0) {
+      return prepared;
+    }
+    const prefetchedAudioUrl = URL.createObjectURL(blob);
+    speechPrefetchedUrls.add(prefetchedAudioUrl);
+    return { ...prepared, prefetchedAudioUrl };
+  } catch {
+    // Preloading is an optimization. Normal URL playback remains the fallback.
+    return prepared;
+  } finally {
+    speechPrefetchControllers.delete(controller);
+  }
+};
+
 const unlockSpeechAudio = () => {
   speechAudio.muted = true;
   speechAudio.src = SILENT_WAV_DATA_URL;
@@ -3157,7 +3206,7 @@ const playPreparedAudio = async (prepared) => {
   await speechAudioUnlockPromise;
   releaseSpeechAudio();
   speechAudio.muted = false;
-  speechAudio.src = prepared.audioUrl;
+  speechAudio.src = prepared.prefetchedAudioUrl || prepared.audioUrl;
   speechAudio.load();
   speechAudio.playbackRate = 1 + speechSpeedPercent / 100;
   if ("preservesPitch" in speechAudio) speechAudio.preservesPitch = true;
@@ -3190,6 +3239,7 @@ const playPreparedAudio = async (prepared) => {
     speechAudio.onerror = null;
     speechAudio.removeAttribute("src");
     speechAudio.load();
+    releasePrefetchedAudio(prepared);
   }
 };
 
@@ -3200,6 +3250,7 @@ const stopSpeech = () => {
   speechIsPaused = false;
   clearSpeechIndicators();
   releaseSpeechAudio();
+  cancelSpeechPreloads();
   clearSpeechSelection();
   syncSpeechControls();
 
@@ -3234,6 +3285,7 @@ const toggleSpeechPause = async () => {
 
 const startSpeech = async () => {
   if (reader.hidden || viewer.children.length === 0 || speechIsActive) return;
+  cancelSpeechPreloads();
   unlockSpeechAudio();
   const generation = ++speechGeneration;
   speechIsActive = true;
@@ -3290,6 +3342,7 @@ const startSpeech = async () => {
       })
     });
     const settlePreparation = (job) => prepareJob(job)
+      .then((value) => preloadPreparedAudio(value, generation))
       .then((value) => ({ value }), (error) => ({ error }));
 
     const viewportReading = !selectedText;
@@ -3387,6 +3440,7 @@ const startSpeech = async () => {
     speechIsPaused = false;
     clearSpeechIndicators();
     releaseSpeechAudio();
+    cancelSpeechPreloads();
     clearSpeechSelection();
     syncSpeechControls();
     settingsSpeechStatus.textContent = "Finished.";
@@ -3396,6 +3450,7 @@ const startSpeech = async () => {
     speechIsPaused = false;
     clearSpeechIndicators();
     releaseSpeechAudio();
+    cancelSpeechPreloads();
     clearSpeechSelection();
     syncSpeechControls();
     const message = error?.message || "Local Piper could not read this text.";

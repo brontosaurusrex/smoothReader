@@ -383,15 +383,25 @@ sequenceDiagram
         R->>A: Play audio
     and Prepare next
         R->>B: Prepare next chunk
+        B-->>R: Next audio URL
+        R->>R: Download next Opus into Blob
     end
     A-->>R: Ended
-    R->>R: Scroll and mark next text
+    R->>A: Play prefetched Blob
+    R->>R: Release old Blob; scroll and mark text
 ```
 
 While one chunk plays, the next chunk is requested. At the end of a visible
 batch, the client geometrically plans the next viewport before scrolling and can
 start generating its first chunk in advance. Playback never waits for the
 10 ms scroll animation; generation and scrolling are separate concerns.
+
+When the bridge finishes the next Opus chunk, the browser immediately downloads
+it into a temporary in-memory Blob. The following transition therefore plays a
+local `blob:` URL rather than beginning its network transfer after the previous
+chunk ends. Only upcoming audio is retained. Blob URLs are revoked after use and
+pending downloads are aborted on Stop, cancellation, or failure. If preloading
+is unavailable or fails, playback falls back to the bridge audio URL.
 
 The active text is represented by a DOM `Range`. A narrow marker is positioned
 to the left of the owning block and recalculated after scroll, zoom, resize, or
@@ -519,7 +529,7 @@ own; access control belongs in Nginx.
 | Speech session ID | Browser sessionStorage | With speech requests | No |
 | Current speech text | Browser memory | Only when Piper is used | No |
 | Voice models | Server filesystem | Already server-side | No |
-| Generated Opus/WAV | Server cache and browser HTTP cache | Returned to browser | No |
+| Generated Opus/WAV | Server cache; next Opus also held temporarily in browser memory | Returned to browser | No |
 
 ## Failure behavior and limitations
 

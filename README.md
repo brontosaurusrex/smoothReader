@@ -118,7 +118,7 @@ python3 piper_bridge.py \
   --port 8000
 ```
 
-The bridge searches the voice directory recursively for `.onnx` models and their `.onnx.json` files. It generates in the background, normalizes speech with FFmpeg, and serves mono Ogg Opus at 48 kbps when supported, with WAV fallback. Each browser tab has an isolated speech session; uncached Piper jobs share a fair single-generator queue.
+The bridge searches the voice directory recursively for `.onnx` models and their `.onnx.json` files. It generates in the background, normalizes speech with FFmpeg, and serves mono Ogg Opus at 48 kbps when supported, with WAV fallback. While one chunk plays, the browser downloads the prepared next Opus chunk into temporary memory for a faster transition. Each browser tab has an isolated speech session; uncached Piper jobs share a fair single-generator queue.
 
 After selecting a multi-speaker ONNX voice, an `Embedded voice` selector appears.
 `RANDOM ID` keeps deterministic automatic speaker selection; selecting a numbered

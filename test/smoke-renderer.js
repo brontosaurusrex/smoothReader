@@ -213,6 +213,8 @@ const selectionRanges = [];
 const createdRanges = [];
 const fetchCalls = [];
 const confirmPrompts = [];
+const createdObjectUrls = [];
+const revokedObjectUrls = [];
 let speechRectLeft = 120;
 let speechBlockLeft = 80;
 const anchorTextNode = {
@@ -300,6 +302,18 @@ const context = vm.createContext({
   },
   setTimeout,
   clearTimeout,
+  Blob,
+  AbortController,
+  URL: {
+    createObjectURL() {
+      const value = `blob:smooth-reader-${createdObjectUrls.length + 1}`;
+      createdObjectUrls.push(value);
+      return value;
+    },
+    revokeObjectURL(value) {
+      revokedObjectUrls.push(value);
+    }
+  },
   crypto: {
     subtle: {
       async digest(_algorithm, bytes) {
@@ -452,6 +466,7 @@ const context = vm.createContext({
       return Promise.resolve({
         ok: true,
         status: 200,
+        blob: async () => new Blob(["test-opus"], { type: "audio/ogg" }),
         json: async () => path === "/api/piper/status"
           ? {
             ok: true,
@@ -609,7 +624,7 @@ assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260910-serverlibrary1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260911-firstline-speed1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260911-opus-preload1/);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
@@ -650,6 +665,9 @@ assert.match(rendererSource, /window\.addEventListener\("popstate"/);
 assert.match(rendererSource, /commitReaderHistory/);
 assert.doesNotMatch(rendererSource, /\/api\/piper\/(?:play|pause|resume)/);
 assert.match(rendererSource, /await speechAudio\.play\(\)/);
+assert.match(rendererSource, /const preloadPreparedAudio = async/);
+assert.match(rendererSource, /prepared\.prefetchedAudioUrl \|\| prepared\.audioUrl/);
+assert.match(rendererSource, /cancelSpeechPreloads\(\)/);
 assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 10/);
 assert.match(rendererSource, /await scrollDownAfterSpeechJob\(currentJob\)/);
 assert.match(rendererSource, /const plan = nextSpeechViewport\(futureCursor\)/);
@@ -1189,12 +1207,19 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.dataset.font, "alegreya");
   assert.equal(vm.runInContext("speechAudioFormat", context), "opus");
 
-  elements["#speech-audio"].autoEnd = true;
-  await vm.runInContext(
-    "playPreparedAudio({ audioUrl: '/api/piper/audio/test-cache-id' })",
+  const prefetchedAudio = await vm.runInContext(
+    "preloadPreparedAudio({ audioUrl: '/api/piper/audio/prefetched-cache-id', audioFormat: 'opus' }, speechGeneration)",
     context
   );
+  assert.equal(prefetchedAudio.prefetchedAudioUrl, "blob:smooth-reader-1");
+  assert.equal(fetchCalls.includes("/api/piper/audio/prefetched-cache-id"), true);
+
+  elements["#speech-audio"].autoEnd = true;
+  context.prefetchedAudio = prefetchedAudio;
+  await vm.runInContext("playPreparedAudio(prefetchedAudio)", context);
   assert.equal(elements["#speech-audio"].src, "");
+  assert.equal(revokedObjectUrls.includes("blob:smooth-reader-1"), true);
+  assert.equal(vm.runInContext("speechPrefetchedUrls.size", context), 0);
   elements["#speech-audio"].autoEnd = false;
   vm.runInContext(
     "speechIsActive = true; speechIsPaused = false; speechAudio.src = '/api/piper/audio/test';",
