@@ -131,6 +131,14 @@
               <button id="settings-speech-position-up" type="button" aria-label="Move spoken text downward">+</button>
             </div>
           </div>
+          <div class="settings-control">
+            <span class="settings-label"><label for="settings-speech-speed">Speech speed</label><output id="settings-speech-speed-value"></output></span>
+            <div class="range-stepper">
+              <button id="settings-speech-speed-down" type="button" aria-label="Decrease speech speed">−</button>
+              <input id="settings-speech-speed" type="range" min="-33" max="33" step="1" aria-label="Speech playback speed">
+              <button id="settings-speech-speed-up" type="button" aria-label="Increase speech speed">+</button>
+            </div>
+          </div>
           <div class="settings-row settings-speech">
             <button id="settings-speech-start" type="button">READ FROM HERE</button>
             <button id="settings-speech-pause" type="button" disabled>PAUSE</button>
@@ -166,6 +174,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260910-serverlibrary1"></script>
+    <script src="renderer-v36.js?v=20260911-firstline-speed1"></script>
   </body>
 </html>

@@ -17,6 +17,7 @@ const makeElement = () => {
     src: "",
     muted: false,
     paused: true,
+    preservesPitch: false,
     files: null,
     disabled: false,
     className: "",
@@ -148,6 +149,10 @@ const elements = {
   "#settings-speech-position-value": makeElement(),
   "#settings-speech-position-down": makeElement(),
   "#settings-speech-position-up": makeElement(),
+  "#settings-speech-speed": makeElement(),
+  "#settings-speech-speed-value": makeElement(),
+  "#settings-speech-speed-down": makeElement(),
+  "#settings-speech-speed-up": makeElement(),
   "#settings-speech-start": makeElement(),
   "#settings-speech-pause": makeElement(),
   "#settings-speech-stop": makeElement(),
@@ -580,6 +585,7 @@ assert.doesNotMatch(indexSource, /id="settings-speech-min"/);
 assert.match(indexSource, /id="settings-speech-max"/);
 assert.match(indexSource, /Spoken text center offset/);
 assert.match(indexSource, /id="settings-speech-position"[^>]*min="-25"[^>]*max="25"/);
+assert.match(indexSource, /id="settings-speech-speed"[^>]*min="-33"[^>]*max="33"/);
 assert.match(indexSource, /id="settings-speech-pause"/);
 assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(indexSource, /id="settings-toggle"[\s\S]*aria-label="Open reader settings"/);
@@ -590,7 +596,7 @@ assert.match(indexSource, /id="settings-font-size-up"/);
 for (const range of [
   "settings-contrast", "settings-font-size", "settings-line-height",
   "settings-width", "settings-speech-max",
-  "settings-speech-position"
+  "settings-speech-position", "settings-speech-speed"
 ]) {
   assert.match(indexSource, new RegExp(`id="${range}-down"`), `${range} minus`);
   assert.match(indexSource, new RegExp(`id="${range}-up"`), `${range} plus`);
@@ -603,7 +609,7 @@ assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260910-serverlibrary1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260910-serverlibrary1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260911-firstline-speed1/);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
@@ -628,6 +634,11 @@ assert.match(rendererSource, /const EPUB_OPEN_TIMEOUT_MS = 30_000/);
 assert.match(rendererSource, /const validateEpubBytes = async/);
 assert.match(rendererSource, /captureTextPositionAnchor/);
 assert.match(rendererSource, /restoreTextPositionAnchor/);
+assert.match(rendererSource, /captureFirstFullyVisibleTextAnchor/);
+assert.match(rendererSource, /placement: "first-visible-line"/);
+assert.match(rendererSource, /FIRST_VISIBLE_LINE_TOP_PADDING_PX = 12/);
+assert.doesNotMatch(rendererSource, /window\.innerHeight \* 0\.32/);
+assert.match(rendererSource, /speechAudio\.playbackRate = 1 \+ speechSpeedPercent \/ 100/);
 assert.match(rendererSource, /savePositionNow\(\);[\s\S]*storageSnapshot\(\)/);
 assert.match(rendererSource, /key\.startsWith\(POSITION_PREFIX\)/);
 assert.match(rendererSource, /positionSavedAt\(existing\) > positionSavedAt\(value\)/);
@@ -1151,7 +1162,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(vm.runInContext("speechMinimumLength", context), 150);
   assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
   assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
+  assert.equal(elements["#settings-speech-speed-value"].textContent, "0%");
+  assert.equal(elements["#speech-audio"].playbackRate, 1);
   assert.equal(stored.get("smooth-reader:speech-center-offset"), "0");
+  assert.equal(stored.get("smooth-reader:speech-speed"), "0");
   assert.equal(vm.runInContext("speechTargetCenterY(80)", context), 400);
   vm.runInContext("applySpeechCenterOffset(25)", context);
   assert.equal(elements["#settings-speech-position-value"].textContent, "+25%");
@@ -1166,6 +1180,11 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     -20
   );
   vm.runInContext("applySpeechCenterOffset(0)", context);
+  vm.runInContext("applySpeechSpeed(33)", context);
+  assert.equal(elements["#settings-speech-speed-value"].textContent, "+33%");
+  assert.equal(elements["#speech-audio"].playbackRate, 1.33);
+  assert.equal(elements["#speech-audio"].preservesPitch, true);
+  vm.runInContext("applySpeechSpeed(0)", context);
   assert.equal(context.document.documentElement.dataset.palette, "nord");
   assert.equal(context.document.documentElement.dataset.font, "alegreya");
   assert.equal(vm.runInContext("speechAudioFormat", context), "opus");
@@ -1360,6 +1379,32 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(scrollByCalls.at(-1).top, 60);
   assert.equal(scrollByCalls.at(-1).behavior, "auto");
 
+  const originalCaretPositionFromPoint = context.document.caretPositionFromPoint;
+  const originalCreateRange = context.document.createRange;
+  context.document.caretPositionFromPoint = (_x, y) => ({
+    offsetNode: anchorTextNode,
+    offset: y < 21 ? 0 : 1
+  });
+  context.document.createRange = () => ({
+    setStart(_node, offset) {
+      this.offset = offset;
+    },
+    setEnd() {},
+    getBoundingClientRect() {
+      return this.offset === 0
+        ? { top: -8, bottom: 12, left: 100, right: 300 }
+        : { top: 24, bottom: 44, left: 100, right: 300 };
+    }
+  });
+  const firstVisibleAnchor = vm.runInContext(
+    "captureFirstFullyVisibleTextAnchor()",
+    context
+  );
+  assert.equal(firstVisibleAnchor.offset, 1);
+  assert.equal(firstVisibleAnchor.viewportTop, 24);
+  context.document.caretPositionFromPoint = originalCaretPositionFromPoint;
+  context.document.createRange = originalCreateRange;
+
   anchorRectCalls = 0;
   vm.runInContext("stableResizeAnchor = captureLayoutAnchor()", context);
   const resizeScrollCount = scrollByCalls.length;
@@ -1511,6 +1556,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     "#settings-width-down", "#settings-width-up",
     "#settings-speech-max-down", "#settings-speech-max-up",
     "#settings-speech-position-down", "#settings-speech-position-up",
+    "#settings-speech-speed-down", "#settings-speech-speed-up",
     "#settings-reset-book"
   ]) {
     assert.equal(elements[button].listeners.has("click"), true, button);
@@ -1526,6 +1572,12 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   });
   assert.equal(elements["#settings-speech-position-value"].textContent, "-8%");
   assert.equal(currentBookSettings().speechCenterOffset, -8);
+  elements["#settings-speech-speed"].listeners.get("input")({
+    target: { value: "20" }
+  });
+  assert.equal(elements["#settings-speech-speed-value"].textContent, "+20%");
+  assert.equal(elements["#speech-audio"].playbackRate, 1.2);
+  assert.equal(currentBookSettings().speechSpeed, 20);
   elements["#settings-speech-max-down"].listeners.get("click")();
   assert.equal(elements["#settings-speech-max-value"].textContent, "650 chars");
   elements["#settings-speech-max-up"].listeners.get("click")();
@@ -1588,6 +1640,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.style["--reader-width"], "44ch");
   assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
   assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
+  assert.equal(elements["#settings-speech-speed-value"].textContent, "0%");
   assert.deepEqual(JSON.parse(vm.runInContext(
     "JSON.stringify(captureReadingSettings())",
     context
@@ -1602,7 +1655,8 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     voice: "",
     speaker: "",
     speechMaximum: 550,
-    speechCenterOffset: 0
+    speechCenterOffset: 0,
+    speechSpeed: 0
   });
   elements["#settings-font-size"].listeners.get("input")({ target: { value: "60" } });
   assert.equal(context.document.documentElement.style["--reader-font-size"], "60px");
@@ -1620,6 +1674,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#settings-contrast-value"].textContent, "+20%");
   assert.equal(elements["#settings-speech-max-value"].textContent, "700 chars");
   assert.equal(elements["#settings-speech-position-value"].textContent, "-8%");
+  assert.equal(elements["#settings-speech-speed-value"].textContent, "+20%");
   assert.equal(renderedSections.length, 12);
 
   let releaseSlowBook;
@@ -1688,6 +1743,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.documentElement.style["--contrast-soften"], "0%");
   assert.equal(elements["#settings-speech-max-value"].textContent, "550 chars");
   assert.equal(elements["#settings-speech-position-value"].textContent, "0%");
+  assert.equal(elements["#settings-speech-speed-value"].textContent, "0%");
   const activeSettingsKey = `smooth-reader:book-settings:${vm.runInContext("activeBookKey", context)}`;
   const resetSettings = JSON.parse(stored.get(activeSettingsKey));
   assert.equal(Number.isFinite(resetSettings.savedAt), true);
@@ -1703,7 +1759,8 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     voice: "",
     speaker: "",
     speechMaximum: 550,
-    speechCenterOffset: 0
+    speechCenterOffset: 0,
+    speechSpeed: 0
   });
 
   assert.equal(vm.runInContext("speechMinimumLength", context), 150);

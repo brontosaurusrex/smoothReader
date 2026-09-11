@@ -54,13 +54,15 @@ The home screen and settings drawer always use the bundled EnvyCodeR Nerd Font. 
 Every reader control is stored per book: palette, contrast, font, font size,
 line height, letter spacing, text width, Piper voice and embedded speaker ID,
 maximum speech chunk length, and spoken-text center offset.
+Speech playback speed is also stored per book and can be adjusted from −33% to
++33% without regenerating cached audio.
 
 `RESET THIS BOOK` restores those controls only for the open book. It keeps the
 cached EPUB and reading position. A newly added book always starts with the
 first-run defaults, then becomes independently configurable. The home screen
 always uses Nord with neutral contrast.
 
-First-run defaults: Nord, Alegreya 36 px, 1.28 line height, +0.02 em letter spacing, about 44 characters per line, 0% contrast, random voice and speaker ID, a fixed 150-character minimum and adjustable 550-character maximum speech chunk, and centered spoken text.
+First-run defaults: Nord, Alegreya 36 px, 1.28 line height, +0.02 em letter spacing, about 44 characters per line, 0% contrast, random voice and speaker ID, a fixed 150-character minimum and adjustable 550-character maximum speech chunk, centered spoken text, and normal speech speed.
 
 All selectable fonts are self-hosted in `vendor/fonts`; the app makes no Google Fonts requests.
 
@@ -87,9 +89,10 @@ appear on the home screen; clicking one downloads, caches, and opens it.
 After the initial EPUB upload, Smooth Reader synchronizes only the small
 per-book state: reading position and every reader setting. Position records also
 include a chapter/text anchor so restoration survives different viewport sizes
-and text reflow better than a pixel offset alone. Newer timestamps win when two
-devices have saved the same book. Simultaneously reading the same book on two
-devices is therefore last-update-wins.
+and text reflow better than a pixel offset alone. The first fully visible text
+line becomes the saved bookmark. Newer timestamps win when two devices have
+saved the same book. Simultaneously reading the same book on two devices is
+therefore last-update-wins.
 
 The existing ZIP export remains a backup of the current browser's local data.
 Back up the server library directory separately as part of normal server

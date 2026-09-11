@@ -56,6 +56,10 @@ const settingsSpeechPosition = document.querySelector("#settings-speech-position
 const settingsSpeechPositionValue = document.querySelector("#settings-speech-position-value");
 const settingsSpeechPositionDown = document.querySelector("#settings-speech-position-down");
 const settingsSpeechPositionUp = document.querySelector("#settings-speech-position-up");
+const settingsSpeechSpeed = document.querySelector("#settings-speech-speed");
+const settingsSpeechSpeedValue = document.querySelector("#settings-speech-speed-value");
+const settingsSpeechSpeedDown = document.querySelector("#settings-speech-speed-down");
+const settingsSpeechSpeedUp = document.querySelector("#settings-speech-speed-up");
 const settingsSpeechStart = document.querySelector("#settings-speech-start");
 const settingsSpeechPause = document.querySelector("#settings-speech-pause");
 const settingsSpeechStop = document.querySelector("#settings-speech-stop");
@@ -84,6 +88,7 @@ const WIDTH_KEY = "smooth-reader:text-width";
 const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
 const LEGACY_SPEECH_POSITION_KEY = "smooth-reader:speech-position";
 const SPEECH_CENTER_OFFSET_KEY = "smooth-reader:speech-center-offset";
+const SPEECH_SPEED_KEY = "smooth-reader:speech-speed";
 const SPEECH_SESSION_KEY = "smooth-reader:speech-session";
 const SILENT_WAV_DATA_URL = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
@@ -108,6 +113,8 @@ const HISTORY_APP = "smooth-reader";
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
 const RIGHT_DRAG_SPEED = 1.35;
+const FIRST_VISIBLE_LINE_TOP_PADDING_PX = 12;
+const FIRST_VISIBLE_LINE_SCAN_STEP_PX = 4;
 const DEFAULT_TRACKING_EM = 0.02;
 const DEFAULT_CONTRAST = 0;
 const MIN_CONTRAST = -30;
@@ -134,6 +141,9 @@ const LEGACY_DEFAULT_SPEECH_POSITION_PERCENT = 22;
 const DEFAULT_SPEECH_CENTER_OFFSET_PERCENT = 0;
 const MIN_SPEECH_CENTER_OFFSET_PERCENT = -25;
 const MAX_SPEECH_CENTER_OFFSET_PERCENT = 25;
+const DEFAULT_SPEECH_SPEED_PERCENT = 0;
+const MIN_SPEECH_SPEED_PERCENT = -33;
+const MAX_SPEECH_SPEED_PERCENT = 33;
 const SPEECH_VIEWPORT_MARGIN_PX = 16;
 const SPEECH_SCROLL_DURATION_MS = 10;
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
@@ -250,6 +260,7 @@ const savedSpeechCenterOffset = Number.parseInt(
   localStorage.getItem(SPEECH_CENTER_OFFSET_KEY),
   10
 );
+const savedSpeechSpeed = Number.parseInt(localStorage.getItem(SPEECH_SPEED_KEY), 10);
 const savedLegacySpeechPosition = Number.parseInt(
   localStorage.getItem(LEGACY_SPEECH_POSITION_KEY),
   10
@@ -267,6 +278,9 @@ let speechCenterOffsetPercent = Math.max(
   MIN_SPEECH_CENTER_OFFSET_PERCENT,
   Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, initialSpeechCenterOffset)
 );
+let speechSpeedPercent = Number.isFinite(savedSpeechSpeed)
+  ? Math.max(MIN_SPEECH_SPEED_PERCENT, Math.min(MAX_SPEECH_SPEED_PERCENT, savedSpeechSpeed))
+  : DEFAULT_SPEECH_SPEED_PERCENT;
 
 const speechSessionId = (() => {
   const makeId = () => crypto.randomUUID?.().replaceAll("-", "") ||
@@ -767,11 +781,11 @@ const populateSelect = (select, choices) => {
 populateSelect(settingsPaletteSelect, PALETTES);
 populateSelect(settingsFontSelect, FONTS);
 
-const getAnchorViewportTop = (anchor) => {
+const getAnchorViewportRect = (anchor) => {
   if (!anchor) return null;
 
   if (anchor.element) {
-    return anchor.element.getBoundingClientRect?.().top ?? null;
+    return anchor.element.getBoundingClientRect?.() || null;
   }
 
   if (!anchor.node || !document.createRange) return null;
@@ -787,28 +801,90 @@ const getAnchorViewportTop = (anchor) => {
       range.setStart(anchor.node, Math.max(0, Math.min(anchor.offset, childCount)));
       range.collapse(true);
     }
-    return range.getBoundingClientRect().top;
+    return range.getBoundingClientRect();
   } catch {
     return null;
   }
 };
 
+const getAnchorViewportTop = (anchor) => {
+  const rectangle = getAnchorViewportRect(anchor);
+  return Number.isFinite(rectangle?.top) ? rectangle.top : null;
+};
+
+const visibleViewportBounds = () => {
+  const visualViewport = window.visualViewport;
+  const top = Number.isFinite(Number(visualViewport?.offsetTop))
+    ? Number(visualViewport.offsetTop)
+    : 0;
+  const left = Number.isFinite(Number(visualViewport?.offsetLeft))
+    ? Number(visualViewport.offsetLeft)
+    : 0;
+  const width = Number.isFinite(Number(visualViewport?.width))
+    ? Number(visualViewport.width)
+    : window.innerWidth;
+  const height = Number.isFinite(Number(visualViewport?.height))
+    ? Number(visualViewport.height)
+    : window.innerHeight;
+  return { top, right: left + width, bottom: top + height, left, width, height };
+};
+
+const captureFirstFullyVisibleTextAnchor = () => {
+  if (
+    reader.hidden ||
+    viewer.children.length === 0 ||
+    typeof document.createRange !== "function"
+  ) return null;
+
+  const viewport = visibleViewportBounds();
+  const x = viewport.left + viewport.width / 2;
+  const firstY = viewport.top + 1;
+  const lastY = Math.max(firstY, viewport.bottom - 1);
+
+  for (let y = firstY; y <= lastY; y += FIRST_VISIBLE_LINE_SCAN_STEP_PX) {
+    const caret = document.caretPositionFromPoint?.(x, y);
+    const legacyCaret = caret ? null : document.caretRangeFromPoint?.(x, y);
+    const node = caret?.offsetNode || legacyCaret?.startContainer;
+    const rawOffset = caret?.offset ?? legacyCaret?.startOffset ?? 0;
+    if (!node || node.nodeType !== 3 || !(node.textContent?.length > 0)) continue;
+
+    const parent = node.parentElement;
+    if (parent?.closest && !parent.closest("#viewer")) continue;
+    const offset = Math.max(0, Math.min(rawOffset, node.textContent.length - 1));
+    const anchor = { node, offset };
+    const rectangle = getAnchorViewportRect(anchor);
+    if (!Number.isFinite(rectangle?.top)) continue;
+    const bottom = Number.isFinite(rectangle.bottom)
+      ? rectangle.bottom
+      : rectangle.top + 1;
+    const right = Number.isFinite(rectangle.right) ? rectangle.right : x + 1;
+    const left = Number.isFinite(rectangle.left) ? rectangle.left : x;
+    if (
+      bottom > rectangle.top &&
+      right > left &&
+      rectangle.top >= viewport.top - 0.5 &&
+      bottom <= viewport.bottom + 0.5 &&
+      right >= viewport.left &&
+      left <= viewport.right
+    ) {
+      return {
+        ...anchor,
+        viewportTop: rectangle.top,
+        viewportRatio: (rectangle.top - viewport.top) / Math.max(1, viewport.height)
+      };
+    }
+  }
+  return null;
+};
+
 const captureLayoutAnchor = () => {
   if (reader.hidden || viewer.children.length === 0) return null;
+  const textAnchor = captureFirstFullyVisibleTextAnchor();
+  if (textAnchor) return textAnchor;
 
-  const x = window.innerWidth / 2;
-  const y = Math.max(64, Math.min(window.innerHeight - 64, window.innerHeight * 0.32));
-  const caret = document.caretPositionFromPoint?.(x, y);
-  const legacyCaret = caret ? null : document.caretRangeFromPoint?.(x, y);
-  const node = caret?.offsetNode || legacyCaret?.startContainer;
-  const offset = caret?.offset ?? legacyCaret?.startOffset ?? 0;
-
-  if (node) {
-    const anchor = { node, offset };
-    const viewportTop = getAnchorViewportTop(anchor);
-    if (Number.isFinite(viewportTop)) return { ...anchor, viewportTop };
-  }
-
+  const viewport = visibleViewportBounds();
+  const x = viewport.left + viewport.width / 2;
+  const y = viewport.top + FIRST_VISIBLE_LINE_TOP_PADDING_PX;
   const element = document.elementFromPoint?.(x, y)?.closest?.(SPEECH_BLOCK_SELECTOR);
   if (element?.closest?.("#viewer")) {
     return { element, viewportTop: element.getBoundingClientRect().top };
@@ -905,7 +981,8 @@ const captureReadingSettings = () => ({
   voice: speechVoicePreference,
   speaker: speechSpeakerPreference,
   speechMaximum: speechMaximumLength,
-  speechCenterOffset: speechCenterOffsetPercent
+  speechCenterOffset: speechCenterOffsetPercent,
+  speechSpeed: speechSpeedPercent
 });
 
 const saveCurrentReadingSettings = (fallbackKey = "", fallbackValue = "") => {
@@ -987,6 +1064,11 @@ const applyStoredBookSettings = (hash) => {
         Number(storedSpeechOffset),
         Boolean(speechActiveJob)
       );
+    }
+    const storedSpeechSpeed = stored.speechSpeed ?? localStorage.getItem(SPEECH_SPEED_KEY);
+    if (storedSpeechSpeed !== null && storedSpeechSpeed !== "" &&
+        Number.isFinite(Number(storedSpeechSpeed))) {
+      applySpeechSpeed(Number(storedSpeechSpeed));
     }
   } finally {
     suppressSettingsPersistence = false;
@@ -1152,6 +1234,7 @@ function applyDefaultReadingSettings() {
     DEFAULT_SPEECH_CENTER_OFFSET_PERCENT,
     Boolean(speechActiveJob)
   );
+  applySpeechSpeed(DEFAULT_SPEECH_SPEED_PERCENT);
 }
 
 const resetCurrentBookSettings = () => {
@@ -1549,12 +1632,9 @@ const loadPosition = (hash) => {
 
 const captureTextPositionAnchor = () => {
   if (reader.hidden || typeof document.createRange !== "function") return null;
-  const x = window.innerWidth / 2;
-  const y = Math.max(32, Math.min(window.innerHeight - 32, window.innerHeight * 0.32));
-  const caret = document.caretPositionFromPoint?.(x, y);
-  const legacyCaret = caret ? null : document.caretRangeFromPoint?.(x, y);
-  const node = caret?.offsetNode || legacyCaret?.startContainer;
-  const offset = caret?.offset ?? legacyCaret?.startOffset ?? 0;
+  const visibleAnchor = captureFirstFullyVisibleTextAnchor();
+  const node = visibleAnchor?.node;
+  const offset = visibleAnchor?.offset ?? 0;
   const element = node?.nodeType === 1 ? node : node?.parentElement;
   const chapter = element?.closest?.(".book-section");
   if (!node || !chapter || typeof chapter.dataset?.spineIndex !== "string") return null;
@@ -1567,7 +1647,8 @@ const captureTextPositionAnchor = () => {
     return {
       spineIndex: Number(chapter.dataset.spineIndex),
       textOffset: range.toString().length,
-      viewportRatio: y / Math.max(1, window.innerHeight)
+      viewportRatio: visibleAnchor.viewportRatio,
+      placement: "first-visible-line"
     };
   } catch {
     return null;
@@ -1600,12 +1681,19 @@ const restoreTextPositionAnchor = (anchor) => {
     range.setEnd(node, Math.min(offset + 1, node.textContent?.length || 0));
     const rectangle = range.getBoundingClientRect();
     if (!Number.isFinite(rectangle?.top)) return false;
-    const viewportRatio = Number.isFinite(Number(anchor.viewportRatio))
+    const viewport = visibleViewportBounds();
+    const legacyViewportRatio = Number.isFinite(Number(anchor.viewportRatio))
       ? Math.max(0.08, Math.min(0.8, Number(anchor.viewportRatio)))
       : 0.32;
+    const targetViewportTop = anchor.placement === "first-visible-line"
+      ? viewport.top + Math.min(
+        FIRST_VISIBLE_LINE_TOP_PADDING_PX,
+        Math.max(1, viewport.height * 0.02)
+      )
+      : viewport.top + viewport.height * legacyViewportRatio;
     window.scrollTo(
       0,
-      Math.max(0, window.scrollY + rectangle.top - window.innerHeight * viewportRatio)
+      Math.max(0, window.scrollY + rectangle.top - targetViewportTop)
     );
     return true;
   } catch {
@@ -2155,6 +2243,30 @@ function applySpeechCenterOffset(nextOffset, followCurrent = false) {
 }
 
 applySpeechCenterOffset(speechCenterOffsetPercent);
+
+function applySpeechSpeed(nextSpeed, announce = false) {
+  speechSpeedPercent = Math.round(Math.max(
+    MIN_SPEECH_SPEED_PERCENT,
+    Math.min(MAX_SPEECH_SPEED_PERCENT, nextSpeed)
+  ));
+  speechAudio.playbackRate = 1 + speechSpeedPercent / 100;
+  if ("preservesPitch" in speechAudio) speechAudio.preservesPitch = true;
+  saveCurrentReadingSettings(SPEECH_SPEED_KEY, speechSpeedPercent);
+  settingsSpeechSpeed.value = String(speechSpeedPercent);
+  settingsSpeechSpeedValue.textContent = (
+    `${speechSpeedPercent > 0 ? "+" : ""}${speechSpeedPercent}%`
+  );
+  settingsSpeechSpeedDown.disabled = speechSpeedPercent <= MIN_SPEECH_SPEED_PERCENT;
+  settingsSpeechSpeedUp.disabled = speechSpeedPercent >= MAX_SPEECH_SPEED_PERCENT;
+  if (announce) {
+    showStatus(
+      `SPEECH SPEED · ${speechSpeedPercent > 0 ? "+" : ""}${speechSpeedPercent}%`,
+      900
+    );
+  }
+}
+
+applySpeechSpeed(speechSpeedPercent);
 
 const speechSourceFromEntries = (entries) => {
   let text = "";
@@ -3047,6 +3159,8 @@ const playPreparedAudio = async (prepared) => {
   speechAudio.muted = false;
   speechAudio.src = prepared.audioUrl;
   speechAudio.load();
+  speechAudio.playbackRate = 1 + speechSpeedPercent / 100;
+  if ("preservesPitch" in speechAudio) speechAudio.preservesPitch = true;
   syncSpeechControls();
 
   let finishPlayback;
@@ -3775,6 +3889,18 @@ settingsSpeechPositionDown.addEventListener("click", () => {
 });
 settingsSpeechPositionUp.addEventListener("click", () => {
   applySpeechCenterOffset(speechCenterOffsetPercent + 1, true);
+});
+settingsSpeechSpeed.addEventListener("input", (event) => {
+  applySpeechSpeed(Number(event.target.value));
+});
+settingsSpeechSpeed.addEventListener("change", (event) => {
+  applySpeechSpeed(Number(event.target.value), true);
+});
+settingsSpeechSpeedDown.addEventListener("click", () => {
+  applySpeechSpeed(speechSpeedPercent - 1, true);
+});
+settingsSpeechSpeedUp.addEventListener("click", () => {
+  applySpeechSpeed(speechSpeedPercent + 1, true);
 });
 
 settingsPaletteSelect.addEventListener("change", (event) => {

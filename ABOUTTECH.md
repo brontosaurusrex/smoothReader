@@ -156,12 +156,12 @@ screens. Browser zoom remains independent of the app's font-size control.
 Changing font, size, line height, letter spacing, width, or browser dimensions
 causes text to reflow. A fixed `scrollY` would then point to different content.
 
-Before a controlled layout change, the app captures a text/caret anchor near
-the horizontal center and 32% down the viewport. After fonts and layout settle,
-it finds that anchor again and corrects the scroll position by the anchor's
-vertical displacement. Resize events use a stable version of the same anchor
-until resizing stops. This does not freeze layout; it keeps approximately the
-same words in view while layout changes around them.
+Before a controlled layout change, the app scans downward from the top edge and
+captures a text/caret anchor on the first fully visible line. After fonts and
+layout settle, it finds that anchor again and corrects the scroll position by
+the anchor's vertical displacement. Resize events use a stable version of the
+same anchor until resizing stops. This does not freeze layout; it keeps the
+first readable line stable while layout changes around it.
 
 ## Navigation and scroll behavior
 
@@ -200,13 +200,14 @@ Small, synchronous state is kept under keys beginning with `smooth-reader:`.
 | Key pattern | Stored value |
 | --- | --- |
 | `smooth-reader:position:<SHA-256>` | JSON containing a chapter/text anchor, `scrollY`, fallback `ratio`, and `savedAt` timestamp |
-| `smooth-reader:book-settings:<SHA-256>` | Palette, contrast, typography, width, Piper voice/speaker, maximum speech chunk, spoken-text offset, and `savedAt` timestamp |
+| `smooth-reader:book-settings:<SHA-256>` | Palette, contrast, typography, width, Piper voice/speaker, maximum speech chunk, spoken-text offset, playback speed, and `savedAt` timestamp |
 | `smooth-reader:recent-books` | Up to 12 lightweight book metadata records |
 | `smooth-reader:last-book` | Most recently opened book metadata |
 | `smooth-reader:palette` | Legacy palette fallback used when opening an older saved book |
 | `smooth-reader:contrast` | Legacy/default contrast fallback |
 | `smooth-reader:speech-maximum` | Legacy/default maximum TTS chunk fallback |
 | `smooth-reader:speech-center-offset` | Legacy/default spoken-text offset fallback |
+| `smooth-reader:speech-speed` | Legacy/default browser playback-speed fallback |
 
 The standalone setting keys are retained only as migration fallbacks for older
 saved records. A book without a per-book record starts from the first-run
@@ -217,9 +218,11 @@ appearance and is always rendered in Nord with neutral contrast.
 
 Position writes are debounced by 180 ms while scrolling. A position is also
 saved before hiding or replacing the current book. The saved anchor records the
-spine index and character offset around 32% down the viewport. Restoration waits
-for fonts, images, and two animation frames, then prefers that text anchor;
-`scrollY`, ratio, and an older percentage field are fallbacks. This makes a
+spine index and character offset on the first fully visible line. Restoration
+waits for fonts, images, and two animation frames, then places that line near
+the top with a small safety margin. `scrollY`, ratio, and an older percentage
+field are fallbacks. Existing 32%-position anchors remain compatible and are
+replaced by the first-line form after the next position save. This makes a
 server position substantially more stable across desktop/mobile reflow.
 
 ### IndexedDB
@@ -400,6 +403,10 @@ Pause and resume operate directly on the browser `<audio>` element. Background
 generation may continue while paused. Stop invalidates the client generation,
 releases audio, clears visual state, and sends the tab's session ID to the
 bridge.
+
+Per-book speech speed uses the browser audio element's `playbackRate`, from
+0.67× to 1.33×, with pitch preservation requested. It therefore changes
+immediately without running FFmpeg again or creating another cached audio file.
 
 ## Piper bridge: server side
 
