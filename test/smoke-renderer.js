@@ -624,7 +624,7 @@ assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260910-serverlibrary1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260911-opus-preload1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260911-nested-speech1/);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
@@ -668,6 +668,7 @@ assert.match(rendererSource, /await speechAudio\.play\(\)/);
 assert.match(rendererSource, /const preloadPreparedAudio = async/);
 assert.match(rendererSource, /prepared\.prefetchedAudioUrl \|\| prepared\.audioUrl/);
 assert.match(rendererSource, /cancelSpeechPreloads\(\)/);
+assert.match(rendererSource, /const speechBlockElements = \(\) =>/);
 assert.match(rendererSource, /const SPEECH_SCROLL_DURATION_MS = 10/);
 assert.match(rendererSource, /await scrollDownAfterSpeechJob\(currentJob\)/);
 assert.match(rendererSource, /const plan = nextSpeechViewport\(futureCursor\)/);
@@ -903,6 +904,51 @@ assert.equal(
   plannedSpeechViewport.entries.some((entry) => entry.text.includes("Text placed below")),
   true
 );
+const nestedQuoteElement = makeViewportSpeechElement(
+  "First quoted paragraph. Second quoted paragraph.",
+  100,
+  300,
+  () => []
+);
+const firstQuotedParagraph = makeViewportSpeechElement(
+  "First quoted paragraph.",
+  100,
+  180,
+  () => []
+);
+const secondQuotedParagraph = makeViewportSpeechElement(
+  "Second quoted paragraph.",
+  200,
+  280,
+  () => []
+);
+const directQuoteElement = makeViewportSpeechElement(
+  "A quotation without paragraph children.",
+  320,
+  380,
+  () => []
+);
+nestedQuoteElement.parentElement = elements["#viewer"];
+firstQuotedParagraph.parentElement = nestedQuoteElement;
+secondQuotedParagraph.parentElement = nestedQuoteElement;
+directQuoteElement.parentElement = elements["#viewer"];
+elements["#viewer"].querySelectorAll = () => [
+  nestedQuoteElement,
+  firstQuotedParagraph,
+  secondQuotedParagraph,
+  directQuoteElement
+];
+assert.equal(
+  vm.runInContext("speechBlockElements().map((element) => element.textContent).join('|')", context),
+  "First quoted paragraph.|Second quoted paragraph.|A quotation without paragraph children."
+);
+elements["#viewer"].querySelectorAll = () => [
+  aboveViewportSpeechElement,
+  clippedViewportSpeechElement,
+  partialViewportSpeechElement,
+  fullViewportSpeechElement,
+  imageHeavySpeechElement
+];
 context.visibleSpeechEntries = visibleSpeechEntries;
 assert.equal(
   vm.runInContext(

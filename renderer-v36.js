@@ -2937,8 +2937,28 @@ const visibleSpeechEntry = (element, viewportTop, viewportBottom) => {
   };
 };
 
-const speechEntriesInViewport = (viewportTop, viewportBottom, afterCursor = null) => {
+// EPUB quotations and lists commonly nest selectable blocks, for example
+// <blockquote><p>…</p></blockquote>. Reading both the container and its child
+// would enqueue the same words twice. Keep only the deepest matching blocks so
+// every rendered passage has one speech source and one marker range.
+const speechBlockElements = () => {
   const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)];
+  const blockSet = new Set(blocks);
+  const containersWithSpeechChildren = new Set();
+
+  blocks.forEach((block) => {
+    let ancestor = block.parentElement;
+    while (ancestor && ancestor !== viewer) {
+      if (blockSet.has(ancestor)) containersWithSpeechChildren.add(ancestor);
+      ancestor = ancestor.parentElement;
+    }
+  });
+
+  return blocks.filter((block) => !containersWithSpeechChildren.has(block));
+};
+
+const speechEntriesInViewport = (viewportTop, viewportBottom, afterCursor = null) => {
+  const blocks = speechBlockElements();
   const cursorIndex = afterCursor?.element
     ? blocks.indexOf(afterCursor.element)
     : -1;
@@ -3060,7 +3080,7 @@ const scrollDownAfterSpeechJob = async (job) => {
 
 const nextSpeechViewport = (cursor) => {
   if (!cursor?.element) return null;
-  const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)];
+  const blocks = speechBlockElements();
   const cursorIndex = blocks.indexOf(cursor.element);
   if (cursorIndex < 0) return false;
 

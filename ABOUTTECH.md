@@ -348,10 +348,12 @@ available. The browser asks for Opus when it reports support for
 If the user has selected text, that selection is read. Otherwise the client:
 
 1. examines paragraph, list-item, blockquote, and heading elements;
-2. maps normalized text offsets back to DOM text-node offsets;
-3. uses DOM ranges to measure individual words;
-4. keeps only words fully inside the viewport, excluding an 8-pixel edge;
-5. stops at the last visible sentence ending when possible.
+2. removes matched containers that also contain matched child blocks, so markup
+   such as `<blockquote><p>…</p></blockquote>` is not spoken twice;
+3. maps normalized text offsets back to DOM text-node offsets;
+4. uses DOM ranges to measure individual words;
+5. keeps only words fully inside the viewport, excluding an 8-pixel edge;
+6. stops at the last visible sentence ending when possible.
 
 This prevents half-visible lines and text below large images from being spoken
 before it appears. If a tab becomes hidden during playback, visual verification
