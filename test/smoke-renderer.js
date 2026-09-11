@@ -217,6 +217,7 @@ const createdObjectUrls = [];
 const revokedObjectUrls = [];
 let speechRectLeft = 120;
 let speechBlockLeft = 80;
+let speechBlockLeftTwo = 80;
 const anchorTextNode = {
   nodeType: 3,
   textContent: "A stable reading anchor",
@@ -624,7 +625,7 @@ assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260910-serverlibrary1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260911-nested-speech1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260911-marker-left1/);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
@@ -1041,7 +1042,7 @@ speechElementOne.getBoundingClientRect = () => ({
 speechElementTwo.textContent = speechNodeTwo.nodeValue;
 speechElementTwo.textNodes = [speechNodeTwo];
 speechElementTwo.getBoundingClientRect = () => ({
-  left: speechBlockLeft,
+  left: speechBlockLeftTwo,
   top: 520,
   bottom: 600
 });
@@ -1058,12 +1059,18 @@ assert.equal(createdRanges.at(-1).endNode, speechNodeTwo);
 assert.equal(elements["#speech-marker"].hidden, false);
 assert.equal(elements["#speech-marker"].style.left, "62px");
 assert.equal(vm.runInContext("speechScrollFrame !== null", context), true);
+speechRectLeft = 140;
+speechBlockLeft = 120;
+speechBlockLeftTwo = 80;
+vm.runInContext("positionSpeechMarker(false)", context);
+assert.equal(elements["#speech-marker"].style.left, "62px");
 vm.runInContext("setSpeechActiveJob(testSpeechJobs[1])", context);
 assert.equal(selectionRanges.length, 0);
 assert.equal(createdRanges.at(-1).startNode, speechNodeTwo);
 assert.equal(vm.runInContext("speechScrollFrame !== null", context), true);
 speechRectLeft = 160;
 speechBlockLeft = 100;
+speechBlockLeftTwo = 100;
 vm.runInContext("positionSpeechMarker(false)", context);
 assert.equal(elements["#speech-marker"].style.left, "82px");
 vm.runInContext("clearSpeechSelection()", context);

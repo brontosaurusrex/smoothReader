@@ -406,8 +406,9 @@ pending downloads are aborted on Stop, cancellation, or failure. If preloading
 is unavailable or fails, playback falls back to the bridge audio URL.
 
 The active text is represented by a DOM `Range`. A narrow marker is positioned
-to the left of the owning block and recalculated after scroll, zoom, resize, or
-layout changes. Spoken text is centered in the usable viewport with a per-book
+outside the leftmost selected block, including chunks that span differently
+indented paragraphs, and recalculated after scroll, zoom, resize, or layout
+changes. Spoken text is centered in the usable viewport with a per-book
 -25% to +25% offset. The centering calculation clamps itself so a chunk that can
 fit is not intentionally pushed beyond the viewport.
 
