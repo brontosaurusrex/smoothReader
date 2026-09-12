@@ -9,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smooth Reader</title>
     <link rel="stylesheet" href="vendor/fonts/reader-fonts.css?v=20260903-fonts1">
-    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260912-fullscreen2">
+    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260912-palette-swatches1">
   </head>
   <body>
     <main id="app">
@@ -72,7 +72,30 @@
         </button>
         <div id="settings-panel" hidden>
           <strong>READER</strong>
-          <label>Palette<select id="settings-palette"></select></label>
+          <div class="settings-control">
+            <span id="settings-palette-label" class="settings-label">Palette</span>
+            <div id="settings-palette-picker" class="palette-picker">
+              <button
+                id="settings-palette-toggle"
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-labelledby="settings-palette-label settings-palette-name"
+              >
+                <span id="settings-palette-name"></span>
+                <span id="settings-palette-swatches" class="palette-swatches" aria-hidden="true"></span>
+                <span class="palette-chevron" aria-hidden="true">⌄</span>
+              </button>
+              <div
+                id="settings-palette-options"
+                class="palette-options"
+                role="listbox"
+                aria-labelledby="settings-palette-label"
+                hidden
+              ></div>
+              <select id="settings-palette" aria-hidden="true" tabindex="-1" hidden></select>
+            </div>
+          </div>
           <div class="settings-control">
             <span class="settings-label"><label for="settings-contrast">Contrast</label><output id="settings-contrast-value"></output></span>
             <div class="range-stepper">
@@ -187,6 +210,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260912-fullscreen2"></script>
+    <script src="renderer-v36.js?v=20260912-palette-swatches1"></script>
   </body>
 </html>

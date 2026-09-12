@@ -60,6 +60,9 @@ maximum speech chunk length, and spoken-text center offset.
 Speech playback speed is also stored per book and can be adjusted from −33% to
 +33% without regenerating cached audio.
 
+Each palette entry previews five colours: page background, main text, muted
+text, lines/borders, and headings.
+
 `RESET THIS BOOK` restores those controls only for the open book. It keeps the
 cached EPUB and reading position. A newly added book always starts with the
 first-run defaults, then becomes independently configurable. The home screen

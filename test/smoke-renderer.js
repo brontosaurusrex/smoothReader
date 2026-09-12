@@ -117,6 +117,11 @@ const elements = {
   "#settings-toggle": makeElement(),
   "#fullscreen-toggle": makeElement(),
   "#settings-panel": makeElement(),
+  "#settings-palette-picker": makeElement(),
+  "#settings-palette-toggle": makeElement(),
+  "#settings-palette-name": makeElement(),
+  "#settings-palette-swatches": makeElement(),
+  "#settings-palette-options": makeElement(),
   "#settings-palette": makeElement(),
   "#settings-contrast": makeElement(),
   "#settings-contrast-value": makeElement(),
@@ -177,6 +182,7 @@ elements["#status"].hidden = true;
 elements["#recent-books"].hidden = true;
 elements["#settings-menu"].hidden = true;
 elements["#settings-panel"].hidden = true;
+elements["#settings-palette-options"].hidden = true;
 elements["#fullscreen-toggle"].hidden = true;
 elements["#settings-speech-speaker-row"].hidden = true;
 elements["#library-manage-actions"].hidden = true;
@@ -637,13 +643,17 @@ assert.doesNotMatch(indexSource, /id="start-settings-scope"/);
 assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260912-fullscreen2/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260912-fullscreen2/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260912-palette-swatches1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260912-palette-swatches1/);
+assert.match(indexSource, /id="settings-palette-toggle"[^>]*aria-haspopup="listbox"/);
+assert.match(indexSource, /id="settings-palette-options"[^>]*role="listbox"/);
+assert.match(stylesSource, /\.palette-swatches i\s*\{[^}]*border-radius:\s*50%[^}]*background:\s*var\(--swatch-color\)/s);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_HEIGHT", context), 900);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_QUALITY", context), 0.86);
+assert.equal(vm.runInContext("FONT_PALETTE_STATUS_DURATION_MS", context), 3900);
 assert.match(rendererSource, /thumbnailVersion:\s*COVER_THUMBNAIL_VERSION/);
 assert.match(rendererSource, /imageSmoothingQuality = "high"/);
 assert.match(indexSource, /vendor\/fonts\/reader-fonts\.css\?v=20260903-fonts1/);
@@ -1242,6 +1252,13 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   );
   delete context.window.JSZip;
   assert.equal(elements["#settings-palette"].children.length, 16);
+  assert.equal(elements["#settings-palette-options"].children.length, 16);
+  assert.equal(
+    elements["#settings-palette-options"].children[0].children[1].children.length,
+    5
+  );
+  assert.equal(elements["#settings-palette-name"].textContent, "NORD");
+  assert.equal(elements["#settings-palette-swatches"].children.length, 5);
   assert.equal(elements["#settings-font"].children.length, 12);
   assert.equal(elements["#settings-contrast-value"].textContent, "0%");
   assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
@@ -1597,6 +1614,15 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(context.document.fullscreenElement, null);
   assert.equal(elements["#fullscreen-toggle"].getAttribute("aria-pressed"), "false");
   assert.equal(elements["#fullscreen-toggle"].getAttribute("aria-label"), "Enter fullscreen");
+
+  elements["#settings-palette-toggle"].listeners.get("click")();
+  assert.equal(elements["#settings-palette-options"].hidden, false);
+  assert.equal(elements["#settings-palette-toggle"].getAttribute("aria-expanded"), "true");
+  elements["#settings-palette-options"].children[12].listeners.get("click")();
+  assert.equal(context.document.documentElement.dataset.palette, "hackerman");
+  assert.equal(elements["#settings-palette-name"].textContent, "HACKERMAN");
+  assert.equal(elements["#settings-palette-swatches"].children.length, 5);
+  assert.equal(elements["#settings-palette-options"].hidden, true);
 
   elements["#settings-palette"].listeners.get("change")({
     target: { value: "nord" }

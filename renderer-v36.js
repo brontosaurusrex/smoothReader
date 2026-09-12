@@ -25,6 +25,11 @@ const settingsToggle = document.querySelector("#settings-toggle");
 const fullscreenToggle = document.querySelector("#fullscreen-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsPaletteSelect = document.querySelector("#settings-palette");
+const settingsPalettePicker = document.querySelector("#settings-palette-picker");
+const settingsPaletteToggle = document.querySelector("#settings-palette-toggle");
+const settingsPaletteName = document.querySelector("#settings-palette-name");
+const settingsPaletteSwatches = document.querySelector("#settings-palette-swatches");
+const settingsPaletteOptions = document.querySelector("#settings-palette-options");
 const settingsContrast = document.querySelector("#settings-contrast");
 const settingsContrastValue = document.querySelector("#settings-contrast-value");
 const settingsContrastDown = document.querySelector("#settings-contrast-down");
@@ -130,6 +135,7 @@ const DEFAULT_FONT_SIZE_PX = 36;
 const MIN_FONT_SIZE_PX = 14;
 const MAX_FONT_SIZE_PX = 80;
 const FONT_SIZE_STEP_PX = 2;
+const FONT_PALETTE_STATUS_DURATION_MS = 3_900;
 const DEFAULT_LINE_HEIGHT = 1.28;
 const MIN_LINE_HEIGHT = 1.2;
 const MAX_LINE_HEIGHT = 2.2;
@@ -149,22 +155,22 @@ const SPEECH_VIEWPORT_MARGIN_PX = 16;
 const SPEECH_SCROLL_DURATION_MS = 10;
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
-  { id: "charcoal", name: "CHARCOAL" },
-  { id: "geany", name: "GEANY" },
-  { id: "midnight", name: "MIDNIGHT" },
-  { id: "sepia", name: "SEPIA" },
-  { id: "forest", name: "FOREST" },
-  { id: "paper", name: "PAPER" },
-  { id: "nord", name: "NORD" },
-  { id: "solarized", name: "SOLARIZED DARK" },
-  { id: "gruvbox", name: "GRUVBOX" },
-  { id: "plum", name: "PLUM" },
-  { id: "flexoki-dark", name: "FLEXOKI DARK" },
-  { id: "catppuccin-mocha", name: "CATPPUCCIN MOCHA" },
-  { id: "hackerman", name: "HACKERMAN" },
-  { id: "lumon", name: "LUMON" },
-  { id: "vantablack", name: "VANTABLACK" },
-  { id: "black-gold", name: "BLACK GOLD" }
+  { id: "charcoal", name: "CHARCOAL", swatches: ["#121212", "#dedad1", "#77746e", "#373532", "#eeeae1"] },
+  { id: "geany", name: "GEANY", swatches: ["#333d4d", "#b7c7c2", "#648d85", "#536665", "#d2ddd8"] },
+  { id: "midnight", name: "MIDNIGHT", swatches: ["#0d1520", "#cfdae5", "#71869b", "#29394a", "#e5edf5"] },
+  { id: "sepia", name: "SEPIA", swatches: ["#241d16", "#dfcfb7", "#9b8465", "#4b3d2d", "#f1e0c5"] },
+  { id: "forest", name: "FOREST", swatches: ["#101914", "#d2dfd4", "#718c76", "#2c4333", "#e4eee5"] },
+  { id: "paper", name: "PAPER", swatches: ["#e8e1d3", "#302d28", "#746c60", "#c3b9a8", "#1f1d1a"] },
+  { id: "nord", name: "NORD", swatches: ["#2e3440", "#d8dee9", "#8192aa", "#4c566a", "#eceff4"] },
+  { id: "solarized", name: "SOLARIZED DARK", swatches: ["#002b36", "#93a1a1", "#657b83", "#164550", "#eee8d5"] },
+  { id: "gruvbox", name: "GRUVBOX", swatches: ["#282828", "#ebdbb2", "#a89984", "#504945", "#fbf1c7"] },
+  { id: "plum", name: "PLUM", swatches: ["#211924", "#dacdda", "#907c91", "#4b3b50", "#f0e5ef"] },
+  { id: "flexoki-dark", name: "FLEXOKI DARK", swatches: ["#100f0f", "#cecdc3", "#878580", "#343331", "#e6e4d9"] },
+  { id: "catppuccin-mocha", name: "CATPPUCCIN MOCHA", swatches: ["#1e1e2e", "#cdd6f4", "#9399b2", "#45475a", "#f5e0dc"] },
+  { id: "hackerman", name: "HACKERMAN", swatches: ["#080d0d", "#a8d5ca", "#527d78", "#224a46", "#c7f0e6"] },
+  { id: "lumon", name: "LUMON", swatches: ["#0e1a26", "#d6e0e2", "#79a6b9", "#294758", "#f3ffff"] },
+  { id: "vantablack", name: "VANTABLACK", swatches: ["#000000", "#d8d8d2", "#777772", "#292927", "#f0f0eb"] },
+  { id: "black-gold", name: "BLACK GOLD", swatches: ["#0d0d0d", "#ebdbb2", "#8f8265", "#4a4434", "#f6f1dd"] }
 ];
 const FONTS = [
   { id: "system-sans", name: "SYSTEM SANS" },
@@ -787,8 +793,64 @@ const populateSelect = (select, choices) => {
   });
 };
 
+const appendPaletteSwatches = (container, palette) => {
+  container.replaceChildren();
+  palette.swatches.forEach((color) => {
+    const swatch = document.createElement("i");
+    swatch.style.setProperty("--swatch-color", color);
+    container.appendChild(swatch);
+  });
+};
+
+const setPalettePickerOpen = (isOpen) => {
+  settingsPaletteOptions.hidden = !isOpen;
+  settingsPaletteToggle.setAttribute("aria-expanded", String(isOpen));
+};
+
+const syncPalettePicker = () => {
+  const palette = PALETTES[paletteIndex];
+  settingsPaletteName.textContent = palette.name;
+  appendPaletteSwatches(settingsPaletteSwatches, palette);
+  for (const option of settingsPaletteOptions.children) {
+    option.setAttribute(
+      "aria-selected",
+      String(option.dataset.paletteId === palette.id)
+    );
+  }
+};
+
+const renderPaletteOptions = () => {
+  settingsPaletteOptions.replaceChildren();
+  PALETTES.forEach((palette, index) => {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "palette-option";
+    option.dataset.paletteId = palette.id;
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", "false");
+
+    const name = document.createElement("span");
+    name.textContent = palette.name;
+    option.appendChild(name);
+
+    const swatches = document.createElement("span");
+    swatches.className = "palette-swatches";
+    swatches.setAttribute("aria-hidden", "true");
+    appendPaletteSwatches(swatches, palette);
+    option.appendChild(swatches);
+
+    option.addEventListener("click", () => {
+      applyPalette(index);
+      setPalettePickerOpen(false);
+      settingsPaletteToggle.focus?.();
+    });
+    settingsPaletteOptions.appendChild(option);
+  });
+};
+
 populateSelect(settingsPaletteSelect, PALETTES);
 populateSelect(settingsFontSelect, FONTS);
+renderPaletteOptions();
 
 const getAnchorViewportRect = (anchor) => {
   if (!anchor) return null;
@@ -1095,6 +1157,7 @@ const syncSettingsControls = () => {
   const contrastText = `${contrast > 0 ? "+" : ""}${contrast}%`;
 
   settingsPaletteSelect.value = paletteId;
+  syncPalettePicker();
   settingsContrast.value = String(contrast);
   settingsContrastValue.textContent = contrastText;
   settingsContrastDown.disabled = contrast <= MIN_CONTRAST;
@@ -1123,7 +1186,10 @@ const applyPalette = (nextIndex, announce = true) => {
   syncSettingsControls();
 
   if (announce) {
-    showStatus(`PALETTE ${paletteIndex + 1}/${PALETTES.length} · ${palette.name}`, 900);
+    showStatus(
+      `PALETTE ${paletteIndex + 1}/${PALETTES.length} · ${palette.name}`,
+      FONT_PALETTE_STATUS_DURATION_MS
+    );
   }
 };
 
@@ -1157,7 +1223,10 @@ const applyFont = (nextIndex, announce = true) => {
   scheduleLayoutAnchorRestore(anchor);
 
   if (announce) {
-    showStatus(`FONT ${fontIndex + 1}/${FONTS.length} · ${font.name}`, 900);
+    showStatus(
+      `FONT ${fontIndex + 1}/${FONTS.length} · ${font.name}`,
+      FONT_PALETTE_STATUS_DURATION_MS
+    );
   }
 };
 
@@ -1538,6 +1607,7 @@ const importLibrary = async (file) => {
 
 const setSettingsOpen = (isOpen) => {
   settingsPanel.hidden = !isOpen;
+  if (!isOpen) setPalettePickerOpen(false);
   document.body.classList[isOpen ? "add" : "remove"]("settings-open");
   settingsToggle.setAttribute("aria-expanded", String(isOpen));
   settingsToggle.setAttribute(
@@ -3825,6 +3895,16 @@ const handleReaderKeyDown = (event) => {
 
   if (reader.hidden) return;
 
+  if (
+    noCommandModifier && !event.shiftKey && key === "escape"
+    && !settingsPaletteOptions.hidden
+  ) {
+    event.preventDefault();
+    setPalettePickerOpen(false);
+    settingsPaletteToggle.focus?.();
+    return;
+  }
+
   if (noCommandModifier && !event.shiftKey && !event.repeat && key === "v") {
     event.preventDefault();
     if (speechIsActive) stopSpeech();
@@ -4085,11 +4165,20 @@ settingsWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
 settingsToggle.addEventListener("click", () => {
   setSettingsOpen(settingsPanel.hidden);
 });
+settingsPaletteToggle.addEventListener("click", () => {
+  setPalettePickerOpen(settingsPaletteOptions.hidden);
+});
 fullscreenToggle.addEventListener("click", () => void toggleFullscreen());
 settingsHome.addEventListener("click", returnToHomeScreen);
 settingsResetBook.addEventListener("click", resetCurrentBookSettings);
 
 window.addEventListener("click", (event) => {
+  if (
+    !settingsPaletteOptions.hidden
+    && !event.target?.closest?.("#settings-palette-picker")
+  ) {
+    setPalettePickerOpen(false);
+  }
   if (!settingsPanel.hidden && !event.target?.closest?.("#settings-menu")) {
     setSettingsOpen(false);
   }
