@@ -22,6 +22,7 @@ const startCancelManage = document.querySelector("#start-cancel-manage");
 const libraryImportInput = document.querySelector("#library-import-input");
 const settingsMenu = document.querySelector("#settings-menu");
 const settingsToggle = document.querySelector("#settings-toggle");
+const fullscreenToggle = document.querySelector("#fullscreen-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsPaletteSelect = document.querySelector("#settings-palette");
 const settingsContrast = document.querySelector("#settings-contrast");
@@ -157,7 +158,13 @@ const PALETTES = [
   { id: "nord", name: "NORD" },
   { id: "solarized", name: "SOLARIZED DARK" },
   { id: "gruvbox", name: "GRUVBOX" },
-  { id: "plum", name: "PLUM" }
+  { id: "plum", name: "PLUM" },
+  { id: "flexoki-dark", name: "FLEXOKI DARK" },
+  { id: "catppuccin-mocha", name: "CATPPUCCIN MOCHA" },
+  { id: "hackerman", name: "HACKERMAN" },
+  { id: "lumon", name: "LUMON" },
+  { id: "vantablack", name: "VANTABLACK" },
+  { id: "black-gold", name: "BLACK GOLD" }
 ];
 const FONTS = [
   { id: "system-sans", name: "SYSTEM SANS" },
@@ -1539,6 +1546,43 @@ const setSettingsOpen = (isOpen) => {
   settingsToggle.title = isOpen ? "Close reader settings" : "Reader settings";
 };
 
+const fullscreenElement = () => (
+  document.fullscreenElement || document.webkitFullscreenElement || null
+);
+
+const fullscreenRequest = document.documentElement.requestFullscreen
+  || document.documentElement.webkitRequestFullscreen;
+const fullscreenExit = document.exitFullscreen || document.webkitExitFullscreen;
+const fullscreenAvailable = (
+  document.fullscreenEnabled !== false
+  && typeof fullscreenRequest === "function"
+  && typeof fullscreenExit === "function"
+);
+
+const syncFullscreenToggle = () => {
+  const isFullscreen = Boolean(fullscreenElement());
+  fullscreenToggle.hidden = !fullscreenAvailable;
+  fullscreenToggle.setAttribute("aria-pressed", String(isFullscreen));
+  fullscreenToggle.setAttribute(
+    "aria-label", isFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+  );
+  fullscreenToggle.title = isFullscreen ? "Exit fullscreen" : "Enter fullscreen";
+};
+
+const toggleFullscreen = async () => {
+  if (!fullscreenAvailable) return;
+  try {
+    if (fullscreenElement()) await fullscreenExit.call(document);
+    else await fullscreenRequest.call(document.documentElement);
+  } catch (error) {
+    showStatus(`FULLSCREEN ERROR · ${error?.message || "Fullscreen is unavailable"}`, 2600);
+  } finally {
+    syncFullscreenToggle();
+  }
+};
+
+syncFullscreenToggle();
+
 const setReadingMode = (isReading) => {
   if (isReading && libraryManageMode) {
     libraryManageMode = false;
@@ -2123,7 +2167,7 @@ const handleRightDragStart = (event) => {
   if (
     event.button !== 2 ||
     reader.hidden ||
-    event.target?.closest?.("#settings-menu, #speech-controls")
+    event.target?.closest?.("#settings-menu, #speech-controls, #fullscreen-toggle")
   ) return;
 
   event.preventDefault();
@@ -4041,6 +4085,7 @@ settingsWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
 settingsToggle.addEventListener("click", () => {
   setSettingsOpen(settingsPanel.hidden);
 });
+fullscreenToggle.addEventListener("click", () => void toggleFullscreen());
 settingsHome.addEventListener("click", returnToHomeScreen);
 settingsResetBook.addEventListener("click", resetCurrentBookSettings);
 
@@ -4122,6 +4167,8 @@ window.addEventListener("popstate", (event) => {
   if (event.state.view === "reader") showReaderView();
   else showHomeView();
 });
+document.addEventListener?.("fullscreenchange", syncFullscreenToggle);
+document.addEventListener?.("webkitfullscreenchange", syncFullscreenToggle);
 document.addEventListener?.("visibilitychange", () => {
   if (!pageIsVisible()) {
     savePositionNow();

@@ -9,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smooth Reader</title>
     <link rel="stylesheet" href="vendor/fonts/reader-fonts.css?v=20260903-fonts1">
-    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260910-serverlibrary1">
+    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260912-fullscreen2">
   </head>
   <body>
     <main id="app">
@@ -41,7 +41,7 @@
           <span><kbd>Home</kbd> / <kbd>End</kbd> book start / end</span>
           <span><kbd>PgUp</kbd> / <kbd>PgDn</kbd> move one screen</span>
           <span><kbd>P</kbd> / <kbd>Shift+P</kbd> next / previous palette</span>
-          <span><kbd>Alt+1…9/0</kbd> select palette directly</span>
+          <span><kbd>Alt+1…9/0</kbd> select one of the first ten palettes</span>
           <span><kbd>F</kbd> / <kbd>Shift+F</kbd> next / previous font</span>
           <span><kbd>Alt+Shift+1…9/0</kbd> font · <kbd>Alt+Shift+M</kbd> mono</span>
           <span><kbd>[</kbd> / <kbd>]</kbd> decrease / increase font size</span>
@@ -157,6 +157,19 @@
 
       <div id="status" role="status" aria-live="polite" hidden></div>
       <div id="progress-stack" aria-live="off">
+        <button
+          id="fullscreen-toggle"
+          type="button"
+          aria-label="Enter fullscreen"
+          title="Enter fullscreen"
+          aria-pressed="false"
+          hidden
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path class="fullscreen-enter" d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path>
+            <path class="fullscreen-exit" d="M8 3v5H3M16 3v5h5M21 16h-5v5M3 16h5v5"></path>
+          </svg>
+        </button>
         <div id="speech-controls" hidden>
           <button id="speech-overlay-pause" type="button" aria-label="Pause speech" title="Pause speech" disabled>Ⅱ</button>
           <button id="speech-overlay-stop" type="button" aria-label="Stop speech" title="Stop speech">■</button>
@@ -174,6 +187,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260911-marker-left1"></script>
+    <script src="renderer-v36.js?v=20260912-fullscreen2"></script>
   </body>
 </html>

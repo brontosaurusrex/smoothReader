@@ -214,6 +214,84 @@
   --scrollbar: #66536c;
 }
 
+:root[data-palette="flexoki-dark"] {
+  --background: #100f0f;
+  --text: #cecdc3;
+  --muted: #878580;
+  --line: #343331;
+  --heading: #e6e4d9;
+  --link: #4385be;
+  --panel: #1c1b1a;
+  --hover: #282726;
+  --cover: rgb(16 15 15 / 94%);
+  --scrollbar: #575653;
+}
+
+:root[data-palette="catppuccin-mocha"] {
+  --background: #1e1e2e;
+  --text: #cdd6f4;
+  --muted: #9399b2;
+  --line: #45475a;
+  --heading: #f5e0dc;
+  --link: #89b4fa;
+  --panel: #181825;
+  --hover: #313244;
+  --cover: rgb(30 30 46 / 94%);
+  --scrollbar: #585b70;
+}
+
+:root[data-palette="hackerman"] {
+  --background: #080d0d;
+  --text: #a8d5ca;
+  --muted: #527d78;
+  --line: #224a46;
+  --heading: #c7f0e6;
+  --link: #43bfae;
+  --panel: #0e1918;
+  --hover: #12221f;
+  --cover: rgb(8 13 13 / 95%);
+  --scrollbar: #2f7068;
+}
+
+:root[data-palette="lumon"] {
+  --background: #0e1a26;
+  --text: #d6e0e2;
+  --muted: #79a6b9;
+  --line: #294758;
+  --heading: #f3ffff;
+  --link: #afcbd6;
+  --panel: #142635;
+  --hover: #19303e;
+  --cover: rgb(14 26 38 / 95%);
+  --scrollbar: #3e6a78;
+}
+
+:root[data-palette="vantablack"] {
+  --background: #000000;
+  --text: #d8d8d2;
+  --muted: #777772;
+  --line: #292927;
+  --heading: #f0f0eb;
+  --link: #b6b6af;
+  --panel: #070707;
+  --hover: #111111;
+  --cover: rgb(0 0 0 / 96%);
+  --scrollbar: #3d3d3a;
+}
+
+:root[data-palette="black-gold"] {
+  --background: #0d0d0d;
+  --text: #ebdbb2;
+  --muted: #8f8265;
+  --line: #4a4434;
+  --heading: #f6f1dd;
+  --link: #bfa75d;
+  --panel: #171612;
+  --hover: #211f18;
+  --cover: rgb(13 13 13 / 95%);
+  --scrollbar: #6e6a58;
+}
+
 :root[data-view="home"] {
   color-scheme: dark;
   --background: #2e3440;
@@ -738,7 +816,7 @@ body.is-dragging #drop-zone::before {
   background: currentColor;
 }
 
-#settings-menu:is(:hover, :focus-within) #settings-toggle,
+#settings-toggle:is(:hover, :focus-visible),
 #settings-toggle[aria-expanded="true"] {
   border-color: var(--display-line);
   opacity: 1;
@@ -1006,7 +1084,8 @@ body.is-right-dragging * {
   pointer-events: auto;
 }
 
-#speech-controls button {
+#speech-controls button,
+#fullscreen-toggle {
   display: grid;
   place-items: center;
   width: 42px;
@@ -1027,7 +1106,29 @@ body.is-right-dragging * {
     background-color 120ms ease;
 }
 
-#speech-controls button:is(:hover, :focus-visible) {
+#fullscreen-toggle {
+  margin-bottom: 0.3rem;
+  pointer-events: auto;
+}
+
+#fullscreen-toggle svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+#fullscreen-toggle[aria-pressed="false"] .fullscreen-exit,
+#fullscreen-toggle[aria-pressed="true"] .fullscreen-enter,
+#fullscreen-toggle[hidden] {
+  display: none;
+}
+
+#speech-controls button:is(:hover, :focus-visible),
+#fullscreen-toggle:is(:hover, :focus-visible) {
   border-color: var(--display-line);
   background: var(--display-panel);
   opacity: 1;
@@ -1217,13 +1318,15 @@ body.is-right-dragging * {
     bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
   }
 
-  #speech-controls button {
+  #speech-controls button,
+  #fullscreen-toggle {
     width: 44px;
     height: 44px;
     opacity: 0.46;
   }
 
-  #speech-controls button:is(:active, :focus-visible) {
+  #speech-controls button:is(:active, :focus-visible),
+  #fullscreen-toggle:is(:active, :focus-visible) {
     border-color: var(--display-line);
     background: var(--display-panel);
     opacity: 1;

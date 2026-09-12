@@ -115,6 +115,7 @@ const elements = {
   "#library-import-input": makeElement(),
   "#settings-menu": makeElement(),
   "#settings-toggle": makeElement(),
+  "#fullscreen-toggle": makeElement(),
   "#settings-panel": makeElement(),
   "#settings-palette": makeElement(),
   "#settings-contrast": makeElement(),
@@ -176,6 +177,7 @@ elements["#status"].hidden = true;
 elements["#recent-books"].hidden = true;
 elements["#settings-menu"].hidden = true;
 elements["#settings-panel"].hidden = true;
+elements["#fullscreen-toggle"].hidden = true;
 elements["#settings-speech-speaker-row"].hidden = true;
 elements["#library-manage-actions"].hidden = true;
 elements["#start-store-server"].hidden = true;
@@ -345,6 +347,12 @@ const context = vm.createContext({
     title: "Smooth Reader",
     hidden: false,
     visibilityState: "visible",
+    fullscreenEnabled: true,
+    fullscreenElement: null,
+    async exitFullscreen() {
+      this.fullscreenElement = null;
+      documentListeners.get("fullscreenchange")?.();
+    },
     fonts: { ready: Promise.resolve() },
     addEventListener(name, callback) {
       documentListeners.set(name, callback);
@@ -352,6 +360,10 @@ const context = vm.createContext({
     documentElement: {
       scrollHeight: 3000,
       dataset: { view: "home" },
+      async requestFullscreen() {
+        context.document.fullscreenElement = context.document.documentElement;
+        documentListeners.get("fullscreenchange")?.();
+      },
       style: {
         setProperty(name, value) {
           this[name] = value;
@@ -605,6 +617,7 @@ assert.match(indexSource, /id="settings-speech-speed"[^>]*min="-33"[^>]*max="33"
 assert.match(indexSource, /id="settings-speech-pause"/);
 assert.match(indexSource, /id="settings-speech-stop"/);
 assert.match(indexSource, /id="settings-toggle"[\s\S]*aria-label="Open reader settings"/);
+assert.match(indexSource, /id="fullscreen-toggle"[\s\S]*aria-label="Enter fullscreen"/);
 assert.match(indexSource, /id="settings-font-size"[^>]*max="80"[^>]*step="2"/);
 assert.match(indexSource, /id="settings-width"[^>]*min="8"[^>]*max="100"[^>]*step="2"/);
 assert.match(indexSource, /id="settings-font-size-down"/);
@@ -624,8 +637,8 @@ assert.doesNotMatch(indexSource, /id="start-settings-scope"/);
 assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260910-serverlibrary1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260911-marker-left1/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260912-fullscreen2/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260912-fullscreen2/);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
@@ -750,6 +763,9 @@ assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and
 assert.match(stylesSource, /touch-action:\s*none/);
 assert.match(stylesSource, /\(pointer:\s*coarse\)/);
 assert.match(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*44px[^}]*height:\s*44px[^}]*opacity:\s*0\.18/s);
+assert.match(stylesSource, /#speech-controls button,\s*#fullscreen-toggle[^{]*\{[^}]*width:\s*42px[^}]*height:\s*42px[^}]*opacity:\s*0\.2/s);
+assert.match(stylesSource, /#fullscreen-toggle[^{]*\{[^}]*pointer-events:\s*auto/s);
+assert.match(stylesSource, /#fullscreen-toggle:is\(:hover, :focus-visible\)[^{]*\{[^}]*border-color:\s*var\(--display-line\)[^}]*background:\s*var\(--display-panel\)[^}]*opacity:\s*1/s);
 assert.doesNotMatch(stylesSource, /#settings-toggle[^{]*\{[^}]*width:\s*52px/s);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#start-hotkeys[^{]*\{[^}]*font-size:\s*clamp\(1rem/s);
 assert.match(stylesSource, /@media \(max-width: 620px\), \(pointer: coarse\) and \(hover: none\)[\s\S]*#settings-panel[^{]*\{[^}]*width:\s*min\(96vw, 28rem\)[^}]*font-size:\s*1rem/s);
@@ -757,6 +773,7 @@ assert.match(stylesSource, /#recent-book-list[^{]*\{[^}]*grid-template-columns:\
 assert.match(stylesSource, /#recent-book-list[^{]*\{[^}]*justify-content:\s*center/s);
 assert.match(stylesSource, /#drop-picker,\s*#recent-books,\s*#start-hotkeys,\s*#library-actions,\s*#library-manage-actions[^{]*\{[^}]*justify-self:\s*center[^}]*margin-inline:\s*auto/s);
 assert.ok(indexSource.indexOf('id="speech-controls"') < indexSource.indexOf('id="reading-progress"'));
+assert.ok(indexSource.indexOf('id="fullscreen-toggle"') < indexSource.indexOf('id="speech-controls"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-pause"') < indexSource.indexOf('id="speech-overlay-stop"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-stop"') < indexSource.indexOf('id="speech-overlay-home"'));
 assert.ok(indexSource.indexOf('id="reading-progress"') < indexSource.indexOf('id="speech-voice"'));
@@ -769,7 +786,9 @@ assert.match(stylesSource, /overflow:\s*visible\s*!important/);
 assert.match(stylesSource, /#333d4d/i);
 for (const palette of [
   "charcoal", "geany", "midnight", "sepia", "forest",
-  "paper", "nord", "solarized", "gruvbox", "plum"
+  "paper", "nord", "solarized", "gruvbox", "plum",
+  "flexoki-dark", "catppuccin-mocha", "hackerman", "lumon",
+  "vantablack", "black-gold"
 ]) {
   assert.match(stylesSource, new RegExp(`data-palette="${palette}"`), palette);
 }
@@ -1222,7 +1241,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     /Invalid or damaged EPUB archive/
   );
   delete context.window.JSZip;
-  assert.equal(elements["#settings-palette"].children.length, 10);
+  assert.equal(elements["#settings-palette"].children.length, 16);
   assert.equal(elements["#settings-font"].children.length, 12);
   assert.equal(elements["#settings-contrast-value"].textContent, "0%");
   assert.equal(context.document.documentElement.style["--contrast-strength"], "0%");
@@ -1566,6 +1585,18 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   elements["#settings-toggle"].listeners.get("click")();
   assert.equal(elements["#settings-panel"].hidden, false);
   assert.equal(elements["#settings-toggle"].getAttribute("aria-expanded"), "true");
+  assert.equal(elements["#fullscreen-toggle"].hidden, false);
+  assert.equal(elements["#fullscreen-toggle"].getAttribute("aria-pressed"), "false");
+  elements["#fullscreen-toggle"].listeners.get("click")();
+  await wait(0);
+  assert.equal(context.document.fullscreenElement, context.document.documentElement);
+  assert.equal(elements["#fullscreen-toggle"].getAttribute("aria-pressed"), "true");
+  assert.equal(elements["#fullscreen-toggle"].getAttribute("aria-label"), "Exit fullscreen");
+  elements["#fullscreen-toggle"].listeners.get("click")();
+  await wait(0);
+  assert.equal(context.document.fullscreenElement, null);
+  assert.equal(elements["#fullscreen-toggle"].getAttribute("aria-pressed"), "false");
+  assert.equal(elements["#fullscreen-toggle"].getAttribute("aria-label"), "Enter fullscreen");
 
   elements["#settings-palette"].listeners.get("change")({
     target: { value: "nord" }

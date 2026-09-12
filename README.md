@@ -21,7 +21,7 @@ scroll/reflow handling, and Piper architecture, see [ABOUTTECH.md](ABOUTTECH.md)
 - `{` / `}` — decrease / increase line height
 - `-` / `+` — decrease / increase letter spacing
 - `0` — reset letter spacing
-- `Alt+1…0` — select a palette directly
+- `Alt+1…0` — select one of the first ten palettes directly
 - `Alt+Shift+1…0` — select a font directly
 - `Alt+Shift+M` — select System Mono
 
@@ -47,7 +47,10 @@ stored on the server.
 
 ## Settings
 
-The top-right hamburger opens all reader controls.
+The top-right hamburger opens all reader controls. The subtle fullscreen button
+in the bottom-right control stack sits above play/pause and changes to an
+exit-fullscreen icon while active. Browsers that do not expose the Fullscreen
+API do not show it.
 
 The home screen and settings drawer always use the bundled EnvyCodeR Nerd Font. Changing a book's font affects only its text, reading percentage, and Piper voice label.
 
