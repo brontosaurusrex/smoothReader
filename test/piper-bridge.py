@@ -338,7 +338,13 @@ with tempfile.TemporaryDirectory() as temporary_directory:
             "fileName": "tiny.epub",
             "title": "Tiny Test Book",
             "openedAt": 100,
-            "position": {"ratio": 0.4, "scrollY": 300, "savedAt": 400},
+            "position": {
+                "ratio": 0.4,
+                "scrollY": 300,
+                "characterOffset": 68_000,
+                "characterCount": 466_000,
+                "savedAt": 400,
+            },
             "settings": {"palette": "nord", "font": "alegreya", "savedAt": 500},
         }
         state_request = urllib.request.Request(
@@ -376,6 +382,12 @@ with tempfile.TemporaryDirectory() as temporary_directory:
             assert books[0]["hash"] == book_hash
             assert books[0]["title"] == "Tiny Test Book"
             assert books[0]["coverUrl"].endswith(f"/{book_hash}/cover")
+            assert books[0]["position"] == {
+                "ratio": 0.4,
+                "characterOffset": 68_000,
+                "characterCount": 466_000,
+                "savedAt": 400,
+            }
 
         with urllib.request.urlopen(urllib.request.Request(
             base_url + f"/api/library/books/{book_hash}/epub", headers=user_headers

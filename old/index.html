@@ -9,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Smooth Reader</title>
     <link rel="stylesheet" href="vendor/fonts/reader-fonts.css?v=20260903-fonts1">
-    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260909-homecenter1">
+    <link rel="stylesheet" href="styles-v36-mobile7.css?v=20260912-palette-swatches1">
   </head>
   <body>
     <main id="app">
@@ -28,7 +28,9 @@
           <button id="start-manage-library" type="button" disabled>MANAGE LIBRARY</button>
         </div>
         <div id="library-manage-actions" aria-label="Manage selected books" hidden>
-          <button id="start-remove-books" type="button" disabled>REMOVE SELECTED</button>
+          <button id="start-store-server" type="button" disabled hidden>STORE ON SERVER</button>
+          <button id="start-remove-local" type="button" disabled>REMOVE FROM THIS DEVICE</button>
+          <button id="start-remove-server" type="button" disabled hidden>REMOVE FROM SERVER</button>
           <button id="start-cancel-manage" type="button">CANCEL</button>
         </div>
         <div id="start-hotkeys" aria-label="Keyboard shortcuts">
@@ -39,7 +41,7 @@
           <span><kbd>Home</kbd> / <kbd>End</kbd> book start / end</span>
           <span><kbd>PgUp</kbd> / <kbd>PgDn</kbd> move one screen</span>
           <span><kbd>P</kbd> / <kbd>Shift+P</kbd> next / previous palette</span>
-          <span><kbd>Alt+1…9/0</kbd> select palette directly</span>
+          <span><kbd>Alt+1…9/0</kbd> select one of the first ten palettes</span>
           <span><kbd>F</kbd> / <kbd>Shift+F</kbd> next / previous font</span>
           <span><kbd>Alt+Shift+1…9/0</kbd> font · <kbd>Alt+Shift+M</kbd> mono</span>
           <span><kbd>[</kbd> / <kbd>]</kbd> decrease / increase font size</span>
@@ -70,7 +72,30 @@
         </button>
         <div id="settings-panel" hidden>
           <strong>READER</strong>
-          <label>Palette<select id="settings-palette"></select></label>
+          <div class="settings-control">
+            <span id="settings-palette-label" class="settings-label">Palette</span>
+            <div id="settings-palette-picker" class="palette-picker">
+              <button
+                id="settings-palette-toggle"
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-labelledby="settings-palette-label settings-palette-name"
+              >
+                <span id="settings-palette-name"></span>
+                <span id="settings-palette-swatches" class="palette-swatches" aria-hidden="true"></span>
+                <span class="palette-chevron" aria-hidden="true">⌄</span>
+              </button>
+              <div
+                id="settings-palette-options"
+                class="palette-options"
+                role="listbox"
+                aria-labelledby="settings-palette-label"
+                hidden
+              ></div>
+              <select id="settings-palette" aria-hidden="true" tabindex="-1" hidden></select>
+            </div>
+          </div>
           <div class="settings-control">
             <span class="settings-label"><label for="settings-contrast">Contrast</label><output id="settings-contrast-value"></output></span>
             <div class="range-stepper">
@@ -129,6 +154,14 @@
               <button id="settings-speech-position-up" type="button" aria-label="Move spoken text downward">+</button>
             </div>
           </div>
+          <div class="settings-control">
+            <span class="settings-label"><label for="settings-speech-speed">Speech speed</label><output id="settings-speech-speed-value"></output></span>
+            <div class="range-stepper">
+              <button id="settings-speech-speed-down" type="button" aria-label="Decrease speech speed">−</button>
+              <input id="settings-speech-speed" type="range" min="-33" max="33" step="1" aria-label="Speech playback speed">
+              <button id="settings-speech-speed-up" type="button" aria-label="Increase speech speed">+</button>
+            </div>
+          </div>
           <div class="settings-row settings-speech">
             <button id="settings-speech-start" type="button">READ FROM HERE</button>
             <button id="settings-speech-pause" type="button" disabled>PAUSE</button>
@@ -147,6 +180,19 @@
 
       <div id="status" role="status" aria-live="polite" hidden></div>
       <div id="progress-stack" aria-live="off">
+        <button
+          id="fullscreen-toggle"
+          type="button"
+          aria-label="Enter fullscreen"
+          title="Enter fullscreen"
+          aria-pressed="false"
+          hidden
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path class="fullscreen-enter" d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path>
+            <path class="fullscreen-exit" d="M8 3v5H3M16 3v5h5M21 16h-5v5M3 16h5v5"></path>
+          </svg>
+        </button>
         <div id="speech-controls" hidden>
           <button id="speech-overlay-pause" type="button" aria-label="Pause speech" title="Pause speech" disabled>Ⅱ</button>
           <button id="speech-overlay-stop" type="button" aria-label="Stop speech" title="Stop speech">■</button>
@@ -164,6 +210,6 @@
     <script src="vendor/jszip.min.js"></script>
     <script src="vendor/jszip-global.js"></script>
     <script src="vendor/epub.min.js"></script>
-    <script src="renderer-v36.js?v=20260909-newdefaults1"></script>
+    <script src="renderer-v36.js?v=20260912-palette-swatches1"></script>
   </body>
 </html>

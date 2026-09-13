@@ -15,13 +15,21 @@ const startExportLibrary = document.querySelector("#start-export-library");
 const startImportLibrary = document.querySelector("#start-import-library");
 const startManageLibrary = document.querySelector("#start-manage-library");
 const libraryManageActions = document.querySelector("#library-manage-actions");
-const startRemoveBooks = document.querySelector("#start-remove-books");
+const startStoreServer = document.querySelector("#start-store-server");
+const startRemoveLocal = document.querySelector("#start-remove-local");
+const startRemoveServer = document.querySelector("#start-remove-server");
 const startCancelManage = document.querySelector("#start-cancel-manage");
 const libraryImportInput = document.querySelector("#library-import-input");
 const settingsMenu = document.querySelector("#settings-menu");
 const settingsToggle = document.querySelector("#settings-toggle");
+const fullscreenToggle = document.querySelector("#fullscreen-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsPaletteSelect = document.querySelector("#settings-palette");
+const settingsPalettePicker = document.querySelector("#settings-palette-picker");
+const settingsPaletteToggle = document.querySelector("#settings-palette-toggle");
+const settingsPaletteName = document.querySelector("#settings-palette-name");
+const settingsPaletteSwatches = document.querySelector("#settings-palette-swatches");
+const settingsPaletteOptions = document.querySelector("#settings-palette-options");
 const settingsContrast = document.querySelector("#settings-contrast");
 const settingsContrastValue = document.querySelector("#settings-contrast-value");
 const settingsContrastDown = document.querySelector("#settings-contrast-down");
@@ -54,6 +62,10 @@ const settingsSpeechPosition = document.querySelector("#settings-speech-position
 const settingsSpeechPositionValue = document.querySelector("#settings-speech-position-value");
 const settingsSpeechPositionDown = document.querySelector("#settings-speech-position-down");
 const settingsSpeechPositionUp = document.querySelector("#settings-speech-position-up");
+const settingsSpeechSpeed = document.querySelector("#settings-speech-speed");
+const settingsSpeechSpeedValue = document.querySelector("#settings-speech-speed-value");
+const settingsSpeechSpeedDown = document.querySelector("#settings-speech-speed-down");
+const settingsSpeechSpeedUp = document.querySelector("#settings-speech-speed-up");
 const settingsSpeechStart = document.querySelector("#settings-speech-start");
 const settingsSpeechPause = document.querySelector("#settings-speech-pause");
 const settingsSpeechStop = document.querySelector("#settings-speech-stop");
@@ -82,6 +94,7 @@ const WIDTH_KEY = "smooth-reader:text-width";
 const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
 const LEGACY_SPEECH_POSITION_KEY = "smooth-reader:speech-position";
 const SPEECH_CENTER_OFFSET_KEY = "smooth-reader:speech-center-offset";
+const SPEECH_SPEED_KEY = "smooth-reader:speech-speed";
 const SPEECH_SESSION_KEY = "smooth-reader:speech-session";
 const SILENT_WAV_DATA_URL = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
@@ -98,10 +111,16 @@ const COVER_THUMBNAIL_QUALITY = 0.86;
 const LIBRARY_BACKUP_FORMAT = "smooth-reader-library";
 const LIBRARY_BACKUP_VERSION = 1;
 const MAX_LIBRARY_IMPORT_BYTES = 512 * 1024 * 1024;
+const EPUB_OPEN_TIMEOUT_MS = 30_000;
+const SERVER_LIBRARY_REQUEST_TIMEOUT_MS = 30_000;
+const SERVER_LIBRARY_UPLOAD_TIMEOUT_MS = 180_000;
+const SERVER_STATE_SYNC_DELAY_MS = 1_500;
 const HISTORY_APP = "smooth-reader";
 const SAVE_DELAY_MS = 180;
 const PAGE_SCROLL_RATIO = 0.88;
 const RIGHT_DRAG_SPEED = 1.35;
+const FIRST_VISIBLE_LINE_TOP_PADDING_PX = 12;
+const FIRST_VISIBLE_LINE_SCAN_STEP_PX = 4;
 const DEFAULT_TRACKING_EM = 0.02;
 const DEFAULT_CONTRAST = 0;
 const MIN_CONTRAST = -30;
@@ -116,6 +135,7 @@ const DEFAULT_FONT_SIZE_PX = 36;
 const MIN_FONT_SIZE_PX = 14;
 const MAX_FONT_SIZE_PX = 80;
 const FONT_SIZE_STEP_PX = 2;
+const FONT_PALETTE_STATUS_DURATION_MS = 3_900;
 const DEFAULT_LINE_HEIGHT = 1.28;
 const MIN_LINE_HEIGHT = 1.2;
 const MAX_LINE_HEIGHT = 2.2;
@@ -128,20 +148,29 @@ const LEGACY_DEFAULT_SPEECH_POSITION_PERCENT = 22;
 const DEFAULT_SPEECH_CENTER_OFFSET_PERCENT = 0;
 const MIN_SPEECH_CENTER_OFFSET_PERCENT = -25;
 const MAX_SPEECH_CENTER_OFFSET_PERCENT = 25;
+const DEFAULT_SPEECH_SPEED_PERCENT = 0;
+const MIN_SPEECH_SPEED_PERCENT = -33;
+const MAX_SPEECH_SPEED_PERCENT = 33;
 const SPEECH_VIEWPORT_MARGIN_PX = 16;
 const SPEECH_SCROLL_DURATION_MS = 10;
 const SPEECH_BLOCK_SELECTOR = "p, li, blockquote, h1, h2, h3, h4, h5, h6";
 const PALETTES = [
-  { id: "charcoal", name: "CHARCOAL" },
-  { id: "geany", name: "GEANY" },
-  { id: "midnight", name: "MIDNIGHT" },
-  { id: "sepia", name: "SEPIA" },
-  { id: "forest", name: "FOREST" },
-  { id: "paper", name: "PAPER" },
-  { id: "nord", name: "NORD" },
-  { id: "solarized", name: "SOLARIZED DARK" },
-  { id: "gruvbox", name: "GRUVBOX" },
-  { id: "plum", name: "PLUM" }
+  { id: "charcoal", name: "CHARCOAL", swatches: ["#121212", "#dedad1", "#77746e", "#373532", "#eeeae1"] },
+  { id: "geany", name: "GEANY", swatches: ["#333d4d", "#b7c7c2", "#648d85", "#536665", "#d2ddd8"] },
+  { id: "midnight", name: "MIDNIGHT", swatches: ["#0d1520", "#cfdae5", "#71869b", "#29394a", "#e5edf5"] },
+  { id: "sepia", name: "SEPIA", swatches: ["#241d16", "#dfcfb7", "#9b8465", "#4b3d2d", "#f1e0c5"] },
+  { id: "forest", name: "FOREST", swatches: ["#101914", "#d2dfd4", "#718c76", "#2c4333", "#e4eee5"] },
+  { id: "paper", name: "PAPER", swatches: ["#e8e1d3", "#302d28", "#746c60", "#c3b9a8", "#1f1d1a"] },
+  { id: "nord", name: "NORD", swatches: ["#2e3440", "#d8dee9", "#8192aa", "#4c566a", "#eceff4"] },
+  { id: "solarized", name: "SOLARIZED DARK", swatches: ["#002b36", "#93a1a1", "#657b83", "#164550", "#eee8d5"] },
+  { id: "gruvbox", name: "GRUVBOX", swatches: ["#282828", "#ebdbb2", "#a89984", "#504945", "#fbf1c7"] },
+  { id: "plum", name: "PLUM", swatches: ["#211924", "#dacdda", "#907c91", "#4b3b50", "#f0e5ef"] },
+  { id: "flexoki-dark", name: "FLEXOKI DARK", swatches: ["#100f0f", "#cecdc3", "#878580", "#343331", "#e6e4d9"] },
+  { id: "catppuccin-mocha", name: "CATPPUCCIN MOCHA", swatches: ["#1e1e2e", "#cdd6f4", "#9399b2", "#45475a", "#f5e0dc"] },
+  { id: "hackerman", name: "HACKERMAN", swatches: ["#080d0d", "#a8d5ca", "#527d78", "#224a46", "#c7f0e6"] },
+  { id: "lumon", name: "LUMON", swatches: ["#0e1a26", "#d6e0e2", "#79a6b9", "#294758", "#f3ffff"] },
+  { id: "vantablack", name: "VANTABLACK", swatches: ["#000000", "#d8d8d2", "#777772", "#292927", "#f0f0eb"] },
+  { id: "black-gold", name: "BLACK GOLD", swatches: ["#0d0d0d", "#ebdbb2", "#8f8265", "#4a4434", "#f6f1dd"] }
 ];
 const FONTS = [
   { id: "system-sans", name: "SYSTEM SANS" },
@@ -177,6 +206,12 @@ let recentBookInfo = [];
 let cachedRecentBooks = [];
 let libraryManageMode = false;
 const selectedLibraryBooks = new Set();
+let serverLibraryAvailable = false;
+let serverLibraryBusy = false;
+let serverBookInfo = [];
+const serverBookHashes = new Set();
+let serverStateSyncTimer = null;
+const serverStateSyncing = new Map();
 let pendingLayoutAnchor = null;
 let layoutChangeGeneration = 0;
 let stableResizeAnchor = null;
@@ -191,6 +226,8 @@ let speechActiveJob = null;
 let speechActiveElements = [];
 let speechAudioFinish = null;
 let speechAudioUnlockPromise = Promise.resolve();
+const speechPrefetchControllers = new Set();
+const speechPrefetchedUrls = new Set();
 let speechMarkerFrame = null;
 let speechScrollFrame = null;
 let speechScrollTargetY = null;
@@ -238,6 +275,7 @@ const savedSpeechCenterOffset = Number.parseInt(
   localStorage.getItem(SPEECH_CENTER_OFFSET_KEY),
   10
 );
+const savedSpeechSpeed = Number.parseInt(localStorage.getItem(SPEECH_SPEED_KEY), 10);
 const savedLegacySpeechPosition = Number.parseInt(
   localStorage.getItem(LEGACY_SPEECH_POSITION_KEY),
   10
@@ -255,6 +293,9 @@ let speechCenterOffsetPercent = Math.max(
   MIN_SPEECH_CENTER_OFFSET_PERCENT,
   Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, initialSpeechCenterOffset)
 );
+let speechSpeedPercent = Number.isFinite(savedSpeechSpeed)
+  ? Math.max(MIN_SPEECH_SPEED_PERCENT, Math.min(MAX_SPEECH_SPEED_PERCENT, savedSpeechSpeed))
+  : DEFAULT_SPEECH_SPEED_PERCENT;
 
 const speechSessionId = (() => {
   const makeId = () => crypto.randomUUID?.().replaceAll("-", "") ||
@@ -289,6 +330,107 @@ const clearStatus = () => {
   status.textContent = "";
 };
 
+const withTimeout = (promise, milliseconds, message) => {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error(message)), milliseconds);
+  });
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
+};
+
+const serverRequest = async (path, options = {}, timeout = SERVER_LIBRARY_REQUEST_TIMEOUT_MS) => {
+  if (typeof window.fetch !== "function") throw new Error("Server library is unavailable");
+  const { expectBinary = false, ...fetchOptions } = options;
+  const response = await withTimeout(
+    window.fetch(path, { credentials: "same-origin", ...fetchOptions }),
+    timeout,
+    "Server library request timed out"
+  );
+  let payload = null;
+  if (expectBinary) {
+    if (!response.ok) {
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      throw new Error(payload?.error || `Server library returned HTTP ${response.status}`);
+    }
+    return response.arrayBuffer();
+  }
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.error || `Server library returned HTTP ${response.status}`);
+  }
+  return payload;
+};
+
+const serverRecordFor = (record) => serverBookInfo.find((candidate) =>
+  booksMatch(record, candidate)
+);
+
+const cachedRecordFor = (record) => cachedRecentBooks.find((candidate) =>
+  booksMatch(record, candidate)
+);
+
+const displayedLibraryBooks = () => {
+  const combined = recentBookInfo.map((record) => ({ ...record }));
+  serverBookInfo.forEach((serverRecord) => {
+    const index = combined.findIndex((record) => booksMatch(record, serverRecord));
+    if (index < 0) {
+      combined.push({ ...serverRecord, serverStored: true });
+      return;
+    }
+    const existing = combined[index];
+    combined[index] = {
+      ...serverRecord,
+      ...existing,
+      title: existing.title || serverRecord.title,
+      fileName: existing.fileName || serverRecord.fileName,
+      openedAt: Math.max(
+        Number(existing.openedAt) || 0,
+        Number(serverRecord.openedAt) || 0
+      ),
+      coverUrl: serverRecord.coverUrl || "",
+      serverStored: true
+    };
+  });
+  return combined
+    .sort((first, second) => (Number(second.openedAt) || 0) - (Number(first.openedAt) || 0))
+    .slice(0, MAX_RECENT_BOOKS);
+};
+
+const setServerLibraryAvailable = (available) => {
+  serverLibraryAvailable = Boolean(available);
+  startStoreServer.hidden = !serverLibraryAvailable;
+  startRemoveServer.hidden = !serverLibraryAvailable;
+};
+
+const refreshServerLibrary = async (silent = false) => {
+  try {
+    const payload = await serverRequest("/api/library/books");
+    serverBookInfo = Array.isArray(payload.books) ? payload.books : [];
+    serverBookHashes.clear();
+    serverBookInfo.forEach((record) => {
+      if (/^[a-f0-9]{64}$/.test(record?.hash || "")) serverBookHashes.add(record.hash);
+    });
+    setServerLibraryAvailable(true);
+    renderRecentBooks();
+    return true;
+  } catch (error) {
+    setServerLibraryAvailable(false);
+    serverBookInfo = [];
+    serverBookHashes.clear();
+    renderRecentBooks();
+    if (!silent) showStatus(`SERVER LIBRARY ERROR · ${error.message}`, 3200);
+    return false;
+  }
+};
+
 const setReopenAvailability = (canReopen) => {
   startReopen.disabled = isBookLoading || !canReopen;
 };
@@ -315,18 +457,37 @@ const libraryBookKey = (record) => record?.hash
   : `file:${record?.fileName || ""}`;
 
 const syncLibraryManageControls = () => {
-  startManageLibrary.disabled = isBookLoading || recentBookInfo.length === 0;
+  const displayed = displayedLibraryBooks();
+  const selected = displayed.filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record))
+  );
+  const hasLocalSelection = selected.some((record) =>
+    recentBookInfo.some((candidate) => booksMatch(candidate, record)) ||
+    Boolean(cachedRecordFor(record)?.bytes)
+  );
+  const hasUploadSelection = selected.some((record) =>
+    Boolean(cachedRecordFor(record)?.bytes) && !serverBookHashes.has(record.hash)
+  );
+  const hasServerSelection = selected.some((record) =>
+    serverBookHashes.has(record.hash)
+  );
+  const busy = isBookLoading || serverLibraryBusy;
+  startManageLibrary.disabled = busy || displayed.length === 0;
   libraryManageActions.hidden = !libraryManageMode;
-  startRemoveBooks.disabled = isBookLoading || selectedLibraryBooks.size === 0;
-  startRemoveBooks.textContent = selectedLibraryBooks.size > 0
-    ? `REMOVE SELECTED (${selectedLibraryBooks.size})`
-    : "REMOVE SELECTED";
+  startStoreServer.disabled = busy || !hasUploadSelection;
+  startRemoveLocal.disabled = busy || !hasLocalSelection;
+  startRemoveServer.disabled = busy || !hasServerSelection;
+  startStoreServer.textContent = selectedLibraryBooks.size > 0
+    ? `STORE ON SERVER (${selectedLibraryBooks.size})`
+    : "STORE ON SERVER";
   if (libraryManageMode) recentBookList.classList.add("is-managing");
   else recentBookList.classList.remove("is-managing");
 };
 
 const setLibraryManageMode = (enabled) => {
-  libraryManageMode = Boolean(enabled && recentBookInfo.length > 0 && !isBookLoading);
+  libraryManageMode = Boolean(
+    enabled && displayedLibraryBooks().length > 0 && !isBookLoading && !serverLibraryBusy
+  );
   if (!libraryManageMode) selectedLibraryBooks.clear();
   syncLibraryManageControls();
   renderRecentBooks();
@@ -342,43 +503,50 @@ const toggleLibraryBookSelection = (record) => {
 
 const renderRecentBooks = () => {
   recentBookList.replaceChildren();
-  recentBooks.hidden = recentBookInfo.length === 0;
+  const displayed = displayedLibraryBooks();
+  recentBooks.hidden = displayed.length === 0;
 
-  recentBookInfo.forEach((record, index) => {
-    const cached = cachedRecentBooks.find((candidate) => booksMatch(record, candidate));
+  displayed.forEach((record, index) => {
+    const cached = cachedRecordFor(record);
+    const serverRecord = serverRecordFor(record);
+    const serverStored = Boolean(serverRecord || serverBookHashes.has(record.hash));
     const button = document.createElement("button");
     const selectionKey = libraryBookKey(record);
     const isSelected = selectedLibraryBooks.has(selectionKey);
     button.type = "button";
     button.className = "recent-book";
-    button.disabled = isBookLoading || (!libraryManageMode && !cached?.bytes);
+    button.disabled = isBookLoading || serverLibraryBusy || (
+      !libraryManageMode && !cached?.bytes && !serverStored
+    );
     button.textContent = record.title && record.title !== record.fileName
       ? `${record.title} — ${record.fileName}`
       : record.fileName;
-    if (cached?.thumbnail) {
+    const cover = cached?.thumbnail || serverRecord?.coverUrl || "";
+    if (cover) {
       button.classList.add("has-cover");
-      button.style.setProperty("--recent-book-cover", `url("${cached.thumbnail}")`);
+      button.style.setProperty("--recent-book-cover", `url("${cover}")`);
     }
+    if (serverStored) button.classList.add("is-server-stored");
     if (libraryManageMode) {
       if (isSelected) button.classList.add("is-selected");
       button.setAttribute("aria-pressed", String(isSelected));
       button.title = `${isSelected ? "Deselect" : "Select"} ${record.title || record.fileName}`;
       button.addEventListener("click", () => toggleLibraryBookSelection(record));
     } else {
-      button.title = cached?.bytes
-        ? `Open ${record.title || record.fileName}`
-        : "Cached copy unavailable; drop this EPUB again";
-      button.addEventListener("click", () => reopenCachedBook(record));
+      button.title = `${serverStored ? "Server stored · " : ""}Open ${
+        record.title || record.fileName
+      }`;
+      button.addEventListener("click", () => void openLibraryBook(record));
     }
     recentBookList.appendChild(button);
 
     if (index === 0) {
-      lastBookCanReopen = Boolean(cached?.bytes);
+      lastBookCanReopen = Boolean(cached?.bytes || serverStored);
       setReopenAvailability(lastBookCanReopen);
     }
   });
 
-  if (recentBookInfo.length === 0) {
+  if (displayed.length === 0) {
     lastBookCanReopen = false;
     setReopenAvailability(false);
   }
@@ -539,19 +707,25 @@ const initializeRecentBooks = async () => {
   }
 };
 
-const recentBooksReady = initializeRecentBooks();
+const recentBooksReady = Promise.all([
+  initializeRecentBooks(),
+  refreshServerLibrary(true)
+]);
 
-const removeSelectedLibraryBooks = async () => {
+const removeSelectedClientBooks = async () => {
   if (isBookLoading || selectedLibraryBooks.size === 0) return;
-  const selectedRecords = recentBookInfo.filter((record) =>
-    selectedLibraryBooks.has(libraryBookKey(record))
+  const selectedRecords = displayedLibraryBooks().filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record)) && (
+      recentBookInfo.some((candidate) => booksMatch(candidate, record)) ||
+      Boolean(cachedRecordFor(record)?.bytes)
+    )
   );
   if (selectedRecords.length === 0) return;
 
   const count = selectedRecords.length;
   const prompt = count === 1
-    ? "Remove this book, its reading position, and its settings from this browser?"
-    : `Remove these ${count} books, their reading positions, and their settings from this browser?`;
+    ? "Remove this book, its reading position, and its settings from this device? Any server copy will be kept."
+    : `Remove these ${count} books, their reading positions, and their settings from this device? Any server copies will be kept.`;
   if (!window.confirm(prompt)) return;
 
   const removedHashes = new Set();
@@ -568,6 +742,9 @@ const removeSelectedLibraryBooks = async () => {
   );
 
   try {
+    if (activeBookWasRemoved && serverBookHashes.has(activeBookKey)) {
+      await syncServerBookState(activeBookKey);
+    }
     await writeCachedBooks(retainedCachedBooks);
     if (activeBookWasRemoved) {
       destroyCurrentBook();
@@ -597,7 +774,10 @@ const removeSelectedLibraryBooks = async () => {
     );
     setLibraryManageMode(false);
     setReopenAvailability(lastBookCanReopen);
-    showStatus(`${count} ${count === 1 ? "BOOK" : "BOOKS"} REMOVED`, 1800);
+    showStatus(
+      `${count} ${count === 1 ? "BOOK" : "BOOKS"} REMOVED FROM THIS DEVICE`,
+      2200
+    );
   } catch (error) {
     console.error(error);
     showStatus("BOOKS COULD NOT BE REMOVED", 2400);
@@ -613,14 +793,70 @@ const populateSelect = (select, choices) => {
   });
 };
 
+const appendPaletteSwatches = (container, palette) => {
+  container.replaceChildren();
+  palette.swatches.forEach((color) => {
+    const swatch = document.createElement("i");
+    swatch.style.setProperty("--swatch-color", color);
+    container.appendChild(swatch);
+  });
+};
+
+const setPalettePickerOpen = (isOpen) => {
+  settingsPaletteOptions.hidden = !isOpen;
+  settingsPaletteToggle.setAttribute("aria-expanded", String(isOpen));
+};
+
+const syncPalettePicker = () => {
+  const palette = PALETTES[paletteIndex];
+  settingsPaletteName.textContent = palette.name;
+  appendPaletteSwatches(settingsPaletteSwatches, palette);
+  for (const option of settingsPaletteOptions.children) {
+    option.setAttribute(
+      "aria-selected",
+      String(option.dataset.paletteId === palette.id)
+    );
+  }
+};
+
+const renderPaletteOptions = () => {
+  settingsPaletteOptions.replaceChildren();
+  PALETTES.forEach((palette, index) => {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "palette-option";
+    option.dataset.paletteId = palette.id;
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", "false");
+
+    const name = document.createElement("span");
+    name.textContent = palette.name;
+    option.appendChild(name);
+
+    const swatches = document.createElement("span");
+    swatches.className = "palette-swatches";
+    swatches.setAttribute("aria-hidden", "true");
+    appendPaletteSwatches(swatches, palette);
+    option.appendChild(swatches);
+
+    option.addEventListener("click", () => {
+      applyPalette(index);
+      setPalettePickerOpen(false);
+      settingsPaletteToggle.focus?.();
+    });
+    settingsPaletteOptions.appendChild(option);
+  });
+};
+
 populateSelect(settingsPaletteSelect, PALETTES);
 populateSelect(settingsFontSelect, FONTS);
+renderPaletteOptions();
 
-const getAnchorViewportTop = (anchor) => {
+const getAnchorViewportRect = (anchor) => {
   if (!anchor) return null;
 
   if (anchor.element) {
-    return anchor.element.getBoundingClientRect?.().top ?? null;
+    return anchor.element.getBoundingClientRect?.() || null;
   }
 
   if (!anchor.node || !document.createRange) return null;
@@ -636,28 +872,90 @@ const getAnchorViewportTop = (anchor) => {
       range.setStart(anchor.node, Math.max(0, Math.min(anchor.offset, childCount)));
       range.collapse(true);
     }
-    return range.getBoundingClientRect().top;
+    return range.getBoundingClientRect();
   } catch {
     return null;
   }
 };
 
+const getAnchorViewportTop = (anchor) => {
+  const rectangle = getAnchorViewportRect(anchor);
+  return Number.isFinite(rectangle?.top) ? rectangle.top : null;
+};
+
+const visibleViewportBounds = () => {
+  const visualViewport = window.visualViewport;
+  const top = Number.isFinite(Number(visualViewport?.offsetTop))
+    ? Number(visualViewport.offsetTop)
+    : 0;
+  const left = Number.isFinite(Number(visualViewport?.offsetLeft))
+    ? Number(visualViewport.offsetLeft)
+    : 0;
+  const width = Number.isFinite(Number(visualViewport?.width))
+    ? Number(visualViewport.width)
+    : window.innerWidth;
+  const height = Number.isFinite(Number(visualViewport?.height))
+    ? Number(visualViewport.height)
+    : window.innerHeight;
+  return { top, right: left + width, bottom: top + height, left, width, height };
+};
+
+const captureFirstFullyVisibleTextAnchor = () => {
+  if (
+    reader.hidden ||
+    viewer.children.length === 0 ||
+    typeof document.createRange !== "function"
+  ) return null;
+
+  const viewport = visibleViewportBounds();
+  const x = viewport.left + viewport.width / 2;
+  const firstY = viewport.top + 1;
+  const lastY = Math.max(firstY, viewport.bottom - 1);
+
+  for (let y = firstY; y <= lastY; y += FIRST_VISIBLE_LINE_SCAN_STEP_PX) {
+    const caret = document.caretPositionFromPoint?.(x, y);
+    const legacyCaret = caret ? null : document.caretRangeFromPoint?.(x, y);
+    const node = caret?.offsetNode || legacyCaret?.startContainer;
+    const rawOffset = caret?.offset ?? legacyCaret?.startOffset ?? 0;
+    if (!node || node.nodeType !== 3 || !(node.textContent?.length > 0)) continue;
+
+    const parent = node.parentElement;
+    if (parent?.closest && !parent.closest("#viewer")) continue;
+    const offset = Math.max(0, Math.min(rawOffset, node.textContent.length - 1));
+    const anchor = { node, offset };
+    const rectangle = getAnchorViewportRect(anchor);
+    if (!Number.isFinite(rectangle?.top)) continue;
+    const bottom = Number.isFinite(rectangle.bottom)
+      ? rectangle.bottom
+      : rectangle.top + 1;
+    const right = Number.isFinite(rectangle.right) ? rectangle.right : x + 1;
+    const left = Number.isFinite(rectangle.left) ? rectangle.left : x;
+    if (
+      bottom > rectangle.top &&
+      right > left &&
+      rectangle.top >= viewport.top - 0.5 &&
+      bottom <= viewport.bottom + 0.5 &&
+      right >= viewport.left &&
+      left <= viewport.right
+    ) {
+      return {
+        ...anchor,
+        viewportTop: rectangle.top,
+        viewportRatio: (rectangle.top - viewport.top) / Math.max(1, viewport.height)
+      };
+    }
+  }
+  return null;
+};
+
 const captureLayoutAnchor = () => {
   if (reader.hidden || viewer.children.length === 0) return null;
+  const textAnchor = captureFirstFullyVisibleTextAnchor();
+  if (textAnchor) return textAnchor;
 
-  const x = window.innerWidth / 2;
-  const y = Math.max(64, Math.min(window.innerHeight - 64, window.innerHeight * 0.32));
-  const caret = document.caretPositionFromPoint?.(x, y);
-  const legacyCaret = caret ? null : document.caretRangeFromPoint?.(x, y);
-  const node = caret?.offsetNode || legacyCaret?.startContainer;
-  const offset = caret?.offset ?? legacyCaret?.startOffset ?? 0;
-
-  if (node) {
-    const anchor = { node, offset };
-    const viewportTop = getAnchorViewportTop(anchor);
-    if (Number.isFinite(viewportTop)) return { ...anchor, viewportTop };
-  }
-
+  const viewport = visibleViewportBounds();
+  const x = viewport.left + viewport.width / 2;
+  const y = viewport.top + FIRST_VISIBLE_LINE_TOP_PADDING_PX;
   const element = document.elementFromPoint?.(x, y)?.closest?.(SPEECH_BLOCK_SELECTOR);
   if (element?.closest?.("#viewer")) {
     return { element, viewportTop: element.getBoundingClientRect().top };
@@ -734,6 +1032,15 @@ const handleViewportResize = () => {
 
 const bookSettingsKey = (hash) => `${BOOK_SETTINGS_PREFIX}${hash}`;
 
+const scheduleServerStateSync = (hash = activeBookKey, immediate = false) => {
+  window.clearTimeout(serverStateSyncTimer);
+  if (!hash || !serverLibraryAvailable || !serverBookHashes.has(hash)) return;
+  serverStateSyncTimer = window.setTimeout(
+    () => void syncServerBookState(hash),
+    immediate ? 0 : SERVER_STATE_SYNC_DELAY_MS
+  );
+};
+
 const captureReadingSettings = () => ({
   palette: PALETTES[paletteIndex].id,
   contrast,
@@ -745,7 +1052,8 @@ const captureReadingSettings = () => ({
   voice: speechVoicePreference,
   speaker: speechSpeakerPreference,
   speechMaximum: speechMaximumLength,
-  speechCenterOffset: speechCenterOffsetPercent
+  speechCenterOffset: speechCenterOffsetPercent,
+  speechSpeed: speechSpeedPercent
 });
 
 const saveCurrentReadingSettings = (fallbackKey = "", fallbackValue = "") => {
@@ -753,8 +1061,9 @@ const saveCurrentReadingSettings = (fallbackKey = "", fallbackValue = "") => {
   if (activeBookKey) {
     localStorage.setItem(
       bookSettingsKey(activeBookKey),
-      JSON.stringify(captureReadingSettings())
+      JSON.stringify({ ...captureReadingSettings(), savedAt: Date.now() })
     );
+    scheduleServerStateSync(activeBookKey);
   } else if (fallbackKey) {
     localStorage.setItem(fallbackKey, String(fallbackValue));
   }
@@ -827,6 +1136,11 @@ const applyStoredBookSettings = (hash) => {
         Boolean(speechActiveJob)
       );
     }
+    const storedSpeechSpeed = stored.speechSpeed ?? localStorage.getItem(SPEECH_SPEED_KEY);
+    if (storedSpeechSpeed !== null && storedSpeechSpeed !== "" &&
+        Number.isFinite(Number(storedSpeechSpeed))) {
+      applySpeechSpeed(Number(storedSpeechSpeed));
+    }
   } finally {
     suppressSettingsPersistence = false;
   }
@@ -843,6 +1157,7 @@ const syncSettingsControls = () => {
   const contrastText = `${contrast > 0 ? "+" : ""}${contrast}%`;
 
   settingsPaletteSelect.value = paletteId;
+  syncPalettePicker();
   settingsContrast.value = String(contrast);
   settingsContrastValue.textContent = contrastText;
   settingsContrastDown.disabled = contrast <= MIN_CONTRAST;
@@ -871,7 +1186,10 @@ const applyPalette = (nextIndex, announce = true) => {
   syncSettingsControls();
 
   if (announce) {
-    showStatus(`PALETTE ${paletteIndex + 1}/${PALETTES.length} · ${palette.name}`, 900);
+    showStatus(
+      `PALETTE ${paletteIndex + 1}/${PALETTES.length} · ${palette.name}`,
+      FONT_PALETTE_STATUS_DURATION_MS
+    );
   }
 };
 
@@ -905,7 +1223,10 @@ const applyFont = (nextIndex, announce = true) => {
   scheduleLayoutAnchorRestore(anchor);
 
   if (announce) {
-    showStatus(`FONT ${fontIndex + 1}/${FONTS.length} · ${font.name}`, 900);
+    showStatus(
+      `FONT ${fontIndex + 1}/${FONTS.length} · ${font.name}`,
+      FONT_PALETTE_STATUS_DURATION_MS
+    );
   }
 };
 
@@ -991,6 +1312,7 @@ function applyDefaultReadingSettings() {
     DEFAULT_SPEECH_CENTER_OFFSET_PERCENT,
     Boolean(speechActiveJob)
   );
+  applySpeechSpeed(DEFAULT_SPEECH_SPEED_PERCENT);
 }
 
 const resetCurrentBookSettings = () => {
@@ -1285,6 +1607,7 @@ const importLibrary = async (file) => {
 
 const setSettingsOpen = (isOpen) => {
   settingsPanel.hidden = !isOpen;
+  if (!isOpen) setPalettePickerOpen(false);
   document.body.classList[isOpen ? "add" : "remove"]("settings-open");
   settingsToggle.setAttribute("aria-expanded", String(isOpen));
   settingsToggle.setAttribute(
@@ -1292,6 +1615,43 @@ const setSettingsOpen = (isOpen) => {
   );
   settingsToggle.title = isOpen ? "Close reader settings" : "Reader settings";
 };
+
+const fullscreenElement = () => (
+  document.fullscreenElement || document.webkitFullscreenElement || null
+);
+
+const fullscreenRequest = document.documentElement.requestFullscreen
+  || document.documentElement.webkitRequestFullscreen;
+const fullscreenExit = document.exitFullscreen || document.webkitExitFullscreen;
+const fullscreenAvailable = (
+  document.fullscreenEnabled !== false
+  && typeof fullscreenRequest === "function"
+  && typeof fullscreenExit === "function"
+);
+
+const syncFullscreenToggle = () => {
+  const isFullscreen = Boolean(fullscreenElement());
+  fullscreenToggle.hidden = !fullscreenAvailable;
+  fullscreenToggle.setAttribute("aria-pressed", String(isFullscreen));
+  fullscreenToggle.setAttribute(
+    "aria-label", isFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+  );
+  fullscreenToggle.title = isFullscreen ? "Exit fullscreen" : "Enter fullscreen";
+};
+
+const toggleFullscreen = async () => {
+  if (!fullscreenAvailable) return;
+  try {
+    if (fullscreenElement()) await fullscreenExit.call(document);
+    else await fullscreenRequest.call(document.documentElement);
+  } catch (error) {
+    showStatus(`FULLSCREEN ERROR · ${error?.message || "Fullscreen is unavailable"}`, 2600);
+  } finally {
+    syncFullscreenToggle();
+  }
+};
+
+syncFullscreenToggle();
 
 const setReadingMode = (isReading) => {
   if (isReading && libraryManageMode) {
@@ -1386,6 +1746,77 @@ const loadPosition = (hash) => {
   }
 };
 
+const captureTextPositionAnchor = () => {
+  if (reader.hidden || typeof document.createRange !== "function") return null;
+  const visibleAnchor = captureFirstFullyVisibleTextAnchor();
+  const node = visibleAnchor?.node;
+  const offset = visibleAnchor?.offset ?? 0;
+  const element = node?.nodeType === 1 ? node : node?.parentElement;
+  const chapter = element?.closest?.(".book-section");
+  if (!node || !chapter || typeof chapter.dataset?.spineIndex !== "string") return null;
+
+  try {
+    const range = document.createRange();
+    if (typeof range.selectNodeContents !== "function") return null;
+    range.selectNodeContents(chapter);
+    range.setEnd(node, offset);
+    return {
+      spineIndex: Number(chapter.dataset.spineIndex),
+      textOffset: range.toString().length,
+      viewportRatio: visibleAnchor.viewportRatio,
+      placement: "first-visible-line"
+    };
+  } catch {
+    return null;
+  }
+};
+
+const restoreTextPositionAnchor = (anchor) => {
+  if (
+    !anchor ||
+    !Number.isInteger(Number(anchor.spineIndex)) ||
+    !Number.isFinite(Number(anchor.textOffset)) ||
+    typeof viewer.querySelector !== "function"
+  ) return false;
+  const chapter = viewer.querySelector(
+    `.book-section[data-spine-index="${Number(anchor.spineIndex)}"]`
+  );
+  if (!chapter) return false;
+  let remaining = Math.max(0, Number(anchor.textOffset));
+  const walker = document.createTreeWalker(chapter, 4);
+  let node = walker.nextNode();
+  while (node && remaining > (node.textContent?.length || 0)) {
+    remaining -= node.textContent?.length || 0;
+    node = walker.nextNode();
+  }
+  if (!node) return false;
+  try {
+    const range = document.createRange();
+    const offset = Math.max(0, Math.min(remaining, node.textContent?.length || 0));
+    range.setStart(node, offset);
+    range.setEnd(node, Math.min(offset + 1, node.textContent?.length || 0));
+    const rectangle = range.getBoundingClientRect();
+    if (!Number.isFinite(rectangle?.top)) return false;
+    const viewport = visibleViewportBounds();
+    const legacyViewportRatio = Number.isFinite(Number(anchor.viewportRatio))
+      ? Math.max(0.08, Math.min(0.8, Number(anchor.viewportRatio)))
+      : 0.32;
+    const targetViewportTop = anchor.placement === "first-visible-line"
+      ? viewport.top + Math.min(
+        FIRST_VISIBLE_LINE_TOP_PADDING_PX,
+        Math.max(1, viewport.height * 0.02)
+      )
+      : viewport.top + viewport.height * legacyViewportRatio;
+    window.scrollTo(
+      0,
+      Math.max(0, window.scrollY + rectangle.top - targetViewportTop)
+    );
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const savePositionNow = () => {
   if (positionPersistenceSuspended || !activeBookKey || reader.hidden) return;
 
@@ -1394,17 +1825,215 @@ const savePositionNow = () => {
     document.documentElement.scrollHeight - window.innerHeight
   );
 
+  const capturedAnchor = captureTextPositionAnchor();
+  const previousAnchor = document.visibilityState === "hidden"
+    ? loadPosition(activeBookKey)?.anchor || null
+    : null;
   localStorage.setItem(positionKey(activeBookKey), JSON.stringify({
     scrollY: window.scrollY,
     ratio: scrollRange > 0 ? window.scrollY / scrollRange : 0,
+    anchor: capturedAnchor || previousAnchor,
     savedAt: Date.now()
   }));
+  scheduleServerStateSync(activeBookKey);
 };
 
 const schedulePositionSave = () => {
   window.clearTimeout(saveTimer);
   if (positionPersistenceSuspended) return;
   saveTimer = window.setTimeout(savePositionNow, SAVE_DELAY_MS);
+};
+
+const settingsSavedAt = (settings) => {
+  const savedAt = Number(settings?.savedAt);
+  return Number.isFinite(savedAt) ? savedAt : 0;
+};
+
+const mergeServerBookState = (bookHash, state) => {
+  if (!state || state.hash !== bookHash) return;
+  const remotePosition = state.position;
+  const localPosition = loadPosition(bookHash);
+  if (
+    remotePosition &&
+    Number(remotePosition.savedAt) >= Number(localPosition?.savedAt || 0)
+  ) {
+    localStorage.setItem(positionKey(bookHash), JSON.stringify(remotePosition));
+  }
+
+  const remoteSettings = state.settings;
+  const localSettings = readBookSettings(bookHash);
+  if (remoteSettings && settingsSavedAt(remoteSettings) >= settingsSavedAt(localSettings)) {
+    localStorage.setItem(bookSettingsKey(bookHash), JSON.stringify(remoteSettings));
+  }
+};
+
+const serverStateForBook = (bookHash) => {
+  const metadata = recentBookInfo.find((record) => record.hash === bookHash) ||
+    cachedRecentBooks.find((record) => record.hash === bookHash) ||
+    serverBookInfo.find((record) => record.hash === bookHash) || {};
+  return {
+    version: 1,
+    hash: bookHash,
+    fileName: metadata.fileName || `${bookHash.slice(0, 12)}.epub`,
+    title: metadata.title || "",
+    openedAt: Number(metadata.openedAt) || 0,
+    position: loadPosition(bookHash) || {},
+    settings: readBookSettings(bookHash) || {}
+  };
+};
+
+const syncServerBookState = (bookHash = activeBookKey, keepalive = false) => {
+  if (!bookHash || !serverLibraryAvailable || !serverBookHashes.has(bookHash)) {
+    return Promise.resolve(false);
+  }
+  const previous = serverStateSyncing.get(bookHash) || Promise.resolve();
+  const operation = previous
+    .catch(() => {})
+    .then(() => serverRequest(
+      `/api/library/books/${bookHash}/state`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(serverStateForBook(bookHash)),
+        keepalive
+      }
+    ))
+    .then(() => true)
+    .catch((error) => {
+      console.warn("Could not synchronize server book state.", error);
+      return false;
+    });
+  serverStateSyncing.set(bookHash, operation);
+  operation.finally(() => {
+    if (serverStateSyncing.get(bookHash) === operation) serverStateSyncing.delete(bookHash);
+  });
+  return operation;
+};
+
+const flushServerBookState = (bookHash = activeBookKey) => {
+  window.clearTimeout(serverStateSyncTimer);
+  if (
+    !bookHash ||
+    !serverLibraryAvailable ||
+    !serverBookHashes.has(bookHash) ||
+    typeof window.fetch !== "function"
+  ) return;
+  void window.fetch(`/api/library/books/${bookHash}/state`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(serverStateForBook(bookHash)),
+    keepalive: true
+  }).catch(() => {});
+};
+
+const jpegBytesFromDataUrl = (dataUrl) => {
+  const match = /^data:image\/jpeg;base64,(.+)$/i.exec(dataUrl || "");
+  if (!match || typeof window.atob !== "function") return null;
+  const decoded = window.atob(match[1]);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index += 1) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+  return bytes;
+};
+
+const storeSelectedBooksOnServer = async () => {
+  if (!serverLibraryAvailable || serverLibraryBusy || isBookLoading) return;
+  const selected = displayedLibraryBooks().filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record)) &&
+    Boolean(cachedRecordFor(record)?.bytes) &&
+    !serverBookHashes.has(record.hash)
+  );
+  if (selected.length === 0) return;
+
+  serverLibraryBusy = true;
+  syncLibraryManageControls();
+  try {
+    for (const [index, record] of selected.entries()) {
+      const cached = cachedRecordFor(record);
+      showStatus(`UPLOADING ${index + 1} / ${selected.length} · ${record.title || record.fileName}`);
+      await serverRequest(
+        `/api/library/books/${record.hash}/epub`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/epub+zip" },
+          body: cached.bytes
+        },
+        SERVER_LIBRARY_UPLOAD_TIMEOUT_MS
+      );
+      const cover = jpegBytesFromDataUrl(cached.thumbnail);
+      if (cover?.byteLength) {
+        try {
+          await serverRequest(
+            `/api/library/books/${record.hash}/cover`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "image/jpeg" },
+              body: cover
+            },
+            SERVER_LIBRARY_UPLOAD_TIMEOUT_MS
+          );
+        } catch (error) {
+          console.warn("The book was stored without its cover.", error);
+        }
+      }
+      await serverRequest(`/api/library/books/${record.hash}/state`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(serverStateForBook(record.hash))
+      });
+      serverBookHashes.add(record.hash);
+    }
+    await refreshServerLibrary(true);
+    setLibraryManageMode(false);
+    showStatus(
+      `${selected.length} ${selected.length === 1 ? "BOOK" : "BOOKS"} STORED ON SERVER`,
+      2400
+    );
+  } catch (error) {
+    console.error(error);
+    showStatus(`SERVER UPLOAD ERROR · ${error.message}`, 5200);
+  } finally {
+    serverLibraryBusy = false;
+    renderRecentBooks();
+    syncLibraryManageControls();
+  }
+};
+
+const removeSelectedServerBooks = async () => {
+  if (!serverLibraryAvailable || serverLibraryBusy || isBookLoading) return;
+  const selected = displayedLibraryBooks().filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record)) && serverBookHashes.has(record.hash)
+  );
+  if (selected.length === 0) return;
+  const prompt = selected.length === 1
+    ? "Remove this book and its synchronized state from the server? The copy on this device will be kept."
+    : `Remove these ${selected.length} books and their synchronized state from the server? Copies on this device will be kept.`;
+  if (!window.confirm(prompt)) return;
+
+  serverLibraryBusy = true;
+  syncLibraryManageControls();
+  try {
+    for (const [index, record] of selected.entries()) {
+      showStatus(`REMOVING FROM SERVER ${index + 1} / ${selected.length}`);
+      await serverRequest(`/api/library/books/${record.hash}`, { method: "DELETE" });
+      serverBookHashes.delete(record.hash);
+    }
+    await refreshServerLibrary(true);
+    setLibraryManageMode(false);
+    showStatus(
+      `${selected.length} ${selected.length === 1 ? "BOOK" : "BOOKS"} REMOVED FROM SERVER`,
+      2400
+    );
+  } catch (error) {
+    console.error(error);
+    showStatus(`SERVER REMOVE ERROR · ${error.message}`, 4200);
+  } finally {
+    serverLibraryBusy = false;
+    renderRecentBooks();
+    syncLibraryManageControls();
+  }
 };
 
 const hashBook = async (arrayBuffer) => {
@@ -1608,7 +2237,7 @@ const handleRightDragStart = (event) => {
   if (
     event.button !== 2 ||
     reader.hidden ||
-    event.target?.closest?.("#settings-menu, #speech-controls")
+    event.target?.closest?.("#settings-menu, #speech-controls, #fullscreen-toggle")
   ) return;
 
   event.preventDefault();
@@ -1663,6 +2292,11 @@ const restorePosition = async (savedPosition) => {
   const legacyRatio = Number(savedPosition?.percentage);
   const storedRatio = Number(savedPosition?.ratio);
   const storedY = Number(savedPosition?.scrollY);
+
+  if (restoreTextPositionAnchor(savedPosition?.anchor)) {
+    updateReadingProgress();
+    return;
+  }
 
   let target = 0;
   if (Number.isFinite(storedY)) {
@@ -1725,6 +2359,30 @@ function applySpeechCenterOffset(nextOffset, followCurrent = false) {
 }
 
 applySpeechCenterOffset(speechCenterOffsetPercent);
+
+function applySpeechSpeed(nextSpeed, announce = false) {
+  speechSpeedPercent = Math.round(Math.max(
+    MIN_SPEECH_SPEED_PERCENT,
+    Math.min(MAX_SPEECH_SPEED_PERCENT, nextSpeed)
+  ));
+  speechAudio.playbackRate = 1 + speechSpeedPercent / 100;
+  if ("preservesPitch" in speechAudio) speechAudio.preservesPitch = true;
+  saveCurrentReadingSettings(SPEECH_SPEED_KEY, speechSpeedPercent);
+  settingsSpeechSpeed.value = String(speechSpeedPercent);
+  settingsSpeechSpeedValue.textContent = (
+    `${speechSpeedPercent > 0 ? "+" : ""}${speechSpeedPercent}%`
+  );
+  settingsSpeechSpeedDown.disabled = speechSpeedPercent <= MIN_SPEECH_SPEED_PERCENT;
+  settingsSpeechSpeedUp.disabled = speechSpeedPercent >= MAX_SPEECH_SPEED_PERCENT;
+  if (announce) {
+    showStatus(
+      `SPEECH SPEED · ${speechSpeedPercent > 0 ? "+" : ""}${speechSpeedPercent}%`,
+      900
+    );
+  }
+}
+
+applySpeechSpeed(speechSpeedPercent);
 
 const speechSourceFromEntries = (entries) => {
   let text = "";
@@ -2101,9 +2759,15 @@ const positionSpeechMarker = (followText = false) => {
   if (rects.length > 0) {
     const firstRect = rects[0];
     const lastRect = rects.at(-1);
-    const blockRect = firstElement?.getBoundingClientRect?.();
-    const blockLeft = Number.isFinite(blockRect?.left) ? blockRect.left : firstRect.left;
-    speechMarker.style.left = `${(window.scrollX || 0) + Math.max(8, blockLeft - 18)}px`;
+    const selectedElements = [...new Set(
+      (speechActiveJob.segments || []).map((segment) => segment.element).filter(Boolean)
+    )];
+    const leftEdges = [
+      ...rects.map((rect) => rect.left),
+      ...selectedElements.map((element) => element.getBoundingClientRect?.()?.left)
+    ].filter(Number.isFinite);
+    const selectionLeft = leftEdges.length > 0 ? Math.min(...leftEdges) : firstRect.left;
+    speechMarker.style.left = `${(window.scrollX || 0) + Math.max(8, selectionLeft - 18)}px`;
     speechMarker.style.top = `${window.scrollY + firstRect.top}px`;
     speechMarker.style.height = `${Math.max(18, lastRect.bottom - firstRect.top)}px`;
     speechMarker.hidden = false;
@@ -2393,8 +3057,28 @@ const visibleSpeechEntry = (element, viewportTop, viewportBottom) => {
   };
 };
 
-const speechEntriesInViewport = (viewportTop, viewportBottom, afterCursor = null) => {
+// EPUB quotations and lists commonly nest selectable blocks, for example
+// <blockquote><p>…</p></blockquote>. Reading both the container and its child
+// would enqueue the same words twice. Keep only the deepest matching blocks so
+// every rendered passage has one speech source and one marker range.
+const speechBlockElements = () => {
   const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)];
+  const blockSet = new Set(blocks);
+  const containersWithSpeechChildren = new Set();
+
+  blocks.forEach((block) => {
+    let ancestor = block.parentElement;
+    while (ancestor && ancestor !== viewer) {
+      if (blockSet.has(ancestor)) containersWithSpeechChildren.add(ancestor);
+      ancestor = ancestor.parentElement;
+    }
+  });
+
+  return blocks.filter((block) => !containersWithSpeechChildren.has(block));
+};
+
+const speechEntriesInViewport = (viewportTop, viewportBottom, afterCursor = null) => {
+  const blocks = speechBlockElements();
   const cursorIndex = afterCursor?.element
     ? blocks.indexOf(afterCursor.element)
     : -1;
@@ -2516,7 +3200,7 @@ const scrollDownAfterSpeechJob = async (job) => {
 
 const nextSpeechViewport = (cursor) => {
   if (!cursor?.element) return null;
-  const blocks = [...viewer.querySelectorAll(SPEECH_BLOCK_SELECTOR)];
+  const blocks = speechBlockElements();
   const cursorIndex = blocks.indexOf(cursor.element);
   if (cursorIndex < 0) return false;
 
@@ -2595,6 +3279,53 @@ const releaseSpeechAudio = () => {
   syncSpeechControls();
 };
 
+const releasePrefetchedAudio = (prepared) => {
+  const blobUrl = prepared?.prefetchedAudioUrl;
+  if (!blobUrl || !speechPrefetchedUrls.has(blobUrl)) return;
+  URL.revokeObjectURL(blobUrl);
+  speechPrefetchedUrls.delete(blobUrl);
+};
+
+const cancelSpeechPreloads = () => {
+  speechPrefetchControllers.forEach((controller) => controller.abort());
+  speechPrefetchControllers.clear();
+  speechPrefetchedUrls.forEach((blobUrl) => URL.revokeObjectURL(blobUrl));
+  speechPrefetchedUrls.clear();
+};
+
+const preloadPreparedAudio = async (prepared, generation) => {
+  if (
+    prepared?.audioFormat !== "opus" ||
+    !prepared.audioUrl ||
+    generation !== speechGeneration ||
+    typeof AbortController !== "function" ||
+    typeof URL === "undefined" ||
+    typeof URL.createObjectURL !== "function"
+  ) return prepared;
+
+  const controller = new AbortController();
+  speechPrefetchControllers.add(controller);
+  try {
+    const response = await window.fetch(prepared.audioUrl, {
+      signal: controller.signal,
+      credentials: "same-origin"
+    });
+    if (!response.ok || typeof response.blob !== "function") return prepared;
+    const blob = await response.blob();
+    if (controller.signal.aborted || generation !== speechGeneration || blob.size === 0) {
+      return prepared;
+    }
+    const prefetchedAudioUrl = URL.createObjectURL(blob);
+    speechPrefetchedUrls.add(prefetchedAudioUrl);
+    return { ...prepared, prefetchedAudioUrl };
+  } catch {
+    // Preloading is an optimization. Normal URL playback remains the fallback.
+    return prepared;
+  } finally {
+    speechPrefetchControllers.delete(controller);
+  }
+};
+
 const unlockSpeechAudio = () => {
   speechAudio.muted = true;
   speechAudio.src = SILENT_WAV_DATA_URL;
@@ -2615,8 +3346,10 @@ const playPreparedAudio = async (prepared) => {
   await speechAudioUnlockPromise;
   releaseSpeechAudio();
   speechAudio.muted = false;
-  speechAudio.src = prepared.audioUrl;
+  speechAudio.src = prepared.prefetchedAudioUrl || prepared.audioUrl;
   speechAudio.load();
+  speechAudio.playbackRate = 1 + speechSpeedPercent / 100;
+  if ("preservesPitch" in speechAudio) speechAudio.preservesPitch = true;
   syncSpeechControls();
 
   let finishPlayback;
@@ -2646,6 +3379,7 @@ const playPreparedAudio = async (prepared) => {
     speechAudio.onerror = null;
     speechAudio.removeAttribute("src");
     speechAudio.load();
+    releasePrefetchedAudio(prepared);
   }
 };
 
@@ -2656,6 +3390,7 @@ const stopSpeech = () => {
   speechIsPaused = false;
   clearSpeechIndicators();
   releaseSpeechAudio();
+  cancelSpeechPreloads();
   clearSpeechSelection();
   syncSpeechControls();
 
@@ -2690,6 +3425,7 @@ const toggleSpeechPause = async () => {
 
 const startSpeech = async () => {
   if (reader.hidden || viewer.children.length === 0 || speechIsActive) return;
+  cancelSpeechPreloads();
   unlockSpeechAudio();
   const generation = ++speechGeneration;
   speechIsActive = true;
@@ -2746,6 +3482,7 @@ const startSpeech = async () => {
       })
     });
     const settlePreparation = (job) => prepareJob(job)
+      .then((value) => preloadPreparedAudio(value, generation))
       .then((value) => ({ value }), (error) => ({ error }));
 
     const viewportReading = !selectedText;
@@ -2843,6 +3580,7 @@ const startSpeech = async () => {
     speechIsPaused = false;
     clearSpeechIndicators();
     releaseSpeechAudio();
+    cancelSpeechPreloads();
     clearSpeechSelection();
     syncSpeechControls();
     settingsSpeechStatus.textContent = "Finished.";
@@ -2852,11 +3590,36 @@ const startSpeech = async () => {
     speechIsPaused = false;
     clearSpeechIndicators();
     releaseSpeechAudio();
+    cancelSpeechPreloads();
     clearSpeechSelection();
     syncSpeechControls();
     const message = error?.message || "Local Piper could not read this text.";
     settingsSpeechStatus.textContent = message;
     showStatus(`PIPER ERROR · ${message}`, 3200);
+  }
+};
+
+const validateEpubBytes = async (bytes) => {
+  if (typeof window.JSZip !== "function") return;
+  let archive;
+  try {
+    archive = await withTimeout(
+      window.JSZip.loadAsync(bytes),
+      EPUB_OPEN_TIMEOUT_MS,
+      "EPUB archive validation timed out"
+    );
+  } catch (error) {
+    throw new Error(`Invalid or damaged EPUB archive: ${error.message}`);
+  }
+  const container = archive.file("META-INF/container.xml");
+  if (!container) throw new Error("Invalid EPUB: META-INF/container.xml is missing");
+  const containerXml = await withTimeout(
+    container.async("string"),
+    EPUB_OPEN_TIMEOUT_MS,
+    "EPUB package validation timed out"
+  );
+  if (!/<rootfile\b[^>]*\bfull-path\s*=\s*["'][^"']+["']/i.test(containerXml)) {
+    throw new Error("Invalid EPUB: package document is missing");
   }
 };
 
@@ -2868,6 +3631,7 @@ const openBook = async (file) => {
   if (isBookLoading) return;
 
   const generation = ++loadGeneration;
+  let replacedCurrentBook = false;
   savePositionNow();
   setLibraryManageMode(false);
   isBookLoading = true;
@@ -2881,15 +3645,21 @@ const openBook = async (file) => {
     const bytes = await file.arrayBuffer();
     const hash = await hashBook(bytes);
     if (generation !== loadGeneration) return;
+    await validateEpubBytes(bytes);
+    if (generation !== loadGeneration) return;
 
     destroyCurrentBook();
+    replacedCurrentBook = true;
     activeBookKey = hash;
     applyStoredBookSettings(hash);
     const savedPosition = loadPosition(hash);
 
     book = ePub(bytes);
-    await book.opened;
-    await book.ready;
+    await withTimeout(
+      Promise.all([book.opened, book.ready]),
+      EPUB_OPEN_TIMEOUT_MS,
+      "EPUB opening timed out"
+    );
     if (generation !== loadGeneration) return;
     const coverThumbnailPromise = createCoverThumbnail(book);
 
@@ -2897,12 +3667,17 @@ const openBook = async (file) => {
     book.spine.each((section) => {
       sections.push(section);
     });
+    if (sections.length === 0) throw new Error("EPUB contains no readable sections");
 
     setReadingMode(true);
     for (let index = 0; index < sections.length; index += 1) {
       if (generation !== loadGeneration) return;
       showStatus(`LOADING ${index + 1} / ${sections.length}`);
-      await appendChapter(sections[index], index);
+      await withTimeout(
+        appendChapter(sections[index], index),
+        EPUB_OPEN_TIMEOUT_MS,
+        `EPUB section ${index + 1} could not be loaded`
+      );
     }
 
     if (generation !== loadGeneration) return;
@@ -2913,10 +3688,11 @@ const openBook = async (file) => {
       2800
     );
 
-    const [metadata, thumbnail] = await Promise.all([
-      book.loaded.metadata,
-      coverThumbnailPromise
-    ]);
+    const [metadata, thumbnail] = await withTimeout(
+      Promise.all([book.loaded.metadata, coverThumbnailPromise]),
+      EPUB_OPEN_TIMEOUT_MS,
+      "EPUB metadata could not be loaded"
+    );
     const lastBookInfo = {
       hash,
       fileName: file.name,
@@ -2957,14 +3733,19 @@ const openBook = async (file) => {
     document.title = activeBookTitle;
     readerScrollBeforeHome = window.scrollY;
     commitReaderHistory();
+    scheduleServerStateSync(hash);
+    return true;
   } catch (error) {
     console.error(error);
-    destroyCurrentBook();
-    activeBookKey = null;
-    activeBookTitle = "";
-    replaceHomeHistory();
-    showHomeView();
-    showStatus("That EPUB could not be opened.");
+    if (replacedCurrentBook) {
+      destroyCurrentBook();
+      activeBookKey = null;
+      activeBookTitle = "";
+      replaceHomeHistory();
+      showHomeView();
+    }
+    showStatus(`EPUB ERROR · ${error?.message || "This book could not be opened"}`, 6000);
+    return false;
   } finally {
     if (generation === loadGeneration) {
       positionPersistenceSuspended = false;
@@ -2975,6 +3756,52 @@ const openBook = async (file) => {
       schedulePositionSave();
     }
   }
+};
+
+const openLibraryBook = async (record) => {
+  if (isBookLoading || serverLibraryBusy) return;
+  const serverRecord = serverRecordFor(record);
+  const cached = cachedRecordFor(record);
+  if (!serverRecord && !serverBookHashes.has(record?.hash)) {
+    reopenCachedBook(record);
+    return;
+  }
+
+  serverLibraryBusy = true;
+  renderRecentBooks();
+  showStatus(`LOADING FROM SERVER · ${record.title || record.fileName}`);
+  let bytes = cached?.bytes || null;
+  try {
+    try {
+      const statePayload = await serverRequest(
+        `/api/library/books/${record.hash}/state`
+      );
+      mergeServerBookState(record.hash, statePayload.state);
+    } catch (error) {
+      if (!bytes) throw error;
+      console.warn("Server state was unavailable; opening the device copy.", error);
+    }
+    if (!bytes) {
+      bytes = await serverRequest(
+        `/api/library/books/${record.hash}/epub`,
+        { expectBinary: true },
+        SERVER_LIBRARY_UPLOAD_TIMEOUT_MS
+      );
+    }
+  } catch (error) {
+    console.error(error);
+    showStatus(`SERVER LIBRARY ERROR · ${error.message}`, 5200);
+    return;
+  } finally {
+    serverLibraryBusy = false;
+    renderRecentBooks();
+  }
+
+  const opened = await openBook({
+    name: record.fileName || serverRecord?.fileName || `${record.hash.slice(0, 12)}.epub`,
+    arrayBuffer: async () => bytes.slice(0)
+  });
+  if (opened) scheduleServerStateSync(record.hash, true);
 };
 
 const firstEpub = (fileList) =>
@@ -2994,29 +3821,20 @@ const reopenCachedBook = (record) => {
     return;
   }
 
-  openBook({
+  void openBook({
     name: cached.fileName,
     arrayBuffer: async () => cached.bytes.slice(0)
-  }).catch((error) => {
-    console.error(error);
-    cachedRecentBooks = cachedRecentBooks.filter(
-      (candidate) => !booksMatch(record, candidate)
-    );
-    lastBookCanReopen = Boolean(
-      cachedRecentBooks.find((candidate) => booksMatch(recentBookInfo[0], candidate))?.bytes
-    );
-    renderRecentBooks();
-    showStatus("CACHED BOOK COULD NOT BE REOPENED · DROP IT AGAIN", 2200);
   });
 };
 
 const reopenLastBook = () => {
   if (isBookLoading) return;
-  if (!lastBookCanReopen || recentBookInfo.length === 0) {
+  const firstBook = displayedLibraryBooks()[0];
+  if (!lastBookCanReopen || !firstBook) {
     showStatus("LAST BOOK IS NOT CACHED · DROP IT AGAIN", 1800);
     return;
   }
-  reopenCachedBook(recentBookInfo[0]);
+  void openLibraryBook(firstBook);
 };
 
 const scrollToBookStart = () => {
@@ -3076,6 +3894,16 @@ const handleReaderKeyDown = (event) => {
   }
 
   if (reader.hidden) return;
+
+  if (
+    noCommandModifier && !event.shiftKey && key === "escape"
+    && !settingsPaletteOptions.hidden
+  ) {
+    event.preventDefault();
+    setPalettePickerOpen(false);
+    settingsPaletteToggle.focus?.();
+    return;
+  }
 
   if (noCommandModifier && !event.shiftKey && !event.repeat && key === "v") {
     event.preventDefault();
@@ -3211,7 +4039,9 @@ startExportLibrary.addEventListener("click", () => void exportLibrary());
 startImportLibrary.addEventListener("click", () => libraryImportInput.click());
 startManageLibrary.addEventListener("click", () => setLibraryManageMode(true));
 startCancelManage.addEventListener("click", () => setLibraryManageMode(false));
-startRemoveBooks.addEventListener("click", () => void removeSelectedLibraryBooks());
+startStoreServer.addEventListener("click", () => void storeSelectedBooksOnServer());
+startRemoveLocal.addEventListener("click", () => void removeSelectedClientBooks());
+startRemoveServer.addEventListener("click", () => void removeSelectedServerBooks());
 settingsSpeechStart.addEventListener("click", startSpeech);
 settingsSpeechPause.addEventListener("click", toggleSpeechPause);
 settingsSpeechStop.addEventListener("click", stopSpeech);
@@ -3264,6 +4094,18 @@ settingsSpeechPositionDown.addEventListener("click", () => {
 });
 settingsSpeechPositionUp.addEventListener("click", () => {
   applySpeechCenterOffset(speechCenterOffsetPercent + 1, true);
+});
+settingsSpeechSpeed.addEventListener("input", (event) => {
+  applySpeechSpeed(Number(event.target.value));
+});
+settingsSpeechSpeed.addEventListener("change", (event) => {
+  applySpeechSpeed(Number(event.target.value), true);
+});
+settingsSpeechSpeedDown.addEventListener("click", () => {
+  applySpeechSpeed(speechSpeedPercent - 1, true);
+});
+settingsSpeechSpeedUp.addEventListener("click", () => {
+  applySpeechSpeed(speechSpeedPercent + 1, true);
 });
 
 settingsPaletteSelect.addEventListener("change", (event) => {
@@ -3323,10 +4165,20 @@ settingsWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
 settingsToggle.addEventListener("click", () => {
   setSettingsOpen(settingsPanel.hidden);
 });
+settingsPaletteToggle.addEventListener("click", () => {
+  setPalettePickerOpen(settingsPaletteOptions.hidden);
+});
+fullscreenToggle.addEventListener("click", () => void toggleFullscreen());
 settingsHome.addEventListener("click", returnToHomeScreen);
 settingsResetBook.addEventListener("click", resetCurrentBookSettings);
 
 window.addEventListener("click", (event) => {
+  if (
+    !settingsPaletteOptions.hidden
+    && !event.target?.closest?.("#settings-palette-picker")
+  ) {
+    setPalettePickerOpen(false);
+  }
   if (!settingsPanel.hidden && !event.target?.closest?.("#settings-menu")) {
     setSettingsOpen(false);
   }
@@ -3404,8 +4256,12 @@ window.addEventListener("popstate", (event) => {
   if (event.state.view === "reader") showReaderView();
   else showHomeView();
 });
+document.addEventListener?.("fullscreenchange", syncFullscreenToggle);
+document.addEventListener?.("webkitfullscreenchange", syncFullscreenToggle);
 document.addEventListener?.("visibilitychange", () => {
   if (!pageIsVisible()) {
+    savePositionNow();
+    flushServerBookState();
     if (speechScrollTargetY !== null) {
       const targetY = speechScrollTargetY;
       cancelSpeechScroll();
@@ -3421,6 +4277,9 @@ if (typeof window.ResizeObserver === "function") {
   speechLayoutObserver.observe(viewer);
 }
 window.addEventListener("blur", () => stopRightDrag());
-window.addEventListener("beforeunload", savePositionNow);
+window.addEventListener("beforeunload", () => {
+  savePositionNow();
+  flushServerBookState();
+});
 syncSpeechControls();
 void probePiperBridge();

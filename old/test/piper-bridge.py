@@ -12,6 +12,7 @@ import tempfile
 import threading
 import time
 import urllib.request
+from urllib.error import HTTPError
 from pathlib import Path
 
 
@@ -234,6 +235,10 @@ with tempfile.TemporaryDirectory() as temporary_directory:
     assert queue_results.get("queue_active")
 
     BRIDGE.SmoothReaderHandler.controller = controller
+    library_dir = root / "library"
+    BRIDGE.SmoothReaderHandler.library = BRIDGE.LibraryController(
+        library_dir, 16, True
+    )
     server = BRIDGE.ThreadingHTTPServer(("127.0.0.1", 0), BRIDGE.SmoothReaderHandler)
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.start()
@@ -292,9 +297,127 @@ with tempfile.TemporaryDirectory() as temporary_directory:
                 "public, max-age=31536000, immutable"
             )
             assert response.read().startswith(b"\x00\x01\x00\x00")
+
+        user_headers = {"X-Smooth-Reader-User": "alice"}
+        with urllib.request.urlopen(urllib.request.Request(
+            base_url + "/api/library/status", headers=user_headers
+        ), timeout=2) as response:
+            library_status = json.loads(response.read())
+            assert library_status["available"] is True
+            assert library_status["user"] == "alice"
+            assert library_status["bookCount"] == 0
+
+        try:
+            urllib.request.urlopen(base_url + "/api/library/books", timeout=2)
+            raise AssertionError("Library request without authenticated user was accepted")
+        except HTTPError as error:
+            assert error.code == 401
+
+        epub_bytes = (Path(__file__).parent / "fixtures" / "tiny.epub").read_bytes()
+        book_hash = BRIDGE.hashlib.sha256(epub_bytes).hexdigest()
+        upload_request = urllib.request.Request(
+            base_url + f"/api/library/books/{book_hash}/epub",
+            data=epub_bytes,
+            headers={**user_headers, "Content-Type": "application/epub+zip"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(upload_request, timeout=2) as response:
+            assert json.loads(response.read())["hash"] == book_hash
+
+        cover_request = urllib.request.Request(
+            base_url + f"/api/library/books/{book_hash}/cover",
+            data=b"\xff\xd8fake jpeg\xff\xd9",
+            headers={**user_headers, "Content-Type": "image/jpeg"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(cover_request, timeout=2) as response:
+            assert json.loads(response.read())["ok"] is True
+
+        state = {
+            "hash": book_hash,
+            "fileName": "tiny.epub",
+            "title": "Tiny Test Book",
+            "openedAt": 100,
+            "position": {"ratio": 0.4, "scrollY": 300, "savedAt": 400},
+            "settings": {"palette": "nord", "font": "alegreya", "savedAt": 500},
+        }
+        state_request = urllib.request.Request(
+            base_url + f"/api/library/books/{book_hash}/state",
+            data=json.dumps(state).encode("utf-8"),
+            headers={**user_headers, "Content-Type": "application/json"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(state_request, timeout=2) as response:
+            stored_state = json.loads(response.read())["state"]
+            assert stored_state["position"]["scrollY"] == 300
+            assert stored_state["settings"]["font"] == "alegreya"
+
+        stale_state = {
+            **state,
+            "position": {"scrollY": 20, "savedAt": 200},
+            "settings": {"palette": "paper", "savedAt": 300},
+        }
+        stale_request = urllib.request.Request(
+            base_url + f"/api/library/books/{book_hash}/state",
+            data=json.dumps(stale_state).encode("utf-8"),
+            headers={**user_headers, "Content-Type": "application/json"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(stale_request, timeout=2) as response:
+            merged_state = json.loads(response.read())["state"]
+            assert merged_state["position"]["scrollY"] == 300
+            assert merged_state["settings"]["palette"] == "nord"
+
+        with urllib.request.urlopen(urllib.request.Request(
+            base_url + "/api/library/books", headers=user_headers
+        ), timeout=2) as response:
+            books = json.loads(response.read())["books"]
+            assert len(books) == 1
+            assert books[0]["hash"] == book_hash
+            assert books[0]["title"] == "Tiny Test Book"
+            assert books[0]["coverUrl"].endswith(f"/{book_hash}/cover")
+
+        with urllib.request.urlopen(urllib.request.Request(
+            base_url + f"/api/library/books/{book_hash}/epub", headers=user_headers
+        ), timeout=2) as response:
+            assert response.headers["Content-Type"] == "application/epub+zip"
+            assert response.read() == epub_bytes
+
+        with urllib.request.urlopen(urllib.request.Request(
+            base_url + "/api/library/books",
+            headers={"X-Smooth-Reader-User": "bob"},
+        ), timeout=2) as response:
+            assert json.loads(response.read())["books"] == []
+
+        broken_epub = b"not an epub"
+        broken_hash = BRIDGE.hashlib.sha256(broken_epub).hexdigest()
+        broken_request = urllib.request.Request(
+            base_url + f"/api/library/books/{broken_hash}/epub",
+            data=broken_epub,
+            headers={**user_headers, "Content-Type": "application/epub+zip"},
+            method="PUT",
+        )
+        try:
+            urllib.request.urlopen(broken_request, timeout=2)
+            raise AssertionError("Broken EPUB was accepted by the server library")
+        except HTTPError as error:
+            assert error.code == 400
+            assert b"valid ZIP archive" in error.read()
+
+        delete_request = urllib.request.Request(
+            base_url + f"/api/library/books/{book_hash}",
+            headers=user_headers,
+            method="DELETE",
+        )
+        with urllib.request.urlopen(delete_request, timeout=2) as response:
+            assert json.loads(response.read())["ok"] is True
+        with urllib.request.urlopen(urllib.request.Request(
+            base_url + "/api/library/books", headers=user_headers
+        ), timeout=2) as response:
+            assert json.loads(response.read())["books"] == []
     finally:
         server.shutdown()
         server.server_close()
         server_thread.join(timeout=2)
 
-print("multiuser cancellation, cached Opus/WAV, loudnorm, and browser audio test passed")
+print("multiuser Piper, server library isolation, EPUB validation, and audio tests passed")

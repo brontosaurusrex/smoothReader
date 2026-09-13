@@ -225,6 +225,14 @@ field are fallbacks. Existing 32%-position anchors remain compatible and are
 replaced by the first-line form after the next position save. This makes a
 server position substantially more stable across desktop/mobile reflow.
 
+After the full spine enters the DOM, the reader collapses repeated whitespace
+and indexes the cumulative text length of every section. Approximate pages use
+2,000 normalized characters each. The current global character offset and total
+character count travel with the ordinary position record, so `(percentage,
+page/total)` can appear on the home grid and synchronize with a server-backed
+book without downloading the EPUB merely to calculate its label. Older records
+show percentage only until their EPUB is opened and indexed once.
+
 ### IndexedDB
 
 Large binary data does not fit localStorage reliably. IndexedDB database
@@ -235,10 +243,12 @@ array of up to 12 cached records. Each can include:
 - the generated cover thumbnail data URL
 - hash, file name, title, opening timestamp, and thumbnail version
 
-This cache makes recent-book covers clickable and allows reopening without
-asking the user to select the original file again. If IndexedDB is unavailable
-or a write fails, the metadata and positions can still exist, but the book must
-be dropped again.
+This 12-book least-recently-opened cache makes local covers clickable and allows
+reopening without asking the user to select the original file again. Eviction
+removes the local EPUB and thumbnail record, not a server copy. Server-backed
+books remain in the home catalogue and are downloaded and recached when clicked.
+If IndexedDB is unavailable or a write fails, local metadata and positions can
+still exist, but a client-only book must be dropped again.
 
 Home-screen library management uses a temporary selection set. `REMOVE FROM
 THIS DEVICE` rewrites the IndexedDB recent-books array, removes the selected
@@ -302,10 +312,14 @@ not include the server audio cache.
 ## Per-user server library
 
 The browser probes `GET /api/library/books` during startup. A successful reply
-enables the server actions and merges server summaries into the home grid. A
-server-stored book has a subtle inset outline. When the API is absent, as on
-GitHub Pages or the basic `python -m http.server`, server controls stay hidden
-and all local features remain unchanged.
+enables the server actions and merges every server summary into the home grid;
+the 12-book limit applies only to the browser cache. Server-backed covers have a
+white three-pixel outline, while client-only covers use a black outline of the
+same width. When the API is absent, as on GitHub Pages or the basic
+`python -m http.server`, server controls stay hidden and all local features
+remain unchanged. Server summaries include only the small numeric position
+fields needed for the home-screen percentage and simulated-page label; full
+state remains available through the per-book state endpoint.
 
 `STORE ON SERVER` sends a selected cached EPUB once, followed by its JPEG cover
 and JSON state. Upload requests have a three-minute client bound. The bridge

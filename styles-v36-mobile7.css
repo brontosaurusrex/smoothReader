@@ -555,9 +555,26 @@ body.is-dragging #drop-zone::before {
   background-image: var(--recent-book-cover);
 }
 
+#recent-book-list .recent-book.is-client-only::before {
+  border: 3px solid #080a0d;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
+}
+
 #recent-book-list .recent-book.is-server-stored::before {
-  border-color: color-mix(in srgb, var(--display-text) 64%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--display-background) 24%, transparent);
+  border: 3px solid #e5e9f0;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 42%);
+}
+
+#recent-book-list .recent-book-title,
+#recent-book-list .recent-book-location {
+  display: block;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+
+#recent-book-list .recent-book-location {
+  color: var(--display-muted);
+  font-size: 0.82em;
 }
 
 #recent-book-list .recent-book:is(:hover, :focus-visible) {
@@ -1159,6 +1176,11 @@ body.is-right-dragging * {
   pointer-events: none;
 }
 
+:root[data-view="home"] #progress-stack {
+  right: calc(2.5rem + env(safe-area-inset-right, 0px));
+  bottom: calc(2.5rem + env(safe-area-inset-bottom, 0px));
+}
+
 #speech-controls {
   display: grid;
   grid-template-columns: 1fr;
@@ -1222,13 +1244,20 @@ body.is-right-dragging * {
   opacity: 0.38;
 }
 
-#reading-progress,
+#reading-location,
 #speech-voice {
   color: var(--display-muted);
   font-family: var(--reader-font);
   font-size: 0.72rem;
   letter-spacing: var(--reader-tracking);
   opacity: 0.72;
+}
+
+#reading-location {
+  display: grid;
+  justify-items: end;
+  gap: 0.02rem;
+  white-space: nowrap;
 }
 
 #speech-voice {
@@ -1239,6 +1268,11 @@ body.is-right-dragging * {
 
 #reading-progress {
   font-size: 1.50rem;
+  font-weight: 400;
+}
+
+#reading-pages {
+  font-size: 0.86rem;
   font-weight: 400;
 }
 
@@ -1399,6 +1433,11 @@ body.is-right-dragging * {
   #progress-stack {
     right: calc(0.65rem + env(safe-area-inset-right, 0px));
     bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  :root[data-view="home"] #progress-stack {
+    right: calc(1.5rem + env(safe-area-inset-right, 0px));
+    bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   #speech-controls button,

@@ -12,7 +12,9 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 import wave
+import zipfile
 from collections import deque
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -22,16 +24,320 @@ from typing import Any
 
 APP_DIR = Path(__file__).resolve().parent
 MAX_REQUEST_BYTES = 32_000
+MAX_LIBRARY_STATE_BYTES = 512_000
+MAX_LIBRARY_COVER_BYTES = 2 * 1024 * 1024
 MAX_TEXT_LENGTH = 8_000
 CACHE_FORMAT_VERSION = 4
 LOUDNORM_FILTER = "loudnorm=I=-16:LRA=11:TP=-1.5"
 OPUS_BITRATE_KBPS = 48
 CACHE_ID_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
+BOOK_HASH_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+LIBRARY_BOOK_ROUTE = re.compile(
+    r"^/api/library/books/([a-f0-9]{64})(?:/(epub|state|cover))?$"
+)
 
 
 class SpeechCancelled(RuntimeError):
     """Raised when one browser session cancels its queued or active speech job."""
+
+
+class LibraryUserRequired(PermissionError):
+    """Raised when an authenticated Nginx username is required but missing."""
+
+
+class LibraryController:
+    """Small per-user, file-backed EPUB and reading-state store."""
+
+    def __init__(
+        self,
+        library_dir: Path,
+        max_book_mb: int,
+        require_user: bool,
+    ) -> None:
+        self.library_dir = library_dir.expanduser().resolve()
+        self.library_dir.mkdir(parents=True, exist_ok=True)
+        self.max_book_bytes = max(1, max_book_mb) * 1024 * 1024
+        self.require_user = require_user
+        self._lock = threading.RLock()
+
+    def _username(self, forwarded_user: str | None) -> str:
+        username = str(forwarded_user or "").strip()
+        if not username:
+            if self.require_user:
+                raise LibraryUserRequired("Authenticated library user was not provided")
+            return "local"
+        if len(username) > 256 or any(ord(character) < 32 for character in username):
+            raise ValueError("Invalid library user")
+        return username
+
+    def _user_directory(self, forwarded_user: str | None) -> tuple[str, Path]:
+        username = self._username(forwarded_user)
+        user_key = hashlib.sha256(username.encode("utf-8")).hexdigest()
+        return username, self.library_dir / user_key
+
+    def _book_directory(self, forwarded_user: str | None, book_hash: str) -> Path:
+        if not BOOK_HASH_PATTERN.fullmatch(book_hash):
+            raise ValueError("Invalid book identifier")
+        _, user_directory = self._user_directory(forwarded_user)
+        return user_directory / book_hash
+
+    @staticmethod
+    def _read_json(path: Path) -> dict[str, Any]:
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except (OSError, json.JSONDecodeError) as error:
+            raise RuntimeError("Stored book state is invalid") from error
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _timestamp(value: Any) -> int:
+        if isinstance(value, bool):
+            return 0
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError, OverflowError):
+            return 0
+
+    @staticmethod
+    def _limited_text(value: Any, maximum: int) -> str:
+        return str(value or "").strip()[:maximum]
+
+    @staticmethod
+    def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+        temporary = path.with_name(
+            f".{path.name}.{threading.get_ident()}.{random.randrange(1 << 30)}.tmp"
+        )
+        try:
+            temporary.write_text(
+                json.dumps(value, ensure_ascii=False, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def status(self, forwarded_user: str | None) -> dict[str, Any]:
+        username, _ = self._user_directory(forwarded_user)
+        return {
+            "ok": True,
+            "available": True,
+            "user": username,
+            "bookCount": len(self.list_books(forwarded_user)),
+            "maxBookBytes": self.max_book_bytes,
+        }
+
+    def list_books(self, forwarded_user: str | None) -> list[dict[str, Any]]:
+        _, user_directory = self._user_directory(forwarded_user)
+        if not user_directory.is_dir():
+            return []
+        records = []
+        with self._lock:
+            for book_directory in user_directory.iterdir():
+                if (
+                    not book_directory.is_dir()
+                    or not BOOK_HASH_PATTERN.fullmatch(book_directory.name)
+                    or not (book_directory / "book.epub").is_file()
+                ):
+                    continue
+                state = self._read_json(book_directory / "state.json")
+                position = state.get("position") if isinstance(state.get("position"), dict) else {}
+                opened_at = self._timestamp(state.get("openedAt"))
+                saved_at = self._timestamp(position.get("savedAt"))
+                updated_at = self._timestamp(state.get("updatedAt"))
+                records.append({
+                    "hash": book_directory.name,
+                    "fileName": self._limited_text(state.get("fileName"), 512)
+                    or f"{book_directory.name[:12]}.epub",
+                    "title": self._limited_text(state.get("title"), 1024),
+                    "openedAt": opened_at,
+                    "updatedAt": max(updated_at, saved_at, opened_at),
+                    "coverUrl": (
+                        f"/api/library/books/{book_directory.name}/cover"
+                        if (book_directory / "cover.jpg").is_file()
+                        else ""
+                    ),
+                    "serverStored": True,
+                })
+        return sorted(
+            records,
+            key=lambda record: (record["updatedAt"], record["openedAt"]),
+            reverse=True,
+        )
+
+    def read_state(self, forwarded_user: str | None, book_hash: str) -> dict[str, Any]:
+        book_directory = self._book_directory(forwarded_user, book_hash)
+        if not (book_directory / "book.epub").is_file():
+            raise FileNotFoundError("Server book was not found")
+        with self._lock:
+            state = self._read_json(book_directory / "state.json")
+        return {"ok": True, "state": state}
+
+    def write_state(
+        self,
+        forwarded_user: str | None,
+        book_hash: str,
+        incoming: dict[str, Any],
+    ) -> dict[str, Any]:
+        book_directory = self._book_directory(forwarded_user, book_hash)
+        if not (book_directory / "book.epub").is_file():
+            raise FileNotFoundError("Upload the EPUB before its reading state")
+
+        incoming_position = incoming.get("position")
+        if not isinstance(incoming_position, dict):
+            incoming_position = {}
+        incoming_settings = incoming.get("settings")
+        if not isinstance(incoming_settings, dict):
+            incoming_settings = {}
+
+        with self._lock:
+            existing = self._read_json(book_directory / "state.json")
+            existing_position = existing.get("position")
+            if not isinstance(existing_position, dict):
+                existing_position = {}
+            existing_settings = existing.get("settings")
+            if not isinstance(existing_settings, dict):
+                existing_settings = {}
+
+            position = (
+                incoming_position
+                if self._timestamp(incoming_position.get("savedAt"))
+                >= self._timestamp(existing_position.get("savedAt"))
+                else existing_position
+            )
+            settings = (
+                incoming_settings
+                if self._timestamp(incoming_settings.get("savedAt"))
+                >= self._timestamp(existing_settings.get("savedAt"))
+                else existing_settings
+            )
+            state = {
+                "version": 1,
+                "hash": book_hash,
+                "fileName": self._limited_text(
+                    incoming.get("fileName") or existing.get("fileName"), 512
+                ) or f"{book_hash[:12]}.epub",
+                "title": self._limited_text(
+                    incoming.get("title") or existing.get("title"), 1024
+                ),
+                "openedAt": max(
+                    self._timestamp(incoming.get("openedAt")),
+                    self._timestamp(existing.get("openedAt")),
+                ),
+                "position": position,
+                "settings": settings,
+                "updatedAt": int(time.time() * 1000),
+            }
+            self._write_json_atomic(book_directory / "state.json", state)
+        return {"ok": True, "state": state}
+
+    @staticmethod
+    def _validate_epub(path: Path) -> None:
+        try:
+            with zipfile.ZipFile(path) as archive:
+                names = set(archive.namelist())
+                if "META-INF/container.xml" not in names:
+                    raise ValueError("EPUB is missing META-INF/container.xml")
+                bad_entry = archive.testzip()
+                if bad_entry:
+                    raise ValueError(f"EPUB contains a damaged entry: {bad_entry}")
+        except zipfile.BadZipFile as error:
+            raise ValueError("EPUB is not a valid ZIP archive") from error
+
+    def write_epub(
+        self,
+        forwarded_user: str | None,
+        book_hash: str,
+        source: Any,
+        content_length: int,
+    ) -> dict[str, Any]:
+        if content_length <= 0 or content_length > self.max_book_bytes:
+            raise ValueError(
+                f"EPUB size must be between 1 byte and {self.max_book_bytes} bytes"
+            )
+        book_directory = self._book_directory(forwarded_user, book_hash)
+        book_directory.mkdir(parents=True, exist_ok=True)
+        temporary = book_directory / (
+            f".book.{threading.get_ident()}.{random.randrange(1 << 30)}.tmp"
+        )
+        digest = hashlib.sha256()
+        remaining = content_length
+        try:
+            with temporary.open("wb") as output:
+                while remaining:
+                    block = source.read(min(64 * 1024, remaining))
+                    if not block:
+                        raise ValueError("EPUB upload ended before the declared size")
+                    output.write(block)
+                    digest.update(block)
+                    remaining -= len(block)
+            if digest.hexdigest() != book_hash:
+                raise ValueError("EPUB content does not match its book identifier")
+            self._validate_epub(temporary)
+            with self._lock:
+                temporary.replace(book_directory / "book.epub")
+        finally:
+            temporary.unlink(missing_ok=True)
+        return {"ok": True, "hash": book_hash, "size": content_length}
+
+    def write_cover(
+        self,
+        forwarded_user: str | None,
+        book_hash: str,
+        source: Any,
+        content_length: int,
+    ) -> dict[str, Any]:
+        if content_length <= 0 or content_length > MAX_LIBRARY_COVER_BYTES:
+            raise ValueError("Cover must be a JPEG no larger than 2 MiB")
+        book_directory = self._book_directory(forwarded_user, book_hash)
+        if not (book_directory / "book.epub").is_file():
+            raise FileNotFoundError("Upload the EPUB before its cover")
+        cover = source.read(content_length)
+        if len(cover) != content_length or not cover.startswith(b"\xff\xd8"):
+            raise ValueError("Cover must be a valid JPEG image")
+        temporary = book_directory / (
+            f".cover.{threading.get_ident()}.{random.randrange(1 << 30)}.tmp"
+        )
+        try:
+            temporary.write_bytes(cover)
+            with self._lock:
+                temporary.replace(book_directory / "cover.jpg")
+        finally:
+            temporary.unlink(missing_ok=True)
+        return {"ok": True}
+
+    def file_path(
+        self,
+        forwarded_user: str | None,
+        book_hash: str,
+        resource: str,
+    ) -> tuple[Path, str]:
+        book_directory = self._book_directory(forwarded_user, book_hash)
+        if resource == "epub":
+            path, content_type = book_directory / "book.epub", "application/epub+zip"
+        elif resource == "cover":
+            path, content_type = book_directory / "cover.jpg", "image/jpeg"
+        else:
+            raise ValueError("Invalid server book resource")
+        if not path.is_file():
+            raise FileNotFoundError("Server book resource was not found")
+        return path, content_type
+
+    def remove_book(self, forwarded_user: str | None, book_hash: str) -> None:
+        book_directory = self._book_directory(forwarded_user, book_hash)
+        if not book_directory.is_dir():
+            raise FileNotFoundError("Server book was not found")
+        with self._lock:
+            for name in ("book.epub", "cover.jpg", "state.json"):
+                (book_directory / name).unlink(missing_ok=True)
+            for temporary in book_directory.glob(".*.tmp"):
+                temporary.unlink(missing_ok=True)
+            try:
+                book_directory.rmdir()
+            except OSError:
+                pass
 
 
 class PiperController:
@@ -540,6 +846,7 @@ class PiperController:
 
 class SmoothReaderHandler(SimpleHTTPRequestHandler):
     controller: PiperController
+    library: LibraryController
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(APP_DIR), **kwargs)
@@ -561,14 +868,52 @@ class SmoothReaderHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
-    def _read_payload(self) -> dict[str, Any]:
+    def _read_payload(self, maximum_bytes: int = MAX_REQUEST_BYTES) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0"))
-        if length <= 0 or length > MAX_REQUEST_BYTES:
+        if length <= 0 or length > maximum_bytes:
             raise ValueError("Invalid request size")
         payload = json.loads(self.rfile.read(length))
         if not isinstance(payload, dict):
             raise ValueError("JSON request must be an object")
         return payload
+
+    def _library_user(self) -> str | None:
+        return self.headers.get("X-Smooth-Reader-User")
+
+    def _content_length(self) -> int:
+        try:
+            return int(self.headers.get("Content-Length", "0"))
+        except ValueError as error:
+            raise ValueError("Invalid request size") from error
+
+    def _send_private_file(self, path: Path, content_type: str) -> None:
+        file_size = path.stat().st_size
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(file_size))
+        self.send_header("Cache-Control", "private, no-store")
+        self.end_headers()
+        try:
+            with path.open("rb") as source:
+                while True:
+                    block = source.read(64 * 1024)
+                    if not block:
+                        break
+                    self.wfile.write(block)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _library_error(self, error: Exception) -> None:
+        if isinstance(error, LibraryUserRequired):
+            status = HTTPStatus.UNAUTHORIZED
+        elif isinstance(error, FileNotFoundError):
+            status = HTTPStatus.NOT_FOUND
+        elif isinstance(error, (ValueError, json.JSONDecodeError)):
+            status = HTTPStatus.BAD_REQUEST
+        else:
+            self.log_error("Server library error: %s", error)
+            status = HTTPStatus.INTERNAL_SERVER_ERROR
+        self._json_response(status, {"ok": False, "error": str(error)})
 
     def _send_audio(self, cache_id: str) -> None:
         audio_path, audio_format = self.controller.audio_path(cache_id)
@@ -627,6 +972,38 @@ class SmoothReaderHandler(SimpleHTTPRequestHandler):
             self._json_response(HTTPStatus.OK, self.controller.status())
             return
         request_path = self.path.split("?", 1)[0]
+        if request_path in ("/api/library/status", "/api/library/books"):
+            try:
+                if request_path == "/api/library/status":
+                    payload = self.library.status(self._library_user())
+                else:
+                    payload = {
+                        "ok": True,
+                        "books": self.library.list_books(self._library_user()),
+                    }
+                self._json_response(HTTPStatus.OK, payload)
+            except Exception as error:  # noqa: BLE001 - translated to a bounded API error.
+                self._library_error(error)
+            return
+
+        library_match = LIBRARY_BOOK_ROUTE.fullmatch(request_path)
+        if library_match and library_match.group(2) in ("epub", "state", "cover"):
+            try:
+                book_hash, resource = library_match.groups()
+                if resource == "state":
+                    self._json_response(
+                        HTTPStatus.OK,
+                        self.library.read_state(self._library_user(), book_hash),
+                    )
+                else:
+                    path, content_type = self.library.file_path(
+                        self._library_user(), book_hash, resource
+                    )
+                    self._send_private_file(path, content_type)
+            except Exception as error:  # noqa: BLE001 - translated to a bounded API error.
+                self._library_error(error)
+            return
+
         audio_prefix = "/api/piper/audio/"
         if request_path.startswith(audio_prefix):
             try:
@@ -682,6 +1059,50 @@ class SmoothReaderHandler(SimpleHTTPRequestHandler):
                 {"ok": False, "error": str(error)},
             )
 
+    def do_PUT(self) -> None:  # noqa: N802
+        request_path = self.path.split("?", 1)[0]
+        library_match = LIBRARY_BOOK_ROUTE.fullmatch(request_path)
+        if not library_match or library_match.group(2) not in ("epub", "state", "cover"):
+            self._json_response(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Not found"})
+            return
+        try:
+            book_hash, resource = library_match.groups()
+            if resource == "epub":
+                payload = self.library.write_epub(
+                    self._library_user(),
+                    book_hash,
+                    self.rfile,
+                    self._content_length(),
+                )
+            elif resource == "cover":
+                payload = self.library.write_cover(
+                    self._library_user(),
+                    book_hash,
+                    self.rfile,
+                    self._content_length(),
+                )
+            else:
+                payload = self.library.write_state(
+                    self._library_user(),
+                    book_hash,
+                    self._read_payload(MAX_LIBRARY_STATE_BYTES),
+                )
+            self._json_response(HTTPStatus.OK, payload)
+        except Exception as error:  # noqa: BLE001 - translated to a bounded API error.
+            self._library_error(error)
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        request_path = self.path.split("?", 1)[0]
+        library_match = LIBRARY_BOOK_ROUTE.fullmatch(request_path)
+        if not library_match or library_match.group(2) is not None:
+            self._json_response(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Not found"})
+            return
+        try:
+            self.library.remove_book(self._library_user(), library_match.group(1))
+            self._json_response(HTTPStatus.OK, {"ok": True})
+        except Exception as error:  # noqa: BLE001 - translated to a bounded API error.
+            self._library_error(error)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -704,6 +1125,28 @@ def parse_args() -> argparse.Namespace:
         default=1024,
         help="prune least-recently-used cached audio above this size (default: 1024)",
     )
+    parser.add_argument(
+        "--library-dir",
+        type=Path,
+        default=Path(os.environ.get(
+            "SMOOTH_READER_LIBRARY_DIR",
+            "~/.local/share/smooth-reader/library",
+        )),
+        help="persistent root for per-user server EPUB libraries",
+    )
+    parser.add_argument(
+        "--library-max-book-mb",
+        type=int,
+        default=256,
+        help="maximum uploaded EPUB size in MiB (default: 256)",
+    )
+    parser.add_argument(
+        "--require-library-user",
+        action="store_true",
+        default=os.environ.get("SMOOTH_READER_REQUIRE_LIBRARY_USER", "").lower()
+        in ("1", "true", "yes", "on"),
+        help="require X-Smooth-Reader-User from an authenticated reverse proxy",
+    )
     return parser.parse_args()
 
 
@@ -714,11 +1157,17 @@ def main() -> None:
         args.cache_dir,
         args.cache_max_mb,
     )
+    SmoothReaderHandler.library = LibraryController(
+        args.library_dir,
+        args.library_max_book_mb,
+        args.require_library_user,
+    )
     server = ThreadingHTTPServer(("127.0.0.1", args.port), SmoothReaderHandler)
     print(f"Smooth Reader: http://127.0.0.1:{args.port}")
     status = SmoothReaderHandler.controller.status()
     print(status["error"] or f"Piper ready with {len(status['voices'])} voice(s)")
     print(f"Audio cache: {status['cacheDirectory']}")
+    print(f"Server library: {SmoothReaderHandler.library.library_dir}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

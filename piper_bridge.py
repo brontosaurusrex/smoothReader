@@ -144,6 +144,16 @@ class LibraryController:
                     continue
                 state = self._read_json(book_directory / "state.json")
                 position = state.get("position") if isinstance(state.get("position"), dict) else {}
+                position_summary = {
+                    key: position[key]
+                    for key in (
+                        "ratio",
+                        "characterOffset",
+                        "characterCount",
+                        "savedAt",
+                    )
+                    if isinstance(position.get(key), (int, float))
+                }
                 opened_at = self._timestamp(state.get("openedAt"))
                 saved_at = self._timestamp(position.get("savedAt"))
                 updated_at = self._timestamp(state.get("updatedAt"))
@@ -154,6 +164,7 @@ class LibraryController:
                     "title": self._limited_text(state.get("title"), 1024),
                     "openedAt": opened_at,
                     "updatedAt": max(updated_at, saved_at, opened_at),
+                    "position": position_summary,
                     "coverUrl": (
                         f"/api/library/books/{book_directory.name}/cover"
                         if (book_directory / "cover.jpg").is_file()

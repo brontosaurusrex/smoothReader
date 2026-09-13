@@ -15,6 +15,7 @@ The resulting layout is:
 | `/opt/smooth-reader/app` | Smooth Reader files from the `gh-pages` branch |
 | `/opt/smooth-reader/venv` | Isolated Piper Python environment |
 | `/var/lib/smooth-reader/voices` | Piper `.onnx` models and matching JSON files |
+| `/var/lib/smooth-reader/library` | Per-user server EPUBs, covers, positions, and settings |
 | `/var/cache/smooth-reader` | Generated Opus/WAV audio cache |
 | `/etc/systemd/system/smooth-reader.service` | Background service |
 | `/etc/nginx/sites-available/smooth-reader` | HTTPS reverse proxy |
@@ -72,17 +73,18 @@ id smoothreader >/dev/null 2>&1 || \
     smoothreader
 ```
 
-Create the application, voice, and cache locations:
+Create the application, voice, library, and cache locations:
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/smooth-reader
 sudo install -d -o smoothreader -g smoothreader -m 0750 \
   /var/lib/smooth-reader/voices \
+  /var/lib/smooth-reader/library \
   /var/cache/smooth-reader
 ```
 
 The application and Piper executable will be root-owned and read-only to the
-service. Only the voice and cache directories need service-user access.
+service. The voice, library, and cache directories need service-user access.
 
 ## 3. Install Piper in a virtual environment
 
@@ -191,17 +193,17 @@ WorkingDirectory=/opt/smooth-reader/app
 Environment=PIPER_BIN=/opt/smooth-reader/venv/bin/piper
 Environment=FFMPEG_BIN=/usr/bin/ffmpeg
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/usr/bin/python3 /opt/smooth-reader/app/piper_bridge.py --port 8000 --voice-dir /var/lib/smooth-reader/voices --cache-dir /var/cache/smooth-reader --cache-max-mb 4096
+ExecStart=/usr/bin/python3 /opt/smooth-reader/app/piper_bridge.py --port 8000 --voice-dir /var/lib/smooth-reader/voices --cache-dir /var/cache/smooth-reader --cache-max-mb 4096 --library-dir /var/lib/smooth-reader/library --library-max-book-mb 256 --require-library-user
 Restart=on-failure
 RestartSec=3
 UMask=0027
 
-# Basic service isolation. The bridge still needs to write its audio cache.
+# Basic service isolation. The bridge needs to write audio and library data.
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/var/cache/smooth-reader
+ReadWritePaths=/var/cache/smooth-reader /var/lib/smooth-reader/library
 
 [Install]
 WantedBy=multi-user.target
@@ -233,6 +235,19 @@ Look for:
 - the expected voice and cache directories
 - `"audioCodec": "opus"`
 - `"audioBitrateKbps": 48`
+
+Because this service requires an authenticated library identity, test the local
+library API with the same header that Nginx will supply:
+
+```bash
+curl -fsS \
+  -H 'X-Smooth-Reader-User: local-test' \
+  http://127.0.0.1:8000/api/library/status | \
+  python3 -m json.tool
+```
+
+Look for `"available": true`, `"user": "local-test"`, and a numeric
+`bookCount`.
 
 If this request fails, inspect recent logs:
 
@@ -372,6 +387,9 @@ server {
     auth_basic "Smooth Reader";
     auth_basic_user_file /etc/nginx/.htpasswd-smooth-reader;
 
+    # Must match --library-max-book-mb in the systemd service.
+    client_max_body_size 256m;
+
     add_header X-Content-Type-Options nosniff always;
     add_header X-Frame-Options SAMEORIGIN always;
     add_header Referrer-Policy no-referrer always;
@@ -384,10 +402,13 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # Nginx overwrites any client-supplied value with the verified login.
+        proxy_set_header X-Smooth-Reader-User $remote_user;
 
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
         proxy_buffering off;
+        proxy_request_buffering off;
     }
 }
 NGINX
@@ -426,13 +447,30 @@ curl -u reader \
   python3 -m json.tool
 ```
 
+Check that the same login reaches its own server library:
+
+```bash
+curl -u reader \
+  https://reader.example.com/api/library/status | \
+  python3 -m json.tool
+```
+
 Open `https://reader.example.com` in a browser, sign in, load an EPUB, and test
 speech. A hard refresh (`Ctrl+F5`) is useful after application updates.
 
 ## Multiuser behavior
 
-- EPUB files, recent books, positions, and book-specific display settings stay
-  in each user's browser storage; they are not uploaded to the server.
+- Nginx authenticates each user and overwrites `X-Smooth-Reader-User` with
+  `$remote_user`; the loopback-only bridge hashes that username into a safe,
+  isolated storage namespace.
+- The same username on multiple devices sees the same server-stored books,
+  positions, and per-book settings. Different usernames cannot list, download,
+  update, or remove one another's books.
+- EPUBs are uploaded only after `STORE ON SERVER` is chosen. Later reading and
+  setting changes synchronize as small JSON state updates; the EPUB is not
+  uploaded repeatedly.
+- `REMOVE FROM THIS DEVICE` leaves any server copy intact. `REMOVE FROM SERVER`
+  leaves any device copy intact.
 - Each browser tab has an independent speech-session identifier.
 - Stopping speech in one tab does not stop another tab's Piper job.
 - Cached audio downloads and cache hits can run concurrently.
@@ -443,8 +481,19 @@ speech. A hard refresh (`Ctrl+F5`) is useful after application updates.
 - Pause and resume happen in the browser and do not occupy a server-side audio
   player.
 
-Basic Authentication controls access to the whole site, but it is not an
-application account system and does not provide cross-device book syncing.
+Nginx remains the password authority; Smooth Reader never receives or stores
+passwords. Do not expose port 8000 publicly or remove `--require-library-user`
+from an Internet-facing installation.
+
+## Back up server libraries
+
+The browser ZIP export covers one browser's local cache. Include the following
+directory in server backups to preserve every authenticated user's server
+library and synchronized state:
+
+```text
+/var/lib/smooth-reader/library
+```
 
 ## Updating Smooth Reader
 

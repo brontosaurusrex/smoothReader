@@ -75,7 +75,9 @@ const speechAudio = document.querySelector("#speech-audio");
 const settingsHome = document.querySelector("#settings-home");
 const settingsOpen = document.querySelector("#settings-open");
 const settingsResetBook = document.querySelector("#settings-reset-book");
+const readingLocation = document.querySelector("#reading-location");
 const readingProgress = document.querySelector("#reading-progress");
+const readingPages = document.querySelector("#reading-pages");
 const speechVoice = document.querySelector("#speech-voice");
 const speechControls = document.querySelector("#speech-controls");
 const speechOverlayPause = document.querySelector("#speech-overlay-pause");
@@ -104,6 +106,7 @@ const LAST_BOOK_STORE = "books";
 const LAST_BOOK_RECORD = "last-opened";
 const RECENT_BOOKS_RECORD = "recent-books";
 const MAX_RECENT_BOOKS = 12;
+const SIMULATED_PAGE_CHARACTERS = 2_000;
 const COVER_THUMBNAIL_VERSION = 2;
 const COVER_THUMBNAIL_MAX_WIDTH = 600;
 const COVER_THUMBNAIL_MAX_HEIGHT = 900;
@@ -210,6 +213,7 @@ let serverLibraryAvailable = false;
 let serverLibraryBusy = false;
 let serverBookInfo = [];
 const serverBookHashes = new Set();
+let activeBookCharacterCount = 0;
 let serverStateSyncTimer = null;
 const serverStateSyncing = new Map();
 let pendingLayoutAnchor = null;
@@ -377,6 +381,69 @@ const cachedRecordFor = (record) => cachedRecentBooks.find((candidate) =>
   booksMatch(record, candidate)
 );
 
+const positionKey = (hash) => `${POSITION_PREFIX}${hash}`;
+
+const loadPosition = (hash) => {
+  try {
+    const stored = localStorage.getItem(positionKey(hash));
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizedCharacterCount = (text) => String(text || "")
+  .replace(/\s+/g, " ")
+  .trim()
+  .length;
+
+const readingPositionForRecord = (record) => {
+  const localPosition = record?.hash ? loadPosition(record.hash) : null;
+  const serverPosition = record?.position && typeof record.position === "object"
+    ? record.position
+    : null;
+  if (!localPosition) return serverPosition || {};
+  if (!serverPosition) return localPosition;
+  return Number(serverPosition.savedAt) > Number(localPosition.savedAt || 0)
+    ? serverPosition
+    : localPosition;
+};
+
+const positionRatio = (position) => {
+  const storedRatio = Number(position?.ratio);
+  if (Number.isFinite(storedRatio)) return Math.max(0, Math.min(1, storedRatio));
+  const characterOffset = Number(position?.characterOffset);
+  const characterCount = Number(position?.characterCount);
+  if (Number.isFinite(characterOffset) && characterCount > 0) {
+    return Math.max(0, Math.min(1, characterOffset / characterCount));
+  }
+  return 0;
+};
+
+const simulatedPageLocation = (position, fallbackCharacterCount = 0) => {
+  const characterCount = Number(position?.characterCount) || Number(fallbackCharacterCount);
+  if (!(characterCount > 0)) return null;
+  const total = Math.max(1, Math.ceil(characterCount / SIMULATED_PAGE_CHARACTERS));
+  const storedOffset = Number(position?.characterOffset);
+  const offset = Number.isFinite(storedOffset)
+    ? Math.max(0, Math.min(characterCount, storedOffset))
+    : positionRatio(position) * characterCount;
+  const current = Math.max(
+    1,
+    Math.min(total, Math.ceil(offset / SIMULATED_PAGE_CHARACTERS))
+  );
+  return { current, total };
+};
+
+const formatBookReadingLocation = (record) => {
+  const position = readingPositionForRecord(record);
+  const percentage = Math.round(positionRatio(position) * 100);
+  const pages = simulatedPageLocation(position, record?.characterCount);
+  return pages
+    ? `(${percentage}%, ${pages.current}/${pages.total})`
+    : `(${percentage}%)`;
+};
+
 const displayedLibraryBooks = () => {
   const combined = recentBookInfo.map((record) => ({ ...record }));
   serverBookInfo.forEach((serverRecord) => {
@@ -400,8 +467,7 @@ const displayedLibraryBooks = () => {
     };
   });
   return combined
-    .sort((first, second) => (Number(second.openedAt) || 0) - (Number(first.openedAt) || 0))
-    .slice(0, MAX_RECENT_BOOKS);
+    .sort((first, second) => (Number(second.openedAt) || 0) - (Number(first.openedAt) || 0));
 };
 
 const setServerLibraryAvailable = (available) => {
@@ -518,22 +584,33 @@ const renderRecentBooks = () => {
     button.disabled = isBookLoading || serverLibraryBusy || (
       !libraryManageMode && !cached?.bytes && !serverStored
     );
-    button.textContent = record.title && record.title !== record.fileName
+    const bookName = record.title && record.title !== record.fileName
       ? `${record.title} — ${record.fileName}`
       : record.fileName;
+    const locationText = formatBookReadingLocation(record);
+    const titleLabel = document.createElement("span");
+    titleLabel.className = "recent-book-title";
+    titleLabel.textContent = bookName;
+    const locationLabel = document.createElement("span");
+    locationLabel.className = "recent-book-location";
+    locationLabel.textContent = locationText;
+    button.appendChild(titleLabel);
+    button.appendChild(locationLabel);
+    button.setAttribute("aria-label", `${bookName} · ${locationText}`);
     const cover = cached?.thumbnail || serverRecord?.coverUrl || "";
     if (cover) {
       button.classList.add("has-cover");
       button.style.setProperty("--recent-book-cover", `url("${cover}")`);
     }
     if (serverStored) button.classList.add("is-server-stored");
+    else button.classList.add("is-client-only");
     if (libraryManageMode) {
       if (isSelected) button.classList.add("is-selected");
       button.setAttribute("aria-pressed", String(isSelected));
       button.title = `${isSelected ? "Deselect" : "Select"} ${record.title || record.fileName}`;
       button.addEventListener("click", () => toggleLibraryBookSelection(record));
     } else {
-      button.title = `${serverStored ? "Server stored · " : ""}Open ${
+      button.title = `${serverStored ? "Server stored" : "Client only"} · ${
         record.title || record.fileName
       }`;
       button.addEventListener("click", () => void openLibraryBook(record));
@@ -1663,7 +1740,7 @@ const setReadingMode = (isReading) => {
   dropZone.hidden = isReading;
   reader.hidden = !isReading;
   settingsMenu.hidden = !isReading;
-  readingProgress.hidden = !isReading;
+  readingLocation.hidden = !isReading;
   if (!isReading) setSettingsOpen(false);
   syncSpeechControls();
 };
@@ -1723,27 +1800,36 @@ const showReaderView = () => {
 
 replaceHomeHistory();
 
-const updateReadingProgress = () => {
+const indexBookCharacterMetrics = () => {
+  let total = 0;
+  let hasText = false;
+  for (const chapter of viewer.children) {
+    const count = normalizedCharacterCount(chapter.textContent);
+    if (count > 0 && hasText) total += 1;
+    chapter.dataset.characterStart = String(total);
+    chapter.dataset.characterCount = String(count);
+    total += count;
+    if (count > 0) hasText = true;
+  }
+  activeBookCharacterCount = total;
+  return total;
+};
+
+const updateReadingProgress = (position = null) => {
   if (reader.hidden) return;
   const scrollRange = Math.max(
     0,
     document.documentElement.scrollHeight - window.innerHeight
   );
-  const percentage = scrollRange > 0
-    ? Math.round((window.scrollY / scrollRange) * 100)
-    : 0;
+  const ratio = scrollRange > 0 ? window.scrollY / scrollRange : 0;
+  const percentage = Math.round(ratio * 100);
   readingProgress.textContent = `${Math.max(0, Math.min(100, percentage))}%`;
-};
-
-const positionKey = (hash) => `${POSITION_PREFIX}${hash}`;
-
-const loadPosition = (hash) => {
-  try {
-    const stored = localStorage.getItem(positionKey(hash));
-    return stored ? JSON.parse(stored) : null;
-  } catch {
-    return null;
-  }
+  const pages = simulatedPageLocation(
+    position || { ratio, characterCount: activeBookCharacterCount },
+    activeBookCharacterCount
+  );
+  readingPages.hidden = !pages;
+  if (pages) readingPages.textContent = `${pages.current}/${pages.total}`;
 };
 
 const captureTextPositionAnchor = () => {
@@ -1760,9 +1846,16 @@ const captureTextPositionAnchor = () => {
     if (typeof range.selectNodeContents !== "function") return null;
     range.selectNodeContents(chapter);
     range.setEnd(node, offset);
+    const textOffset = range.toString().length;
+    const chapterStart = Number(chapter.dataset.characterStart) || 0;
+    const chapterCharacters = Number(chapter.dataset.characterCount) || 0;
     return {
       spineIndex: Number(chapter.dataset.spineIndex),
-      textOffset: range.toString().length,
+      textOffset,
+      characterOffset: chapterStart + Math.min(
+        chapterCharacters,
+        normalizedCharacterCount(range.toString())
+      ),
       viewportRatio: visibleAnchor.viewportRatio,
       placement: "first-visible-line"
     };
@@ -1825,16 +1918,31 @@ const savePositionNow = () => {
     document.documentElement.scrollHeight - window.innerHeight
   );
 
+  const ratio = scrollRange > 0 ? window.scrollY / scrollRange : 0;
+  const previousPosition = loadPosition(activeBookKey) || {};
   const capturedAnchor = captureTextPositionAnchor();
   const previousAnchor = document.visibilityState === "hidden"
-    ? loadPosition(activeBookKey)?.anchor || null
+    ? previousPosition.anchor || null
     : null;
-  localStorage.setItem(positionKey(activeBookKey), JSON.stringify({
+  const characterCount = activeBookCharacterCount ||
+    Math.max(0, Number(previousPosition.characterCount) || 0);
+  const capturedCharacterOffset = Number(capturedAnchor?.characterOffset);
+  const previousCharacterOffset = Number(previousPosition.characterOffset);
+  const characterOffset = Number.isFinite(capturedCharacterOffset)
+    ? capturedCharacterOffset
+    : document.visibilityState === "hidden" && Number.isFinite(previousCharacterOffset)
+      ? previousCharacterOffset
+      : Math.round(ratio * characterCount);
+  const position = {
     scrollY: window.scrollY,
-    ratio: scrollRange > 0 ? window.scrollY / scrollRange : 0,
+    ratio,
     anchor: capturedAnchor || previousAnchor,
+    characterOffset,
+    characterCount,
     savedAt: Date.now()
-  }));
+  };
+  localStorage.setItem(positionKey(activeBookKey), JSON.stringify(position));
+  updateReadingProgress(position);
   scheduleServerStateSync(activeBookKey);
 };
 
@@ -2063,6 +2171,7 @@ const destroyCurrentBook = () => {
   }
 
   viewer.replaceChildren();
+  activeBookCharacterCount = 0;
   speechTextMaps = new WeakMap();
   chapterLookup.clear();
   window.scrollTo(0, 0);
@@ -2294,7 +2403,7 @@ const restorePosition = async (savedPosition) => {
   const storedY = Number(savedPosition?.scrollY);
 
   if (restoreTextPositionAnchor(savedPosition?.anchor)) {
-    updateReadingProgress();
+    updateReadingProgress(savedPosition);
     return;
   }
 
@@ -2308,7 +2417,7 @@ const restorePosition = async (savedPosition) => {
   }
 
   window.scrollTo(0, Math.max(0, Math.min(scrollRange, target)));
-  updateReadingProgress();
+  updateReadingProgress(savedPosition);
 };
 
 const normalizeSpeechText = (text) => String(text || "")
@@ -3681,6 +3790,7 @@ const openBook = async (file) => {
     }
 
     if (generation !== loadGeneration) return;
+    indexBookCharacterMetrics();
     await restorePosition(savedPosition);
     captureStableResizeAnchor();
     showStatus(
@@ -3697,6 +3807,7 @@ const openBook = async (file) => {
       hash,
       fileName: file.name,
       title: metadata?.title || "",
+      characterCount: activeBookCharacterCount,
       openedAt: Date.now()
     };
     localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(lastBookInfo));
