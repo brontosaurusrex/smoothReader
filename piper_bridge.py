@@ -162,6 +162,10 @@ class LibraryController:
                     "fileName": self._limited_text(state.get("fileName"), 512)
                     or f"{book_directory.name[:12]}.epub",
                     "title": self._limited_text(state.get("title"), 1024),
+                    "author": self._limited_text(state.get("author"), 1024),
+                    "publicationYear": self._limited_text(
+                        state.get("publicationYear"), 4
+                    ),
                     "openedAt": opened_at,
                     "updatedAt": max(updated_at, saved_at, opened_at),
                     "position": position_summary,
@@ -232,6 +236,14 @@ class LibraryController:
                 ) or f"{book_hash[:12]}.epub",
                 "title": self._limited_text(
                     incoming.get("title") or existing.get("title"), 1024
+                ),
+                "author": self._limited_text(
+                    incoming.get("author") or existing.get("author"), 1024
+                ),
+                "publicationYear": self._limited_text(
+                    incoming.get("publicationYear")
+                    or existing.get("publicationYear"),
+                    4,
                 ),
                 "openedAt": max(
                     self._timestamp(incoming.get("openedAt")),

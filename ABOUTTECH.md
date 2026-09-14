@@ -119,11 +119,26 @@ links are left to normal browser navigation.
 
 ### 6. Cover thumbnails
 
-Cover extraction runs while the spine and metadata load. EPUB.js supplies a
-cover URL, the browser decodes it with `createImageBitmap`, and a canvas scales
-it to at most 600 x 900 pixels. The result is a JPEG data URL at quality 0.86
-with high-quality canvas resampling. Old cached books can have thumbnails
-backfilled when their thumbnail version changes.
+Cover extraction runs while the spine and metadata load. Normally EPUB.js
+supplies the cover URL. If an EPUB has a malformed EPUB 2 cover declaration—for
+example, `meta name="cover"` contains a relative image path instead of a manifest
+item ID—the archive inspector resolves that path directly. It also understands
+EPUB 3 `cover-image` properties, cover-like manifest image entries, and images
+referenced by a declared cover page. The browser decodes the selected image with
+`createImageBitmap`, and a canvas scales it to at most 600 x 900 pixels. The
+result is a JPEG data URL at quality 0.86 with high-quality canvas resampling.
+Old cached books can have thumbnails backfilled when their thumbnail version
+changes.
+
+EPUB.js normally supplies title, creator, and `dc:date`. During the same archive
+validation pass, Smooth Reader also reads the package document declared by
+`META-INF/container.xml`. This supplies the EPUB 3
+`meta property="dcterms:date"` fallback used for the home-screen publication
+year. `dcterms:modified` is deliberately ignored because it describes the OPF
+revision, not necessarily the book's publication. When the OPF contains no
+plausible publication year, the reader checks up to eight likely copyright,
+colophon, publication, or title pages for an explicitly labelled copyright or
+publication year. Generic dates and Calibre processing timestamps are not used.
 
 ## Reader layout and typography
 
@@ -201,8 +216,8 @@ Small, synchronous state is kept under keys beginning with `smooth-reader:`.
 | --- | --- |
 | `smooth-reader:position:<SHA-256>` | JSON containing a chapter/text anchor, `scrollY`, fallback `ratio`, and `savedAt` timestamp |
 | `smooth-reader:book-settings:<SHA-256>` | Palette, contrast, typography, width, Piper voice/speaker, maximum speech chunk, spoken-text offset, playback speed, and `savedAt` timestamp |
-| `smooth-reader:recent-books` | Up to 12 lightweight book metadata records |
-| `smooth-reader:last-book` | Most recently opened book metadata |
+| `smooth-reader:recent-books` | Up to 12 lightweight book records, including extracted title, author, and publication year |
+| `smooth-reader:last-book` | Most recently opened book metadata, including title, author, and publication year |
 | `smooth-reader:palette` | Legacy palette fallback used when opening an older saved book |
 | `smooth-reader:contrast` | Legacy/default contrast fallback |
 | `smooth-reader:speech-maximum` | Legacy/default maximum TTS chunk fallback |
@@ -284,7 +299,8 @@ books/02-<hash-prefix>.epub
 
 The manifest currently has format name `smooth-reader-library` and version `1`.
 It contains the export timestamp, every string-valued localStorage item in the
-`smooth-reader:` namespace, and metadata for each cached book. Cover thumbnails
+`smooth-reader:` namespace, and metadata for each cached book, including title,
+author, and publication year when supplied by the EPUB. Cover thumbnails
 are carried in that metadata; EPUB bytes are separate ZIP entries. EPUB entries
 use ZIP `STORE` because EPUB files are already ZIP archives. The manifest uses
 normal deflate compression.

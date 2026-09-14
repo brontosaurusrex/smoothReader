@@ -42,7 +42,13 @@ book available in the server library. Sharp cover thumbnails are generated from
 each EPUB at up to 600 × 900 px. Browser Back returns from a book to the opening
 screen; Forward returns to the loaded book.
 
-Each home-screen cover shows its title/filename first, with the saved percentage
+Each home-screen cover shows `Title (Author - Year)` when all three EPUB metadata
+fields are available. Publication years stored as either `dc:date` or EPUB 3
+`meta property="dcterms:date"` are supported; the OPF modification timestamp is
+never treated as the publication year. If the OPF date is absent or an invalid
+placeholder, likely copyright and publication pages are checked for an
+explicitly labelled year. If anything is still missing, the filename is shown
+instead, with the saved percentage
 and, once the book has been indexed by this version, an approximate page such
 as `(34%, 34/233)` on the line beneath it. In the reader, the simulated page is
 shown above the bottom-right percentage.

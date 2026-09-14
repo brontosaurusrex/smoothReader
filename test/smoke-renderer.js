@@ -72,6 +72,18 @@ const makeElement = () => {
       this.clickCount = (this.clickCount || 0) + 1;
     },
     load() {},
+    getContext() {
+      return {
+        fillStyle: "",
+        imageSmoothingEnabled: false,
+        imageSmoothingQuality: "low",
+        fillRect() {},
+        drawImage() {}
+      };
+    },
+    toDataURL() {
+      return "data:image/jpeg;base64,Q09WRVI=";
+    },
     canPlayType(type) {
       return type.includes("opus") ? "probably" : "";
     },
@@ -507,6 +519,13 @@ const context = vm.createContext({
           : { ok: true }
       });
     },
+    async createImageBitmap(blob) {
+      return {
+        width: blob.size > 0 ? 1200 : 1,
+        height: blob.size > 0 ? 1800 : 1,
+        close() {}
+      };
+    },
     requestAnimationFrame(callback) {
       return setTimeout(() => callback(Date.now()), 0);
     },
@@ -549,7 +568,11 @@ const context = vm.createContext({
       opened: Promise.resolve(),
       ready: Promise.resolve(),
       loaded: {
-        metadata: Promise.resolve({ title: "Test Book" })
+        metadata: Promise.resolve({
+          title: "Test Book",
+          creator: "Test Author",
+          pubdate: "2012-04-03"
+        })
       },
       spine: {
         each(callback) {
@@ -649,7 +672,7 @@ assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260913-progress-layout2/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260913-progress-layout2/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260914-cover-year1/);
 assert.match(indexSource, /id="settings-palette-toggle"[^>]*aria-haspopup="listbox"/);
 assert.match(indexSource, /id="settings-palette-options"[^>]*role="listbox"/);
 assert.match(stylesSource, /\.palette-swatches i\s*\{[^}]*border-radius:\s*50%[^}]*background:\s*var\(--swatch-color\)/s);
@@ -1157,7 +1180,15 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
 
   context.existingBookFixture = [{ hash: "same", fileName: "same.epub", openedAt: 10 }];
   context.importedBookFixture = [
-    { hash: "same", fileName: "same.epub", openedAt: 20, bytes: "imported" },
+    {
+      hash: "same",
+      fileName: "same.epub",
+      title: "Imported Book",
+      author: "Imported Author",
+      publicationYear: "2021",
+      openedAt: 35.5,
+      bytes: "imported"
+    },
     ...Array.from({ length: 12 }, (_, index) => ({
       hash: `new-${index}`,
       fileName: `new-${index}.epub`,
@@ -1170,6 +1201,69 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   );
   assert.equal(mergedBookFixture.length, 12);
   assert.equal(mergedBookFixture[0].fileName, "new-11.epub");
+  const mergedImportedBook = mergedBookFixture.find((record) => record.hash === "same");
+  assert.equal(mergedImportedBook.title, "Imported Book");
+  assert.equal(mergedImportedBook.author, "Imported Author");
+  assert.equal(mergedImportedBook.publicationYear, "2021");
+  assert.equal(
+    vm.runInContext(`formatBookMetadataTitle({
+      fileName: "metadata.epub",
+      title: "  The   Dog Stars ",
+      author: " Peter Heller ",
+      publicationYear: "2012-08-07"
+    })`, context),
+    "The Dog Stars (Peter Heller - 2012)"
+  );
+  assert.equal(
+    vm.runInContext(`formatBookMetadataTitle({
+      fileName: "missing-year.epub",
+      title: "The Dog Stars",
+      author: "Peter Heller"
+    })`, context),
+    "missing-year.epub"
+  );
+  const extractedMetadata = vm.runInContext(`extractEpubBookMetadata({
+    title: "The Dog Stars",
+    creator: [{ name: "Peter Heller" }],
+    pubdate: "2012-08-07T00:00:00Z"
+  })`, context);
+  assert.equal(extractedMetadata.title, "The Dog Stars");
+  assert.equal(extractedMetadata.author, "Peter Heller");
+  assert.equal(extractedMetadata.publicationYear, "2012");
+  const opfMetadata = vm.runInContext(`extractOpfBookMetadata(\`
+    <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+      <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+        <dc:title>Green City Wars</dc:title>
+        <dc:creator>Adrian Tchaikovsky</dc:creator>
+        <meta property="dcterms:modified">2026-05-11T19:59:22Z</meta>
+        <meta property="dcterms:date">2026</meta>
+      </metadata>
+    </package>
+  \`)`, context);
+  assert.equal(opfMetadata.title, "Green City Wars");
+  assert.equal(opfMetadata.author, "Adrian Tchaikovsky");
+  assert.equal(opfMetadata.publicationYear, "2026");
+  const mergedOpfMetadata = vm.runInContext(`extractEpubBookMetadata({
+    title: "Green City Wars",
+    creator: "Adrian Tchaikovsky"
+  }, {
+    publicationYear: "2026"
+  })`, context);
+  context.mergedOpfMetadata = mergedOpfMetadata;
+  assert.equal(
+    vm.runInContext("formatBookMetadataTitle(mergedOpfMetadata)", context),
+    "Green City Wars (Adrian Tchaikovsky - 2026)"
+  );
+  assert.equal(
+    vm.runInContext(`extractOpfBookMetadata(\`
+      <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+        <dc:title>Undated Book</dc:title>
+        <dc:creator>Somebody</dc:creator>
+        <meta property="dcterms:modified">2026-05-11T19:59:22Z</meta>
+      </metadata>
+    \`).publicationYear`, context),
+    ""
+  );
 
   const speechScrollCallCount = scrollCalls.length;
   await vm.runInContext("scrollDownAfterSpeechJob(testSpeechJobs[0])", context);
@@ -1199,7 +1293,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#recent-book-list"].children.length, 1);
   assert.equal(
     elements["#recent-book-list"].children[0].children[0].textContent,
-    "Previous Book — previous.epub"
+    "previous.epub"
   );
   assert.equal(
     elements["#recent-book-list"].children[0].children[1].textContent,
@@ -1229,6 +1323,8 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     hash: serverHashFixture,
     fileName: "remote.epub",
     title: "Remote Book",
+    author: "Remote Author",
+    publicationYear: "2020",
     openedAt: Date.now() + 10_000,
     coverUrl: `/api/library/books/${serverHashFixture}/cover`,
     serverStored: true
@@ -1245,6 +1341,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(
     elements["#recent-book-list"].children[0].classList.contains("is-server-stored"),
     true
+  );
+  assert.equal(
+    elements["#recent-book-list"].children[0].children[0].textContent,
+    "Remote Book (Remote Author - 2020)"
   );
   context.manyServerBooksFixture = Array.from({ length: 14 }, (_, index) => ({
     hash: index.toString(16).padStart(64, "0"),
@@ -1297,6 +1397,112 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   `, context);
 
   context.window.JSZip = function JSZipFixture() {};
+  context.window.JSZip.loadAsync = async () => ({
+    file(name) {
+      if (name === "META-INF/container.xml") {
+        return {
+          async: async () => `
+            <container>
+              <rootfiles>
+                <rootfile full-path="EPUB/package.opf"
+                  media-type="application/oebps-package+xml"/>
+              </rootfiles>
+            </container>
+          `
+        };
+      }
+      if (name === "EPUB/package.opf") {
+        return {
+          async: async () => `
+            <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                <dc:title>Green City Wars</dc:title>
+                <dc:creator>Adrian Tchaikovsky</dc:creator>
+                <meta property="dcterms:modified">2026-05-11T19:59:22Z</meta>
+                <meta property="dcterms:date">2026</meta>
+                <meta name="cover" content="Images/cover.png"/>
+              </metadata>
+              <manifest>
+                <item id="img_cover" href="Images/cover.png" media-type="image/png"/>
+              </manifest>
+            </package>
+          `
+        };
+      }
+      if (name === "EPUB/Images/cover.png") {
+        return {
+          async: async (type) => type === "uint8array"
+            ? new Uint8Array([137, 80, 78, 71])
+            : ""
+        };
+      }
+      return null;
+    }
+  });
+  const validatedOpfMetadata = await vm.runInContext(
+    "validateEpubBytes(new Uint8Array([1, 2, 3]).buffer)",
+    context
+  );
+  assert.equal(validatedOpfMetadata.title, "Green City Wars");
+  assert.equal(validatedOpfMetadata.author, "Adrian Tchaikovsky");
+  assert.equal(validatedOpfMetadata.publicationYear, "2026");
+  const validatedCover = await validatedOpfMetadata.coverImagePromise;
+  assert.equal(validatedCover.type, "image/png");
+  assert.equal(validatedCover.path, "EPUB/Images/cover.png");
+  assert.deepEqual(Array.from(validatedCover.bytes), [137, 80, 78, 71]);
+  context.validatedCoverPromise = Promise.resolve(validatedCover);
+  assert.equal(
+    await vm.runInContext(
+      "createCoverThumbnail({ coverUrl: async () => '' }, validatedCoverPromise)",
+      context
+    ),
+    "data:image/jpeg;base64,Q09WRVI="
+  );
+
+  context.window.JSZip.loadAsync = async () => ({
+    file(name) {
+      const entries = {
+        "META-INF/container.xml": `
+          <container><rootfiles>
+            <rootfile full-path="OPS/content.opf"/>
+          </rootfiles></container>
+        `,
+        "OPS/content.opf": `
+          <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
+            <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+              <dc:title>Old Metadata</dc:title>
+              <dc:creator>Example Author</dc:creator>
+              <dc:date>0101-01-01T00:00:00+00:00</dc:date>
+            </metadata>
+            <manifest>
+              <item id="copyright" href="Text/copyright.htm"
+                media-type="application/xhtml+xml"/>
+            </manifest>
+          </package>
+        `,
+        "OPS/Text/copyright.htm": `
+          <html><body><p>Copyright © 2022 Example Author.</p></body></html>
+        `
+      };
+      return Object.hasOwn(entries, name)
+        ? { async: async () => entries[name] }
+        : null;
+    }
+  });
+  const copyrightFallbackMetadata = await vm.runInContext(
+    "validateEpubBytes(new Uint8Array([1, 2, 3]).buffer)",
+    context
+  );
+  assert.equal(copyrightFallbackMetadata.publicationYear, "2022");
+  context.copyrightFallbackMetadata = copyrightFallbackMetadata;
+  assert.equal(
+    vm.runInContext(`extractEpubBookMetadata({
+      title: "Old Metadata",
+      creator: "Example Author",
+      pubdate: "0101-01-01T00:00:00+00:00"
+    }, copyrightFallbackMetadata).publicationYear`, context),
+    "2022"
+  );
   context.window.JSZip.loadAsync = async () => {
     throw new Error("corrupt central directory");
   };
@@ -1406,13 +1612,15 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#recent-book-list"].children.length, 2);
   assert.match(
     elements["#recent-book-list"].children[0].children[0].textContent,
-    /^Test Book — test\.epub$/
+    /^Test Book \(Test Author - 2012\)$/
   );
   assert.match(
     elements["#recent-book-list"].children[0].children[1].textContent,
     /^\(\d+%(?:, \d+\/\d+)?\)$/
   );
   assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).fileName, "test.epub");
+  assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).author, "Test Author");
+  assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).publicationYear, "2012");
 
   assert.equal(elements["#viewer"].listeners.has("wheel"), false);
   assert.equal(elements["#viewer"].listeners.has("pointerdown"), false);
@@ -1813,11 +2021,11 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#recent-book-list"].children.length, 4);
   assert.match(
     elements["#recent-book-list"].children[0].children[0].textContent,
-    /^Test Book — third\.epub$/
+    /^Test Book \(Test Author - 2012\)$/
   );
   assert.match(
     elements["#recent-book-list"].children[1].children[0].textContent,
-    /^Test Book — second\.epub$/
+    /^Test Book \(Test Author - 2012\)$/
   );
   assert.deepEqual(
     JSON.parse(stored.get("smooth-reader:recent-books")).map((book) => book.fileName),
@@ -1828,7 +2036,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   await wait(80);
   assert.match(
     elements["#recent-book-list"].children[0].children[0].textContent,
-    /^Test Book — second\.epub$/
+    /^Test Book \(Test Author - 2012\)$/
   );
   assert.equal(renderedSections.length, 10);
   assert.equal(context.document.documentElement.dataset.palette, "nord");

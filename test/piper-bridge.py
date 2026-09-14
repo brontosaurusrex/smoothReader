@@ -337,6 +337,8 @@ with tempfile.TemporaryDirectory() as temporary_directory:
             "hash": book_hash,
             "fileName": "tiny.epub",
             "title": "Tiny Test Book",
+            "author": "Test Author",
+            "publicationYear": "2012",
             "openedAt": 100,
             "position": {
                 "ratio": 0.4,
@@ -357,6 +359,8 @@ with tempfile.TemporaryDirectory() as temporary_directory:
             stored_state = json.loads(response.read())["state"]
             assert stored_state["position"]["scrollY"] == 300
             assert stored_state["settings"]["font"] == "alegreya"
+            assert stored_state["author"] == "Test Author"
+            assert stored_state["publicationYear"] == "2012"
 
         stale_state = {
             **state,
@@ -381,6 +385,8 @@ with tempfile.TemporaryDirectory() as temporary_directory:
             assert len(books) == 1
             assert books[0]["hash"] == book_hash
             assert books[0]["title"] == "Tiny Test Book"
+            assert books[0]["author"] == "Test Author"
+            assert books[0]["publicationYear"] == "2012"
             assert books[0]["coverUrl"].endswith(f"/{book_hash}/cover")
             assert books[0]["position"] == {
                 "ratio": 0.4,
