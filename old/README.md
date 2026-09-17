@@ -37,13 +37,35 @@ python3 -m http.server 8000
 
 Open `http://127.0.0.1:8000`, then drop or choose an EPUB. `make run` does the same thing.
 
-The opening screen shows up to 12 recently opened books with sharp cover thumbnails generated from each EPUB at up to 600 × 900 px. EPUB files, reading positions, and preferences stay in that browser's local storage/IndexedDB. Browser Back returns from a book to the opening screen; Forward returns to the loaded book.
+The opening screen shows the browser's 12 most recently cached books plus every
+book available in the server library. Sharp cover thumbnails are generated from
+each EPUB at up to 600 × 900 px. Browser Back returns from a book to the opening
+screen; Forward returns to the loaded book.
+
+Each home-screen cover shows `Title (Author - Year)` when all three EPUB metadata
+fields are available. Publication years stored as either `dc:date` or EPUB 3
+`meta property="dcterms:date"` are supported; the OPF modification timestamp is
+never treated as the publication year. If the OPF date is absent or an invalid
+placeholder, likely copyright and publication pages are checked for an
+explicitly labelled year. If anything is still missing, the filename is shown
+instead, with the saved percentage
+and, once the book has been indexed by this version, an approximate page such
+as `(34%, 34/233)` on the line beneath it. In the reader, the simulated page is
+shown above the bottom-right percentage.
+One simulated page equals 2,000 normalized text characters, including ordinary
+single spaces; images do not add pages.
 
 `MANAGE LIBRARY` on the opening screen lets you select one or more books.
 `REMOVE FROM THIS DEVICE` deletes their local EPUBs, thumbnails, positions, and
 per-book settings. When the server library is available, it also provides
-`STORE ON SERVER` and `REMOVE FROM SERVER`. A thin outline identifies books
-stored on the server.
+`STORE ON SERVER` and `REMOVE FROM SERVER`. Cover outlines identify whether a
+book is server-backed or client-only.
+
+The browser keeps at most 12 EPUB files locally. Opening another book evicts the
+least-recently opened local cache entry. A server-backed book remains visible
+with its server cover and downloads into the browser cache again when clicked.
+A white cover outline denotes server storage; a same-width black outline denotes
+a client-only book. Only `REMOVE FROM SERVER` deletes the server copy.
 
 ## Settings
 
@@ -81,7 +103,7 @@ All selectable fonts are self-hosted in `vendor/fonts`; the app makes no Google 
 - the current and saved reading position for every remembered book
 - every per-book reader setting, including typography, appearance, and Piper controls
 
-Import merges the backup into the current browser rather than clearing it. Duplicate books are matched by their content hash, existing cached data is preserved, and the newer timestamp wins when both sides contain a reading position. If the combined library exceeds 12 books, the 12 most recently opened remain in the accessible cache.
+Import merges the backup into the current browser rather than clearing it. Duplicate books are matched by their content hash, existing cached data is preserved, and the newer timestamp wins when both sides contain a reading position. If the combined browser cache exceeds 12 books, the 12 most recently opened remain cached locally; server books remain listed separately.
 
 This backs up browser-side Smooth Reader data. It does not export generated audio from the server-side Piper cache.
 

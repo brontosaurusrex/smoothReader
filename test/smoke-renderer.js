@@ -72,18 +72,6 @@ const makeElement = () => {
       this.clickCount = (this.clickCount || 0) + 1;
     },
     load() {},
-    getContext() {
-      return {
-        fillStyle: "",
-        imageSmoothingEnabled: false,
-        imageSmoothingQuality: "low",
-        fillRect() {},
-        drawImage() {}
-      };
-    },
-    toDataURL() {
-      return "data:image/jpeg;base64,Q09WRVI=";
-    },
     canPlayType(type) {
       return type.includes("opus") ? "probably" : "";
     },
@@ -184,9 +172,7 @@ const elements = {
   "#speech-overlay-stop": makeElement(),
   "#speech-overlay-home": makeElement(),
   "#speech-audio": makeElement(),
-  "#reading-location": makeElement(),
   "#reading-progress": makeElement(),
-  "#reading-pages": makeElement(),
   "#speech-marker": makeElement()
 };
 
@@ -202,8 +188,7 @@ elements["#settings-speech-speaker-row"].hidden = true;
 elements["#library-manage-actions"].hidden = true;
 elements["#start-store-server"].hidden = true;
 elements["#start-remove-server"].hidden = true;
-elements["#reading-location"].hidden = true;
-elements["#reading-pages"].hidden = true;
+elements["#reading-progress"].hidden = true;
 elements["#speech-voice"].hidden = true;
 elements["#speech-controls"].hidden = true;
 elements["#speech-marker"].hidden = true;
@@ -519,13 +504,6 @@ const context = vm.createContext({
           : { ok: true }
       });
     },
-    async createImageBitmap(blob) {
-      return {
-        width: blob.size > 0 ? 1200 : 1,
-        height: blob.size > 0 ? 1800 : 1,
-        close() {}
-      };
-    },
     requestAnimationFrame(callback) {
       return setTimeout(() => callback(Date.now()), 0);
     },
@@ -568,11 +546,7 @@ const context = vm.createContext({
       opened: Promise.resolve(),
       ready: Promise.resolve(),
       loaded: {
-        metadata: Promise.resolve({
-          title: "Test Book",
-          creator: "Test Author",
-          pubdate: "2012-04-03"
-        })
+        metadata: Promise.resolve({ title: "Test Book" })
       },
       spine: {
         each(callback) {
@@ -623,8 +597,6 @@ assert.match(indexSource, /Alt\+Shift\+M/);
 assert.match(indexSource, /id="settings-menu"/);
 assert.match(indexSource, /id="settings-width"/);
 assert.match(indexSource, /id="reading-progress"/);
-assert.match(indexSource, /id="reading-pages"[^>]*aria-label="Approximate page"/);
-assert.match(indexSource, /id="reading-location"[^>]*aria-label="Reading location"/);
 assert.match(indexSource, /id="progress-stack"/);
 assert.match(indexSource, /id="speech-voice"/);
 assert.doesNotMatch(indexSource, /id="speech-progress"/);
@@ -671,22 +643,13 @@ assert.doesNotMatch(indexSource, /id="start-settings-scope"/);
 assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260913-progress-layout2/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260914-cover-year1/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260912-palette-swatches1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20260912-palette-swatches1/);
 assert.match(indexSource, /id="settings-palette-toggle"[^>]*aria-haspopup="listbox"/);
 assert.match(indexSource, /id="settings-palette-options"[^>]*role="listbox"/);
 assert.match(stylesSource, /\.palette-swatches i\s*\{[^}]*border-radius:\s*50%[^}]*background:\s*var\(--swatch-color\)/s);
 assert.equal(context.window.history.scrollRestoration, "manual");
 assert.equal(vm.runInContext("MAX_RECENT_BOOKS", context), 12);
-assert.equal(vm.runInContext("SIMULATED_PAGE_CHARACTERS", context), 2000);
-assert.equal(vm.runInContext("normalizedCharacterCount('  One   two   three  ')", context), 13);
-assert.equal(
-  vm.runInContext(
-    "JSON.stringify(simulatedPageLocation({ characterOffset: 68000, characterCount: 466000 }))",
-    context
-  ),
-  JSON.stringify({ current: 34, total: 233 })
-);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_WIDTH", context), 600);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_MAX_HEIGHT", context), 900);
 assert.equal(vm.runInContext("COVER_THUMBNAIL_QUALITY", context), 0.86);
@@ -778,8 +741,7 @@ assert.match(stylesSource, /"EnvyCodeR Nerd Font"/);
 assert.match(stylesSource, /--ui-font:\s*"EnvyCodeR Nerd Font"/);
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-family:\s*var\(--ui-font\)/s);
 assert.match(stylesSource, /#settings-menu[^{]*\{[^}]*font-family:\s*var\(--ui-font\)/s);
-assert.match(stylesSource, /#reading-location,\s*#speech-voice[^{]*\{[^}]*font-family:\s*var\(--reader-font\)/s);
-assert.match(stylesSource, /#reading-pages\s*\{[^}]*font-size:\s*0\.86rem/s);
+assert.match(stylesSource, /#reading-progress,\s*#speech-voice[^{]*\{[^}]*font-family:\s*var\(--reader-font\)/s);
 assert.match(stylesSource, /data-font="system-sans"[\s\S]*--reader-font:\s*system-ui, -apple-system, "Segoe UI", sans-serif/);
 assert.match(stylesSource, /"Cascadia Mono"/);
 assert.match(stylesSource, /@supports \(color: color-mix\(in srgb, white, black\)\)/);
@@ -824,7 +786,6 @@ assert.ok(indexSource.indexOf('id="speech-controls"') < indexSource.indexOf('id=
 assert.ok(indexSource.indexOf('id="fullscreen-toggle"') < indexSource.indexOf('id="speech-controls"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-pause"') < indexSource.indexOf('id="speech-overlay-stop"'));
 assert.ok(indexSource.indexOf('id="speech-overlay-stop"') < indexSource.indexOf('id="speech-overlay-home"'));
-assert.ok(indexSource.indexOf('id="reading-pages"') < indexSource.indexOf('id="reading-progress"'));
 assert.ok(indexSource.indexOf('id="reading-progress"') < indexSource.indexOf('id="speech-voice"'));
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*font-size:\s*clamp\(16px, 1\.2vw, 20px\)/s);
 assert.match(stylesSource, /#drop-zone[^{]*\{[^}]*position:\s*relative[^}]*place-content:\s*start center[^}]*min-height:\s*100dvh[^}]*overflow:\s*visible/s);
@@ -848,10 +809,7 @@ assert.match(stylesSource, /#recent-book-list \.recent-book::before[^{]*\{[^}]*w
 assert.match(stylesSource, /#recent-book-list \.recent-book[^{]*\{[^}]*text-align:\s*left/s);
 assert.match(stylesSource, /#recent-book-list\.is-managing \.recent-book\.is-selected/);
 assert.match(stylesSource, /#library-manage-actions/);
-assert.match(stylesSource, /\.recent-book\.is-server-stored::before[^{]*\{[^}]*border:\s*3px solid #e5e9f0[^}]*box-shadow:\s*inset/s);
-assert.match(stylesSource, /\.recent-book\.is-client-only::before[^{]*\{[^}]*border:\s*3px solid #080a0d[^}]*box-shadow:\s*inset/s);
-assert.match(stylesSource, /\.recent-book-title,\s*#recent-book-list \.recent-book-location[^{]*\{[^}]*display:\s*block/s);
-assert.match(stylesSource, /:root\[data-view="home"\] #progress-stack[^{]*\{[^}]*right:\s*calc\(2\.5rem[^}]*bottom:\s*calc\(2\.5rem/s);
+assert.match(stylesSource, /\.recent-book\.is-server-stored::before/);
 
 assert.equal(
   JSON.stringify(vm.runInContext("splitSpeechText('Dr. One. Mr. Two.', 1, 12)", context)),
@@ -1180,15 +1138,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
 
   context.existingBookFixture = [{ hash: "same", fileName: "same.epub", openedAt: 10 }];
   context.importedBookFixture = [
-    {
-      hash: "same",
-      fileName: "same.epub",
-      title: "Imported Book",
-      author: "Imported Author",
-      publicationYear: "2021",
-      openedAt: 35.5,
-      bytes: "imported"
-    },
+    { hash: "same", fileName: "same.epub", openedAt: 20, bytes: "imported" },
     ...Array.from({ length: 12 }, (_, index) => ({
       hash: `new-${index}`,
       fileName: `new-${index}.epub`,
@@ -1201,69 +1151,6 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   );
   assert.equal(mergedBookFixture.length, 12);
   assert.equal(mergedBookFixture[0].fileName, "new-11.epub");
-  const mergedImportedBook = mergedBookFixture.find((record) => record.hash === "same");
-  assert.equal(mergedImportedBook.title, "Imported Book");
-  assert.equal(mergedImportedBook.author, "Imported Author");
-  assert.equal(mergedImportedBook.publicationYear, "2021");
-  assert.equal(
-    vm.runInContext(`formatBookMetadataTitle({
-      fileName: "metadata.epub",
-      title: "  The   Dog Stars ",
-      author: " Peter Heller ",
-      publicationYear: "2012-08-07"
-    })`, context),
-    "The Dog Stars (Peter Heller - 2012)"
-  );
-  assert.equal(
-    vm.runInContext(`formatBookMetadataTitle({
-      fileName: "missing-year.epub",
-      title: "The Dog Stars",
-      author: "Peter Heller"
-    })`, context),
-    "missing-year.epub"
-  );
-  const extractedMetadata = vm.runInContext(`extractEpubBookMetadata({
-    title: "The Dog Stars",
-    creator: [{ name: "Peter Heller" }],
-    pubdate: "2012-08-07T00:00:00Z"
-  })`, context);
-  assert.equal(extractedMetadata.title, "The Dog Stars");
-  assert.equal(extractedMetadata.author, "Peter Heller");
-  assert.equal(extractedMetadata.publicationYear, "2012");
-  const opfMetadata = vm.runInContext(`extractOpfBookMetadata(\`
-    <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
-      <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-        <dc:title>Green City Wars</dc:title>
-        <dc:creator>Adrian Tchaikovsky</dc:creator>
-        <meta property="dcterms:modified">2026-05-11T19:59:22Z</meta>
-        <meta property="dcterms:date">2026</meta>
-      </metadata>
-    </package>
-  \`)`, context);
-  assert.equal(opfMetadata.title, "Green City Wars");
-  assert.equal(opfMetadata.author, "Adrian Tchaikovsky");
-  assert.equal(opfMetadata.publicationYear, "2026");
-  const mergedOpfMetadata = vm.runInContext(`extractEpubBookMetadata({
-    title: "Green City Wars",
-    creator: "Adrian Tchaikovsky"
-  }, {
-    publicationYear: "2026"
-  })`, context);
-  context.mergedOpfMetadata = mergedOpfMetadata;
-  assert.equal(
-    vm.runInContext("formatBookMetadataTitle(mergedOpfMetadata)", context),
-    "Green City Wars (Adrian Tchaikovsky - 2026)"
-  );
-  assert.equal(
-    vm.runInContext(`extractOpfBookMetadata(\`
-      <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-        <dc:title>Undated Book</dc:title>
-        <dc:creator>Somebody</dc:creator>
-        <meta property="dcterms:modified">2026-05-11T19:59:22Z</meta>
-      </metadata>
-    \`).publicationYear`, context),
-    ""
-  );
 
   const speechScrollCallCount = scrollCalls.length;
   await vm.runInContext("scrollDownAfterSpeechJob(testSpeechJobs[0])", context);
@@ -1292,20 +1179,12 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#recent-books"].hidden, false);
   assert.equal(elements["#recent-book-list"].children.length, 1);
   assert.equal(
-    elements["#recent-book-list"].children[0].children[0].textContent,
-    "previous.epub"
-  );
-  assert.equal(
-    elements["#recent-book-list"].children[0].children[1].textContent,
-    "(0%)"
+    elements["#recent-book-list"].children[0].textContent,
+    "Previous Book — previous.epub"
   );
   assert.equal(elements["#recent-book-list"].children[0].disabled, false);
   assert.equal(
     elements["#recent-book-list"].children[0].classList.contains("has-cover"),
-    true
-  );
-  assert.equal(
-    elements["#recent-book-list"].children[0].classList.contains("is-client-only"),
     true
   );
   assert.match(
@@ -1323,8 +1202,6 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     hash: serverHashFixture,
     fileName: "remote.epub",
     title: "Remote Book",
-    author: "Remote Author",
-    publicationYear: "2020",
     openedAt: Date.now() + 10_000,
     coverUrl: `/api/library/books/${serverHashFixture}/cover`,
     serverStored: true
@@ -1342,37 +1219,6 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     elements["#recent-book-list"].children[0].classList.contains("is-server-stored"),
     true
   );
-  assert.equal(
-    elements["#recent-book-list"].children[0].children[0].textContent,
-    "Remote Book (Remote Author - 2020)"
-  );
-  context.manyServerBooksFixture = Array.from({ length: 14 }, (_, index) => ({
-    hash: index.toString(16).padStart(64, "0"),
-    fileName: `remote-${index}.epub`,
-    title: `Remote ${index}`,
-    openedAt: Date.now() + 20_000 + index,
-    coverUrl: `/api/library/books/${index.toString(16).padStart(64, "0")}/cover`,
-    serverStored: true
-  }));
-  vm.runInContext(`
-    serverBookInfo = manyServerBooksFixture;
-    serverBookHashes.clear();
-    serverBookInfo.forEach((record) => serverBookHashes.add(record.hash));
-    renderRecentBooks();
-  `, context);
-  assert.equal(elements["#recent-book-list"].children.length, 15);
-  assert.equal(
-    elements["#recent-book-list"].children.filter((button) =>
-      button.classList.contains("is-server-stored")
-    ).length,
-    14
-  );
-  vm.runInContext(`
-    serverBookInfo = [serverBookFixture];
-    serverBookHashes.clear();
-    serverBookHashes.add(serverBookFixture.hash);
-    renderRecentBooks();
-  `, context);
   context.serverStateFixture = {
     hash: serverHashFixture,
     position: { scrollY: 840, ratio: 0.5, savedAt: 900 },
@@ -1397,112 +1243,6 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   `, context);
 
   context.window.JSZip = function JSZipFixture() {};
-  context.window.JSZip.loadAsync = async () => ({
-    file(name) {
-      if (name === "META-INF/container.xml") {
-        return {
-          async: async () => `
-            <container>
-              <rootfiles>
-                <rootfile full-path="EPUB/package.opf"
-                  media-type="application/oebps-package+xml"/>
-              </rootfiles>
-            </container>
-          `
-        };
-      }
-      if (name === "EPUB/package.opf") {
-        return {
-          async: async () => `
-            <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
-              <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-                <dc:title>Green City Wars</dc:title>
-                <dc:creator>Adrian Tchaikovsky</dc:creator>
-                <meta property="dcterms:modified">2026-05-11T19:59:22Z</meta>
-                <meta property="dcterms:date">2026</meta>
-                <meta name="cover" content="Images/cover.png"/>
-              </metadata>
-              <manifest>
-                <item id="img_cover" href="Images/cover.png" media-type="image/png"/>
-              </manifest>
-            </package>
-          `
-        };
-      }
-      if (name === "EPUB/Images/cover.png") {
-        return {
-          async: async (type) => type === "uint8array"
-            ? new Uint8Array([137, 80, 78, 71])
-            : ""
-        };
-      }
-      return null;
-    }
-  });
-  const validatedOpfMetadata = await vm.runInContext(
-    "validateEpubBytes(new Uint8Array([1, 2, 3]).buffer)",
-    context
-  );
-  assert.equal(validatedOpfMetadata.title, "Green City Wars");
-  assert.equal(validatedOpfMetadata.author, "Adrian Tchaikovsky");
-  assert.equal(validatedOpfMetadata.publicationYear, "2026");
-  const validatedCover = await validatedOpfMetadata.coverImagePromise;
-  assert.equal(validatedCover.type, "image/png");
-  assert.equal(validatedCover.path, "EPUB/Images/cover.png");
-  assert.deepEqual(Array.from(validatedCover.bytes), [137, 80, 78, 71]);
-  context.validatedCoverPromise = Promise.resolve(validatedCover);
-  assert.equal(
-    await vm.runInContext(
-      "createCoverThumbnail({ coverUrl: async () => '' }, validatedCoverPromise)",
-      context
-    ),
-    "data:image/jpeg;base64,Q09WRVI="
-  );
-
-  context.window.JSZip.loadAsync = async () => ({
-    file(name) {
-      const entries = {
-        "META-INF/container.xml": `
-          <container><rootfiles>
-            <rootfile full-path="OPS/content.opf"/>
-          </rootfiles></container>
-        `,
-        "OPS/content.opf": `
-          <package xmlns="http://www.idpf.org/2007/opf" version="2.0">
-            <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-              <dc:title>Old Metadata</dc:title>
-              <dc:creator>Example Author</dc:creator>
-              <dc:date>0101-01-01T00:00:00+00:00</dc:date>
-            </metadata>
-            <manifest>
-              <item id="copyright" href="Text/copyright.htm"
-                media-type="application/xhtml+xml"/>
-            </manifest>
-          </package>
-        `,
-        "OPS/Text/copyright.htm": `
-          <html><body><p>Copyright © 2022 Example Author.</p></body></html>
-        `
-      };
-      return Object.hasOwn(entries, name)
-        ? { async: async () => entries[name] }
-        : null;
-    }
-  });
-  const copyrightFallbackMetadata = await vm.runInContext(
-    "validateEpubBytes(new Uint8Array([1, 2, 3]).buffer)",
-    context
-  );
-  assert.equal(copyrightFallbackMetadata.publicationYear, "2022");
-  context.copyrightFallbackMetadata = copyrightFallbackMetadata;
-  assert.equal(
-    vm.runInContext(`extractEpubBookMetadata({
-      title: "Old Metadata",
-      creator: "Example Author",
-      pubdate: "0101-01-01T00:00:00+00:00"
-    }, copyrightFallbackMetadata).publicationYear`, context),
-    "2022"
-  );
   context.window.JSZip.loadAsync = async () => {
     throw new Error("corrupt central directory");
   };
@@ -1590,7 +1330,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#reader"].hidden, false);
   assert.equal(elements["#drop-zone"].hidden, true);
   assert.equal(elements["#settings-menu"].hidden, false);
-  assert.equal(elements["#reading-location"].hidden, false);
+  assert.equal(elements["#reading-progress"].hidden, false);
   assert.equal(elements["#speech-controls"].hidden, false);
   assert.equal(elements["#speech-overlay-pause"].hidden, false);
   assert.equal(elements["#speech-overlay-stop"].hidden, false);
@@ -1610,17 +1350,11 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(unloadedSections, 2);
   assert.equal(context.document.title, "Test Book — Smooth Reader");
   assert.equal(elements["#recent-book-list"].children.length, 2);
-  assert.match(
-    elements["#recent-book-list"].children[0].children[0].textContent,
-    /^Test Book \(Test Author - 2012\)$/
-  );
-  assert.match(
-    elements["#recent-book-list"].children[0].children[1].textContent,
-    /^\(\d+%(?:, \d+\/\d+)?\)$/
+  assert.equal(
+    elements["#recent-book-list"].children[0].textContent,
+    "Test Book — test.epub"
   );
   assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).fileName, "test.epub");
-  assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).author, "Test Author");
-  assert.equal(JSON.parse(stored.get("smooth-reader:last-book")).publicationYear, "2012");
 
   assert.equal(elements["#viewer"].listeners.has("wheel"), false);
   assert.equal(elements["#viewer"].listeners.has("pointerdown"), false);
@@ -1687,13 +1421,6 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   windowListeners.get("scroll")();
   await wait(220);
   assert.equal(elements["#reading-progress"].textContent, "36%");
-  vm.runInContext(`
-    activeBookCharacterCount = 466000;
-    updateReadingProgress({ ratio: 0.36, characterOffset: 68000, characterCount: 466000 });
-  `, context);
-  assert.equal(elements["#reading-pages"].textContent, "34/233");
-  assert.equal(elements["#reading-pages"].hidden, false);
-  vm.runInContext("activeBookCharacterCount = 0", context);
 
   const storedPositionEntry = [...stored.entries()]
     .find(([key]) => key.startsWith("smooth-reader:position:"));
@@ -2019,13 +1746,13 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   await wait(80);
 
   assert.equal(elements["#recent-book-list"].children.length, 4);
-  assert.match(
-    elements["#recent-book-list"].children[0].children[0].textContent,
-    /^Test Book \(Test Author - 2012\)$/
+  assert.equal(
+    elements["#recent-book-list"].children[0].textContent,
+    "Test Book — third.epub"
   );
-  assert.match(
-    elements["#recent-book-list"].children[1].children[0].textContent,
-    /^Test Book \(Test Author - 2012\)$/
+  assert.equal(
+    elements["#recent-book-list"].children[1].textContent,
+    "Test Book — second.epub"
   );
   assert.deepEqual(
     JSON.parse(stored.get("smooth-reader:recent-books")).map((book) => book.fileName),
@@ -2034,9 +1761,9 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
 
   elements["#recent-book-list"].children[1].listeners.get("click")();
   await wait(80);
-  assert.match(
-    elements["#recent-book-list"].children[0].children[0].textContent,
-    /^Test Book \(Test Author - 2012\)$/
+  assert.equal(
+    elements["#recent-book-list"].children[0].textContent,
+    "Test Book — second.epub"
   );
   assert.equal(renderedSections.length, 10);
   assert.equal(context.document.documentElement.dataset.palette, "nord");
@@ -2113,7 +1840,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#drop-zone"].hidden, false);
   assert.equal(elements["#reader"].hidden, true);
   assert.equal(elements["#settings-menu"].hidden, true);
-  assert.equal(elements["#reading-location"].hidden, true);
+  assert.equal(elements["#reading-progress"].hidden, true);
   assert.equal(elements["#recent-book-list"].children.length, 5);
   assert.equal(context.document.title, "Smooth Reader");
   assert.equal(context.window.history.state.view, "home");

@@ -75,7 +75,9 @@ const speechAudio = document.querySelector("#speech-audio");
 const settingsHome = document.querySelector("#settings-home");
 const settingsOpen = document.querySelector("#settings-open");
 const settingsResetBook = document.querySelector("#settings-reset-book");
+const readingLocation = document.querySelector("#reading-location");
 const readingProgress = document.querySelector("#reading-progress");
+const readingPages = document.querySelector("#reading-pages");
 const speechVoice = document.querySelector("#speech-voice");
 const speechControls = document.querySelector("#speech-controls");
 const speechOverlayPause = document.querySelector("#speech-overlay-pause");
@@ -104,7 +106,8 @@ const LAST_BOOK_STORE = "books";
 const LAST_BOOK_RECORD = "last-opened";
 const RECENT_BOOKS_RECORD = "recent-books";
 const MAX_RECENT_BOOKS = 12;
-const COVER_THUMBNAIL_VERSION = 2;
+const SIMULATED_PAGE_CHARACTERS = 2_000;
+const COVER_THUMBNAIL_VERSION = 3;
 const COVER_THUMBNAIL_MAX_WIDTH = 600;
 const COVER_THUMBNAIL_MAX_HEIGHT = 900;
 const COVER_THUMBNAIL_QUALITY = 0.86;
@@ -210,6 +213,7 @@ let serverLibraryAvailable = false;
 let serverLibraryBusy = false;
 let serverBookInfo = [];
 const serverBookHashes = new Set();
+let activeBookCharacterCount = 0;
 let serverStateSyncTimer = null;
 const serverStateSyncing = new Map();
 let pendingLayoutAnchor = null;
@@ -377,6 +381,411 @@ const cachedRecordFor = (record) => cachedRecentBooks.find((candidate) =>
   booksMatch(record, candidate)
 );
 
+const positionKey = (hash) => `${POSITION_PREFIX}${hash}`;
+
+const loadPosition = (hash) => {
+  try {
+    const stored = localStorage.getItem(positionKey(hash));
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizedCharacterCount = (text) => String(text || "")
+  .replace(/\s+/g, " ")
+  .trim()
+  .length;
+
+const normalizedMetadataText = (value) => {
+  if (Array.isArray(value)) {
+    return value.map(normalizedMetadataText).filter(Boolean).join(", ");
+  }
+  if (value && typeof value === "object") {
+    for (const key of ["name", "value", "text", "#text", "_"]) {
+      const text = normalizedMetadataText(value[key]);
+      if (text) return text;
+    }
+    return "";
+  }
+  return String(value || "").replace(/\s+/g, " ").trim();
+};
+
+const publicationYearFrom = (value) => {
+  const match = normalizedMetadataText(value).match(/\b([12]\d{3})\b/);
+  return match?.[1] || "";
+};
+
+const decodeXmlText = (value) => String(value || "")
+  .replace(/<[^>]*>/g, " ")
+  .replace(/&#x([0-9a-f]+);/gi, (_, digits) =>
+    String.fromCodePoint(Number.parseInt(digits, 16)))
+  .replace(/&#([0-9]+);/g, (_, digits) =>
+    String.fromCodePoint(Number.parseInt(digits, 10)))
+  .replace(/&quot;/gi, '"')
+  .replace(/&apos;/gi, "'")
+  .replace(/&lt;/gi, "<")
+  .replace(/&gt;/gi, ">")
+  .replace(/&amp;/gi, "&")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const xmlTagAttributes = (tagSource) => {
+  const attributes = {};
+  for (const match of String(tagSource || "").matchAll(
+    /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+  )) {
+    attributes[match[1].toLowerCase()] = decodeXmlText(match[2] ?? match[3]);
+  }
+  return attributes;
+};
+
+const opfManifestItems = (packageXml) => {
+  const manifestSource = String(packageXml || "").match(
+    /<(?:[\w.-]+:)?manifest\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?manifest\s*>/i
+  )?.[1] || "";
+  return Array.from(manifestSource.matchAll(/<(?:[\w.-]+:)?item\b[^>]*\/?>/gi))
+    .map((match) => xmlTagAttributes(match[0]))
+    .filter((item) => item.href);
+};
+
+const archivePathFrom = (basePath, relativeHref) => {
+  const href = decodeXmlText(relativeHref).replace(/\\/g, "/").split(/[?#]/, 1)[0];
+  if (!href) return "";
+  const parts = href.startsWith("/")
+    ? []
+    : String(basePath || "").replace(/\\/g, "/").split("/").slice(0, -1);
+  for (const part of href.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  }
+  return parts.join("/");
+};
+
+const archiveEntryForPath = (archive, path) => {
+  if (!path) return null;
+  const direct = archive.file(path);
+  if (direct) return { entry: direct, path };
+  try {
+    const decodedPath = decodeURIComponent(path);
+    const decoded = decodedPath !== path ? archive.file(decodedPath) : null;
+    return decoded ? { entry: decoded, path: decodedPath } : null;
+  } catch {
+    return null;
+  }
+};
+
+const imageMimeTypeFor = (path, declaredType = "") => {
+  if (String(declaredType).toLowerCase().startsWith("image/")) return declaredType;
+  const extension = String(path || "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+  return ({
+    avif: "image/avif",
+    gif: "image/gif",
+    jpeg: "image/jpeg",
+    jpg: "image/jpeg",
+    png: "image/png",
+    svg: "image/svg+xml",
+    webp: "image/webp"
+  })[extension] || "";
+};
+
+const plausiblePublicationYearFrom = (value) => {
+  const year = Number(publicationYearFrom(value));
+  return year >= 1450 && year <= new Date().getFullYear() + 1 ? String(year) : "";
+};
+
+const publicationYearFromDocument = (markup) => {
+  const text = decodeXmlText(markup);
+  const patterns = [
+    /(?:copyright\s*)?(?:©|&copy;|\(c\))\s*([12]\d{3})/i,
+    /\bcopyright\D{0,24}([12]\d{3})\b/i,
+    /\b(?:first\s+published|published|publication(?:\s+date)?|first\s+edition)\D{0,40}([12]\d{3})\b/i,
+    /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+([12]\d{3})\s*:\s*(?:first|\d+(?:st|nd|rd|th))\s+(?:edition|printing)/i
+  ];
+  for (const pattern of patterns) {
+    const year = plausiblePublicationYearFrom(text.match(pattern)?.[1]);
+    if (year) return year;
+  }
+  return "";
+};
+
+const extractOpfBookMetadata = (packageXml) => {
+  const source = String(packageXml || "");
+  if (!source) return {};
+
+  if (typeof DOMParser === "function") {
+    try {
+      const document = new DOMParser().parseFromString(source, "application/xml");
+      if (!document.querySelector("parsererror")) {
+        const metadata = Array.from(document.getElementsByTagName("*")).find(
+          (element) => element.localName?.toLowerCase() === "metadata"
+        );
+        if (metadata) {
+          const elements = Array.from(metadata.getElementsByTagName("*"));
+          const dcText = (localName) => normalizedMetadataText(
+            elements.find((element) =>
+              element.localName?.toLowerCase() === localName &&
+              (element.namespaceURI === "http://purl.org/dc/elements/1.1/" ||
+                element.prefix?.toLowerCase() === "dc")
+            )?.textContent
+          );
+          const propertyText = (...properties) => normalizedMetadataText(
+            elements.find((element) =>
+              element.localName?.toLowerCase() === "meta" &&
+              properties.includes((element.getAttribute("property") || "").toLowerCase())
+            )?.textContent
+          );
+          return {
+            title: dcText("title"),
+            author: dcText("creator"),
+            publicationYear: plausiblePublicationYearFrom(dcText("date")) ||
+              plausiblePublicationYearFrom(
+                propertyText("dcterms:issued", "dcterms:date")
+              )
+          };
+        }
+      }
+    } catch {
+      // Fall through to the small XML-text fallback below.
+    }
+  }
+
+  const metadataSource = source.match(/<(?:[\w.-]+:)?metadata\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?metadata\s*>/i)?.[1] || source;
+  const elementText = (localName) => decodeXmlText(
+    metadataSource.match(
+      new RegExp(`<(?:dc:)?${localName}\\b[^>]*>([\\s\\S]*?)<\\/(?:dc:)?${localName}\\s*>`, "i")
+    )?.[1]
+  );
+  const propertyText = (...properties) => {
+    for (const property of properties) {
+      const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const value = metadataSource.match(
+        new RegExp(`<meta\\b(?=[^>]*\\bproperty\\s*=\\s*["']${escaped}["'])[^>]*>([\\s\\S]*?)<\\/meta\\s*>`, "i")
+      )?.[1];
+      if (value) return decodeXmlText(value);
+    }
+    return "";
+  };
+  return {
+    title: elementText("title"),
+    author: elementText("creator"),
+    publicationYear: plausiblePublicationYearFrom(elementText("date")) ||
+      plausiblePublicationYearFrom(
+        propertyText("dcterms:issued", "dcterms:date")
+      )
+  };
+};
+
+const opfMetaAttributes = (packageXml) => Array.from(
+  String(packageXml || "").matchAll(/<(?:[\w.-]+:)?meta\b[^>]*\/?>/gi)
+).map((match) => xmlTagAttributes(match[0]));
+
+const opfGuideReferences = (packageXml) => {
+  const guideSource = String(packageXml || "").match(
+    /<(?:[\w.-]+:)?guide\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?guide\s*>/i
+  )?.[1] || "";
+  return Array.from(guideSource.matchAll(/<(?:[\w.-]+:)?reference\b[^>]*\/?>/gi))
+    .map((match) => xmlTagAttributes(match[0]))
+    .filter((reference) => reference.href);
+};
+
+const uniqueResourceCandidates = (candidates) => {
+  const seen = new Set();
+  return candidates.filter((candidate) => {
+    const key = `${candidate.href || ""}\n${candidate.type || ""}`;
+    if (!candidate.href || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const publicationYearFromArchive = async (archive, packagePath, packageXml) => {
+  const manifestItems = opfManifestItems(packageXml);
+  const guideReferences = opfGuideReferences(packageXml);
+  const likelyNames = /(?:copyright|copyrt|colophon|publication|title[-_. ]?page)/i;
+  const candidates = uniqueResourceCandidates([
+    ...manifestItems
+      .filter((item) =>
+        /(?:xhtml|html)/i.test(item["media-type"] || "") &&
+        likelyNames.test(`${item.id || ""} ${item.href || ""}`)
+      )
+      .map((item) => ({ href: item.href, type: item["media-type"] })),
+    ...guideReferences
+      .filter((reference) =>
+        /(?:copyright|colophon|title-page)/i.test(reference.type || "") ||
+        likelyNames.test(`${reference.title || ""} ${reference.href || ""}`)
+      )
+      .map((reference) => ({ href: reference.href, type: "application/xhtml+xml" }))
+  ]);
+
+  for (const candidate of candidates.slice(0, 8)) {
+    const path = archivePathFrom(packagePath, candidate.href);
+    const resource = archiveEntryForPath(archive, path);
+    if (!resource) continue;
+    try {
+      const markup = await resource.entry.async("string");
+      const year = publicationYearFromDocument(markup);
+      if (year) return year;
+    } catch {
+      // Ignore an unreadable optional metadata page.
+    }
+  }
+  return "";
+};
+
+const coverImageFromArchive = async (archive, packagePath, packageXml) => {
+  const manifestItems = opfManifestItems(packageXml);
+  const manifestById = new Map(
+    manifestItems.filter((item) => item.id).map((item) => [item.id, item])
+  );
+  const coverMeta = opfMetaAttributes(packageXml).find(
+    (meta) => (meta.name || "").toLowerCase() === "cover" && meta.content
+  );
+  const metaManifestItem = coverMeta ? manifestById.get(coverMeta.content) : null;
+  const directCandidates = uniqueResourceCandidates([
+    ...manifestItems
+      .filter((item) => (item.properties || "").split(/\s+/).includes("cover-image"))
+      .map((item) => ({ href: item.href, type: item["media-type"] })),
+    ...(metaManifestItem
+      ? [{ href: metaManifestItem.href, type: metaManifestItem["media-type"] }]
+      : []),
+    ...(coverMeta ? [{ href: coverMeta.content, type: "" }] : []),
+    ...manifestItems
+      .filter((item) =>
+        (item["media-type"] || "").startsWith("image/") &&
+        /cover/i.test(`${item.id || ""} ${item.href || ""}`)
+      )
+      .map((item) => ({ href: item.href, type: item["media-type"] }))
+  ]);
+
+  const readImageCandidate = async (basePath, candidate) => {
+    const path = archivePathFrom(basePath, candidate.href);
+    const type = imageMimeTypeFor(path, candidate.type);
+    if (!type) return null;
+    const resource = archiveEntryForPath(archive, path);
+    if (!resource) return null;
+    try {
+      return {
+        bytes: await resource.entry.async("uint8array"),
+        type,
+        path: resource.path
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  for (const candidate of directCandidates) {
+    const image = await readImageCandidate(packagePath, candidate);
+    if (image) return image;
+  }
+
+  const pageCandidates = uniqueResourceCandidates([
+    ...opfGuideReferences(packageXml)
+      .filter((reference) => (reference.type || "").toLowerCase() === "cover")
+      .map((reference) => ({ href: reference.href, type: "application/xhtml+xml" })),
+    ...manifestItems
+      .filter((item) =>
+        /(?:xhtml|html)/i.test(item["media-type"] || "") &&
+        /cover/i.test(`${item.id || ""} ${item.href || ""}`)
+      )
+      .map((item) => ({ href: item.href, type: item["media-type"] }))
+  ]);
+
+  for (const page of pageCandidates) {
+    const pagePath = archivePathFrom(packagePath, page.href);
+    const pageResource = archiveEntryForPath(archive, pagePath);
+    if (!pageResource) continue;
+    try {
+      const markup = await pageResource.entry.async("string");
+      const imageTags = Array.from(markup.matchAll(
+        /<(?:[\w.-]+:)?(?:img|image|object)\b[^>]*\/?>/gi
+      ));
+      for (const match of imageTags) {
+        const attributes = xmlTagAttributes(match[0]);
+        const href = attributes.src || attributes.href || attributes["xlink:href"] ||
+          attributes.data;
+        const image = await readImageCandidate(pageResource.path, {
+          href,
+          type: attributes.type || ""
+        });
+        if (image) return image;
+      }
+    } catch {
+      // Ignore an unreadable optional cover page.
+    }
+  }
+  return null;
+};
+
+const extractEpubBookMetadata = (metadata, packageMetadata = {}) => ({
+  title: normalizedMetadataText(metadata?.title || packageMetadata.title),
+  author: normalizedMetadataText(
+    metadata?.creator || metadata?.author || packageMetadata.author
+  ),
+  publicationYear: plausiblePublicationYearFrom(
+    metadata?.pubdate || metadata?.date || metadata?.published
+  ) || plausiblePublicationYearFrom(packageMetadata.publicationYear)
+});
+
+const formatBookMetadataTitle = (record) => {
+  const title = normalizedMetadataText(record?.title);
+  const author = normalizedMetadataText(record?.author);
+  const publicationYear = publicationYearFrom(record?.publicationYear);
+  if (title && author && publicationYear) {
+    return `${title} (${author} - ${publicationYear})`;
+  }
+  return normalizedMetadataText(record?.fileName) || "Untitled EPUB";
+};
+
+const readingPositionForRecord = (record) => {
+  const localPosition = record?.hash ? loadPosition(record.hash) : null;
+  const serverPosition = record?.position && typeof record.position === "object"
+    ? record.position
+    : null;
+  if (!localPosition) return serverPosition || {};
+  if (!serverPosition) return localPosition;
+  return Number(serverPosition.savedAt) > Number(localPosition.savedAt || 0)
+    ? serverPosition
+    : localPosition;
+};
+
+const positionRatio = (position) => {
+  const storedRatio = Number(position?.ratio);
+  if (Number.isFinite(storedRatio)) return Math.max(0, Math.min(1, storedRatio));
+  const characterOffset = Number(position?.characterOffset);
+  const characterCount = Number(position?.characterCount);
+  if (Number.isFinite(characterOffset) && characterCount > 0) {
+    return Math.max(0, Math.min(1, characterOffset / characterCount));
+  }
+  return 0;
+};
+
+const simulatedPageLocation = (position, fallbackCharacterCount = 0) => {
+  const characterCount = Number(position?.characterCount) || Number(fallbackCharacterCount);
+  if (!(characterCount > 0)) return null;
+  const total = Math.max(1, Math.ceil(characterCount / SIMULATED_PAGE_CHARACTERS));
+  const storedOffset = Number(position?.characterOffset);
+  const offset = Number.isFinite(storedOffset)
+    ? Math.max(0, Math.min(characterCount, storedOffset))
+    : positionRatio(position) * characterCount;
+  const current = Math.max(
+    1,
+    Math.min(total, Math.ceil(offset / SIMULATED_PAGE_CHARACTERS))
+  );
+  return { current, total };
+};
+
+const formatBookReadingLocation = (record) => {
+  const position = readingPositionForRecord(record);
+  const percentage = Math.round(positionRatio(position) * 100);
+  const pages = simulatedPageLocation(position, record?.characterCount);
+  return pages
+    ? `(${percentage}%, ${pages.current}/${pages.total})`
+    : `(${percentage}%)`;
+};
+
 const displayedLibraryBooks = () => {
   const combined = recentBookInfo.map((record) => ({ ...record }));
   serverBookInfo.forEach((serverRecord) => {
@@ -390,6 +799,8 @@ const displayedLibraryBooks = () => {
       ...serverRecord,
       ...existing,
       title: existing.title || serverRecord.title,
+      author: existing.author || serverRecord.author,
+      publicationYear: existing.publicationYear || serverRecord.publicationYear,
       fileName: existing.fileName || serverRecord.fileName,
       openedAt: Math.max(
         Number(existing.openedAt) || 0,
@@ -400,8 +811,7 @@ const displayedLibraryBooks = () => {
     };
   });
   return combined
-    .sort((first, second) => (Number(second.openedAt) || 0) - (Number(first.openedAt) || 0))
-    .slice(0, MAX_RECENT_BOOKS);
+    .sort((first, second) => (Number(second.openedAt) || 0) - (Number(first.openedAt) || 0));
 };
 
 const setServerLibraryAvailable = (available) => {
@@ -518,24 +928,31 @@ const renderRecentBooks = () => {
     button.disabled = isBookLoading || serverLibraryBusy || (
       !libraryManageMode && !cached?.bytes && !serverStored
     );
-    button.textContent = record.title && record.title !== record.fileName
-      ? `${record.title} — ${record.fileName}`
-      : record.fileName;
+    const bookName = formatBookMetadataTitle(record);
+    const locationText = formatBookReadingLocation(record);
+    const titleLabel = document.createElement("span");
+    titleLabel.className = "recent-book-title";
+    titleLabel.textContent = bookName;
+    const locationLabel = document.createElement("span");
+    locationLabel.className = "recent-book-location";
+    locationLabel.textContent = locationText;
+    button.appendChild(titleLabel);
+    button.appendChild(locationLabel);
+    button.setAttribute("aria-label", `${bookName} · ${locationText}`);
     const cover = cached?.thumbnail || serverRecord?.coverUrl || "";
     if (cover) {
       button.classList.add("has-cover");
       button.style.setProperty("--recent-book-cover", `url("${cover}")`);
     }
     if (serverStored) button.classList.add("is-server-stored");
+    else button.classList.add("is-client-only");
     if (libraryManageMode) {
       if (isSelected) button.classList.add("is-selected");
       button.setAttribute("aria-pressed", String(isSelected));
-      button.title = `${isSelected ? "Deselect" : "Select"} ${record.title || record.fileName}`;
+      button.title = `${isSelected ? "Deselect" : "Select"} ${bookName}`;
       button.addEventListener("click", () => toggleLibraryBookSelection(record));
     } else {
-      button.title = `${serverStored ? "Server stored · " : ""}Open ${
-        record.title || record.fileName
-      }`;
+      button.title = `${serverStored ? "Server stored" : "Client only"} · ${bookName}`;
       button.addEventListener("click", () => void openLibraryBook(record));
     }
     recentBookList.appendChild(button);
@@ -615,21 +1032,39 @@ const readCachedBooks = async () => {
   return legacy?.fileName ? [legacy] : [];
 };
 
-const createCoverThumbnail = async (bookInstance) => {
+const createCoverThumbnail = async (bookInstance, archiveCoverPromise = null) => {
+  if (typeof window.createImageBitmap !== "function") return "";
+
+  let blob = null;
   if (
-    typeof bookInstance?.coverUrl !== "function" ||
-    typeof window.fetch !== "function" ||
-    typeof window.createImageBitmap !== "function"
-  ) return "";
+    typeof bookInstance?.coverUrl === "function" &&
+    typeof window.fetch === "function"
+  ) {
+    try {
+      const coverUrl = await bookInstance.coverUrl();
+      if (coverUrl) {
+        const response = await window.fetch(coverUrl);
+        const candidate = response.ok ? await response.blob() : null;
+        if (candidate?.type?.startsWith("image/")) blob = candidate;
+      }
+    } catch (error) {
+      console.warn("EPUB.js could not resolve the cover; trying the OPF fallback.", error);
+    }
+  }
+
+  if (!blob && archiveCoverPromise) {
+    try {
+      const archiveCover = await archiveCoverPromise;
+      if (archiveCover?.bytes && archiveCover?.type?.startsWith("image/")) {
+        blob = new Blob([archiveCover.bytes], { type: archiveCover.type });
+      }
+    } catch (error) {
+      console.warn("Could not read the OPF cover fallback.", error);
+    }
+  }
+  if (!blob) return "";
 
   try {
-    const coverUrl = await bookInstance.coverUrl();
-    if (!coverUrl) return "";
-    const response = await window.fetch(coverUrl);
-    if (!response.ok) return "";
-    const blob = await response.blob();
-    if (!blob?.type?.startsWith("image/")) return "";
-
     const bitmap = await window.createImageBitmap(blob);
     const scale = Math.min(
       1,
@@ -671,10 +1106,14 @@ const backfillRecentThumbnails = async () => {
     ) continue;
     let coverBook = null;
     try {
+      const packageMetadata = await validateEpubBytes(cached.bytes);
       coverBook = ePub(cached.bytes);
       await coverBook.opened;
       await coverBook.ready;
-      const thumbnail = await createCoverThumbnail(coverBook);
+      const thumbnail = await createCoverThumbnail(
+        coverBook,
+        packageMetadata.coverImagePromise
+      );
       if (thumbnail) {
         cached.thumbnail = thumbnail;
         renderRecentBooks();
@@ -1381,6 +1820,8 @@ const mergeBookCollections = (existingRecords, importedRecords) => {
       ...existing,
       fileName: existing.fileName || imported.fileName,
       title: existing.title || imported.title,
+      author: existing.author || imported.author,
+      publicationYear: existing.publicationYear || imported.publicationYear,
       openedAt: Math.max(recordOpenedAt(existing), recordOpenedAt(imported)),
       bytes: existing.bytes || imported.bytes,
       thumbnail: existing.thumbnail || imported.thumbnail,
@@ -1663,7 +2104,7 @@ const setReadingMode = (isReading) => {
   dropZone.hidden = isReading;
   reader.hidden = !isReading;
   settingsMenu.hidden = !isReading;
-  readingProgress.hidden = !isReading;
+  readingLocation.hidden = !isReading;
   if (!isReading) setSettingsOpen(false);
   syncSpeechControls();
 };
@@ -1723,27 +2164,36 @@ const showReaderView = () => {
 
 replaceHomeHistory();
 
-const updateReadingProgress = () => {
+const indexBookCharacterMetrics = () => {
+  let total = 0;
+  let hasText = false;
+  for (const chapter of viewer.children) {
+    const count = normalizedCharacterCount(chapter.textContent);
+    if (count > 0 && hasText) total += 1;
+    chapter.dataset.characterStart = String(total);
+    chapter.dataset.characterCount = String(count);
+    total += count;
+    if (count > 0) hasText = true;
+  }
+  activeBookCharacterCount = total;
+  return total;
+};
+
+const updateReadingProgress = (position = null) => {
   if (reader.hidden) return;
   const scrollRange = Math.max(
     0,
     document.documentElement.scrollHeight - window.innerHeight
   );
-  const percentage = scrollRange > 0
-    ? Math.round((window.scrollY / scrollRange) * 100)
-    : 0;
+  const ratio = scrollRange > 0 ? window.scrollY / scrollRange : 0;
+  const percentage = Math.round(ratio * 100);
   readingProgress.textContent = `${Math.max(0, Math.min(100, percentage))}%`;
-};
-
-const positionKey = (hash) => `${POSITION_PREFIX}${hash}`;
-
-const loadPosition = (hash) => {
-  try {
-    const stored = localStorage.getItem(positionKey(hash));
-    return stored ? JSON.parse(stored) : null;
-  } catch {
-    return null;
-  }
+  const pages = simulatedPageLocation(
+    position || { ratio, characterCount: activeBookCharacterCount },
+    activeBookCharacterCount
+  );
+  readingPages.hidden = !pages;
+  if (pages) readingPages.textContent = `${pages.current}/${pages.total}`;
 };
 
 const captureTextPositionAnchor = () => {
@@ -1760,9 +2210,16 @@ const captureTextPositionAnchor = () => {
     if (typeof range.selectNodeContents !== "function") return null;
     range.selectNodeContents(chapter);
     range.setEnd(node, offset);
+    const textOffset = range.toString().length;
+    const chapterStart = Number(chapter.dataset.characterStart) || 0;
+    const chapterCharacters = Number(chapter.dataset.characterCount) || 0;
     return {
       spineIndex: Number(chapter.dataset.spineIndex),
-      textOffset: range.toString().length,
+      textOffset,
+      characterOffset: chapterStart + Math.min(
+        chapterCharacters,
+        normalizedCharacterCount(range.toString())
+      ),
       viewportRatio: visibleAnchor.viewportRatio,
       placement: "first-visible-line"
     };
@@ -1825,16 +2282,31 @@ const savePositionNow = () => {
     document.documentElement.scrollHeight - window.innerHeight
   );
 
+  const ratio = scrollRange > 0 ? window.scrollY / scrollRange : 0;
+  const previousPosition = loadPosition(activeBookKey) || {};
   const capturedAnchor = captureTextPositionAnchor();
   const previousAnchor = document.visibilityState === "hidden"
-    ? loadPosition(activeBookKey)?.anchor || null
+    ? previousPosition.anchor || null
     : null;
-  localStorage.setItem(positionKey(activeBookKey), JSON.stringify({
+  const characterCount = activeBookCharacterCount ||
+    Math.max(0, Number(previousPosition.characterCount) || 0);
+  const capturedCharacterOffset = Number(capturedAnchor?.characterOffset);
+  const previousCharacterOffset = Number(previousPosition.characterOffset);
+  const characterOffset = Number.isFinite(capturedCharacterOffset)
+    ? capturedCharacterOffset
+    : document.visibilityState === "hidden" && Number.isFinite(previousCharacterOffset)
+      ? previousCharacterOffset
+      : Math.round(ratio * characterCount);
+  const position = {
     scrollY: window.scrollY,
-    ratio: scrollRange > 0 ? window.scrollY / scrollRange : 0,
+    ratio,
     anchor: capturedAnchor || previousAnchor,
+    characterOffset,
+    characterCount,
     savedAt: Date.now()
-  }));
+  };
+  localStorage.setItem(positionKey(activeBookKey), JSON.stringify(position));
+  updateReadingProgress(position);
   scheduleServerStateSync(activeBookKey);
 };
 
@@ -1868,15 +2340,23 @@ const mergeServerBookState = (bookHash, state) => {
 };
 
 const serverStateForBook = (bookHash) => {
-  const metadata = recentBookInfo.find((record) => record.hash === bookHash) ||
-    cachedRecentBooks.find((record) => record.hash === bookHash) ||
-    serverBookInfo.find((record) => record.hash === bookHash) || {};
+  const recentMetadata = recentBookInfo.find((record) => record.hash === bookHash) || {};
+  const cachedMetadata = cachedRecentBooks.find((record) => record.hash === bookHash) || {};
+  const serverMetadata = serverBookInfo.find((record) => record.hash === bookHash) || {};
   return {
     version: 1,
     hash: bookHash,
-    fileName: metadata.fileName || `${bookHash.slice(0, 12)}.epub`,
-    title: metadata.title || "",
-    openedAt: Number(metadata.openedAt) || 0,
+    fileName: recentMetadata.fileName || cachedMetadata.fileName ||
+      serverMetadata.fileName || `${bookHash.slice(0, 12)}.epub`,
+    title: recentMetadata.title || cachedMetadata.title || serverMetadata.title || "",
+    author: recentMetadata.author || cachedMetadata.author || serverMetadata.author || "",
+    publicationYear: recentMetadata.publicationYear ||
+      cachedMetadata.publicationYear || serverMetadata.publicationYear || "",
+    openedAt: Math.max(
+      Number(recentMetadata.openedAt) || 0,
+      Number(cachedMetadata.openedAt) || 0,
+      Number(serverMetadata.openedAt) || 0
+    ),
     position: loadPosition(bookHash) || {},
     settings: readBookSettings(bookHash) || {}
   };
@@ -2063,6 +2543,7 @@ const destroyCurrentBook = () => {
   }
 
   viewer.replaceChildren();
+  activeBookCharacterCount = 0;
   speechTextMaps = new WeakMap();
   chapterLookup.clear();
   window.scrollTo(0, 0);
@@ -2294,7 +2775,7 @@ const restorePosition = async (savedPosition) => {
   const storedY = Number(savedPosition?.scrollY);
 
   if (restoreTextPositionAnchor(savedPosition?.anchor)) {
-    updateReadingProgress();
+    updateReadingProgress(savedPosition);
     return;
   }
 
@@ -2308,7 +2789,7 @@ const restorePosition = async (savedPosition) => {
   }
 
   window.scrollTo(0, Math.max(0, Math.min(scrollRange, target)));
-  updateReadingProgress();
+  updateReadingProgress(savedPosition);
 };
 
 const normalizeSpeechText = (text) => String(text || "")
@@ -3600,7 +4081,7 @@ const startSpeech = async () => {
 };
 
 const validateEpubBytes = async (bytes) => {
-  if (typeof window.JSZip !== "function") return;
+  if (typeof window.JSZip !== "function") return {};
   let archive;
   try {
     archive = await withTimeout(
@@ -3618,9 +4099,29 @@ const validateEpubBytes = async (bytes) => {
     EPUB_OPEN_TIMEOUT_MS,
     "EPUB package validation timed out"
   );
-  if (!/<rootfile\b[^>]*\bfull-path\s*=\s*["'][^"']+["']/i.test(containerXml)) {
+  const packagePath = decodeXmlText(
+    containerXml.match(/<rootfile\b[^>]*\bfull-path\s*=\s*["']([^"']+)["']/i)?.[1]
+  );
+  if (!packagePath) {
     throw new Error("Invalid EPUB: package document is missing");
   }
+  const packageEntry = archive.file(packagePath);
+  if (!packageEntry) throw new Error("Invalid EPUB: package document is missing");
+  const packageXml = await withTimeout(
+    packageEntry.async("string"),
+    EPUB_OPEN_TIMEOUT_MS,
+    "EPUB package metadata timed out"
+  );
+  const packageMetadata = extractOpfBookMetadata(packageXml);
+  const coverImagePromise = coverImageFromArchive(archive, packagePath, packageXml);
+  if (!packageMetadata.publicationYear) {
+    packageMetadata.publicationYear = await publicationYearFromArchive(
+      archive,
+      packagePath,
+      packageXml
+    );
+  }
+  return { ...packageMetadata, coverImagePromise };
 };
 
 const openBook = async (file) => {
@@ -3645,7 +4146,7 @@ const openBook = async (file) => {
     const bytes = await file.arrayBuffer();
     const hash = await hashBook(bytes);
     if (generation !== loadGeneration) return;
-    await validateEpubBytes(bytes);
+    const packageMetadata = await validateEpubBytes(bytes);
     if (generation !== loadGeneration) return;
 
     destroyCurrentBook();
@@ -3661,7 +4162,10 @@ const openBook = async (file) => {
       "EPUB opening timed out"
     );
     if (generation !== loadGeneration) return;
-    const coverThumbnailPromise = createCoverThumbnail(book);
+    const coverThumbnailPromise = createCoverThumbnail(
+      book,
+      packageMetadata.coverImagePromise
+    );
 
     const sections = [];
     book.spine.each((section) => {
@@ -3681,6 +4185,7 @@ const openBook = async (file) => {
     }
 
     if (generation !== loadGeneration) return;
+    indexBookCharacterMetrics();
     await restorePosition(savedPosition);
     captureStableResizeAnchor();
     showStatus(
@@ -3693,10 +4198,12 @@ const openBook = async (file) => {
       EPUB_OPEN_TIMEOUT_MS,
       "EPUB metadata could not be loaded"
     );
+    const epubMetadata = extractEpubBookMetadata(metadata, packageMetadata);
     const lastBookInfo = {
       hash,
       fileName: file.name,
-      title: metadata?.title || "",
+      ...epubMetadata,
+      characterCount: activeBookCharacterCount,
       openedAt: Date.now()
     };
     localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(lastBookInfo));

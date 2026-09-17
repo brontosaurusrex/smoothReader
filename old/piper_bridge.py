@@ -144,6 +144,16 @@ class LibraryController:
                     continue
                 state = self._read_json(book_directory / "state.json")
                 position = state.get("position") if isinstance(state.get("position"), dict) else {}
+                position_summary = {
+                    key: position[key]
+                    for key in (
+                        "ratio",
+                        "characterOffset",
+                        "characterCount",
+                        "savedAt",
+                    )
+                    if isinstance(position.get(key), (int, float))
+                }
                 opened_at = self._timestamp(state.get("openedAt"))
                 saved_at = self._timestamp(position.get("savedAt"))
                 updated_at = self._timestamp(state.get("updatedAt"))
@@ -152,8 +162,13 @@ class LibraryController:
                     "fileName": self._limited_text(state.get("fileName"), 512)
                     or f"{book_directory.name[:12]}.epub",
                     "title": self._limited_text(state.get("title"), 1024),
+                    "author": self._limited_text(state.get("author"), 1024),
+                    "publicationYear": self._limited_text(
+                        state.get("publicationYear"), 4
+                    ),
                     "openedAt": opened_at,
                     "updatedAt": max(updated_at, saved_at, opened_at),
+                    "position": position_summary,
                     "coverUrl": (
                         f"/api/library/books/{book_directory.name}/cover"
                         if (book_directory / "cover.jpg").is_file()
@@ -221,6 +236,14 @@ class LibraryController:
                 ) or f"{book_hash[:12]}.epub",
                 "title": self._limited_text(
                     incoming.get("title") or existing.get("title"), 1024
+                ),
+                "author": self._limited_text(
+                    incoming.get("author") or existing.get("author"), 1024
+                ),
+                "publicationYear": self._limited_text(
+                    incoming.get("publicationYear")
+                    or existing.get("publicationYear"),
+                    4,
                 ),
                 "openedAt": max(
                     self._timestamp(incoming.get("openedAt")),

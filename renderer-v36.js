@@ -66,6 +66,7 @@ const settingsSpeechSpeed = document.querySelector("#settings-speech-speed");
 const settingsSpeechSpeedValue = document.querySelector("#settings-speech-speed-value");
 const settingsSpeechSpeedDown = document.querySelector("#settings-speech-speed-down");
 const settingsSpeechSpeedUp = document.querySelector("#settings-speech-speed-up");
+const settingsSpeechPocket = document.querySelector("#settings-speech-pocket");
 const settingsSpeechStart = document.querySelector("#settings-speech-start");
 const settingsSpeechPause = document.querySelector("#settings-speech-pause");
 const settingsSpeechStop = document.querySelector("#settings-speech-stop");
@@ -97,6 +98,7 @@ const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
 const LEGACY_SPEECH_POSITION_KEY = "smooth-reader:speech-position";
 const SPEECH_CENTER_OFFSET_KEY = "smooth-reader:speech-center-offset";
 const SPEECH_SPEED_KEY = "smooth-reader:speech-speed";
+const SPEECH_POCKET_KEY = "smooth-reader:speech-pocket";
 const SPEECH_SESSION_KEY = "smooth-reader:speech-session";
 const SILENT_WAV_DATA_URL = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
@@ -120,6 +122,7 @@ const SERVER_LIBRARY_UPLOAD_TIMEOUT_MS = 180_000;
 const SERVER_STATE_SYNC_DELAY_MS = 1_500;
 const HISTORY_APP = "smooth-reader";
 const SAVE_DELAY_MS = 180;
+const IMAGE_LAYOUT_WAIT_MS = 4000;
 const PAGE_SCROLL_RATIO = 0.88;
 const RIGHT_DRAG_SPEED = 1.35;
 const FIRST_VISIBLE_LINE_TOP_PADDING_PX = 12;
@@ -147,6 +150,8 @@ const DEFAULT_SPEECH_MIN_LENGTH = 150;
 const DEFAULT_SPEECH_MAX_LENGTH = 550;
 const MIN_SPEECH_MAX_LENGTH = 300;
 const MAX_SPEECH_MAX_LENGTH = 1200;
+const POCKET_SPEECH_MAX_LENGTH = 5000;
+const POCKET_SPEECH_BATCH_CHARACTERS = 24000;
 const LEGACY_DEFAULT_SPEECH_POSITION_PERCENT = 22;
 const DEFAULT_SPEECH_CENTER_OFFSET_PERCENT = 0;
 const MIN_SPEECH_CENTER_OFFSET_PERCENT = -25;
@@ -195,6 +200,8 @@ let activeBookKey = null;
 let activeBookTitle = "";
 let readerScrollBeforeHome = 0;
 let saveTimer = null;
+let lastVisiblePositionSnapshot = null;
+let lastVisibleScrollSnapshot = null;
 let statusTimer = null;
 let loadGeneration = 0;
 let isBookLoading = false;
@@ -214,7 +221,7 @@ let serverLibraryBusy = false;
 let serverBookInfo = [];
 const serverBookHashes = new Set();
 let activeBookCharacterCount = 0;
-let serverStateSyncTimer = null;
+const serverStateSyncTimers = new Map();
 const serverStateSyncing = new Map();
 let pendingLayoutAnchor = null;
 let layoutChangeGeneration = 0;
@@ -280,6 +287,7 @@ const savedSpeechCenterOffset = Number.parseInt(
   10
 );
 const savedSpeechSpeed = Number.parseInt(localStorage.getItem(SPEECH_SPEED_KEY), 10);
+const savedSpeechPocket = localStorage.getItem(SPEECH_POCKET_KEY) === "1";
 const savedLegacySpeechPosition = Number.parseInt(
   localStorage.getItem(LEGACY_SPEECH_POSITION_KEY),
   10
@@ -297,6 +305,7 @@ let speechCenterOffsetPercent = Math.max(
   MIN_SPEECH_CENTER_OFFSET_PERCENT,
   Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, initialSpeechCenterOffset)
 );
+let speechPocketMode = savedSpeechPocket;
 let speechSpeedPercent = Number.isFinite(savedSpeechSpeed)
   ? Math.max(MIN_SPEECH_SPEED_PERCENT, Math.min(MAX_SPEECH_SPEED_PERCENT, savedSpeechSpeed))
   : DEFAULT_SPEECH_SPEED_PERCENT;
@@ -1339,9 +1348,86 @@ const visibleViewportBounds = () => {
   return { top, right: left + width, bottom: top + height, left, width, height };
 };
 
+const fullyVisibleTextRect = (rectangle, viewport) => (
+  rectangle &&
+  rectangle.height > 0 &&
+  rectangle.width > 0 &&
+  rectangle.top >= viewport.top - 0.5 &&
+  rectangle.bottom <= viewport.bottom + 0.5 &&
+  rectangle.right >= viewport.left &&
+  rectangle.left <= viewport.right
+);
+
+const textNodeOffsetForLineRect = (node, lineRect) => {
+  const length = node?.textContent?.length || 0;
+  if (length <= 0) return 0;
+  const probe = document.createRange();
+  const rectangleAt = (offset) => {
+    const index = Math.max(0, Math.min(length - 1, offset));
+    probe.setStart(node, index);
+    probe.setEnd(node, index + 1);
+    return probe.getBoundingClientRect();
+  };
+
+  let low = 0;
+  let high = length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const rectangle = rectangleAt(middle);
+    if (!Number.isFinite(rectangle?.bottom) || rectangle.bottom <= lineRect.top + 0.5) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+
+  const first = Math.max(0, low - 4);
+  const last = Math.min(length - 1, low + 12);
+  for (let offset = first; offset <= last; offset += 1) {
+    const rectangle = rectangleAt(offset);
+    if (
+      rectangle?.height > 0 &&
+      rectangle.bottom > lineRect.top + 0.5 &&
+      rectangle.top < lineRect.bottom - 0.5
+    ) return offset;
+  }
+  return low;
+};
+
+const captureFirstFullyVisibleTextAnchorFromDom = (viewport) => {
+  if (typeof document.createTreeWalker !== "function") return null;
+  const chapters = [...viewer.querySelectorAll(".book-section")].filter((chapter) => {
+    const rectangle = chapter.getBoundingClientRect();
+    return rectangle.bottom > viewport.top && rectangle.top < viewport.bottom;
+  });
+
+  for (const chapter of chapters) {
+    const walker = document.createTreeWalker(chapter, 4);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent || !/\S/.test(node.textContent)) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const rectangles = [...range.getClientRects()]
+        .filter((rectangle) => fullyVisibleTextRect(rectangle, viewport))
+        .sort((first, second) => first.top - second.top || first.left - second.left);
+      const rectangle = rectangles[0];
+      if (!rectangle) continue;
+      const offset = textNodeOffsetForLineRect(node, rectangle);
+      return {
+        node,
+        offset,
+        viewportTop: rectangle.top,
+        viewportRatio: (rectangle.top - viewport.top) / Math.max(1, viewport.height)
+      };
+    }
+  }
+  return null;
+};
+
 const captureFirstFullyVisibleTextAnchor = () => {
   if (
     reader.hidden ||
+    !pageIsVisible() ||
     viewer.children.length === 0 ||
     typeof document.createRange !== "function"
   ) return null;
@@ -1363,20 +1449,7 @@ const captureFirstFullyVisibleTextAnchor = () => {
     const offset = Math.max(0, Math.min(rawOffset, node.textContent.length - 1));
     const anchor = { node, offset };
     const rectangle = getAnchorViewportRect(anchor);
-    if (!Number.isFinite(rectangle?.top)) continue;
-    const bottom = Number.isFinite(rectangle.bottom)
-      ? rectangle.bottom
-      : rectangle.top + 1;
-    const right = Number.isFinite(rectangle.right) ? rectangle.right : x + 1;
-    const left = Number.isFinite(rectangle.left) ? rectangle.left : x;
-    if (
-      bottom > rectangle.top &&
-      right > left &&
-      rectangle.top >= viewport.top - 0.5 &&
-      bottom <= viewport.bottom + 0.5 &&
-      right >= viewport.left &&
-      left <= viewport.right
-    ) {
+    if (fullyVisibleTextRect(rectangle, viewport)) {
       return {
         ...anchor,
         viewportTop: rectangle.top,
@@ -1384,7 +1457,10 @@ const captureFirstFullyVisibleTextAnchor = () => {
       };
     }
   }
-  return null;
+
+  // Mobile caret hit-testing is not reliable in every browser/layout. Fall back to
+  // the rendered DOM itself so position persistence still gets a text anchor.
+  return captureFirstFullyVisibleTextAnchorFromDom(viewport);
 };
 
 const captureLayoutAnchor = () => {
@@ -1472,12 +1548,14 @@ const handleViewportResize = () => {
 const bookSettingsKey = (hash) => `${BOOK_SETTINGS_PREFIX}${hash}`;
 
 const scheduleServerStateSync = (hash = activeBookKey, immediate = false) => {
-  window.clearTimeout(serverStateSyncTimer);
   if (!hash || !serverLibraryAvailable || !serverBookHashes.has(hash)) return;
-  serverStateSyncTimer = window.setTimeout(
-    () => void syncServerBookState(hash),
-    immediate ? 0 : SERVER_STATE_SYNC_DELAY_MS
-  );
+  const existingTimer = serverStateSyncTimers.get(hash);
+  if (existingTimer !== undefined) window.clearTimeout(existingTimer);
+  const timer = window.setTimeout(() => {
+    serverStateSyncTimers.delete(hash);
+    void syncServerBookState(hash);
+  }, immediate ? 0 : SERVER_STATE_SYNC_DELAY_MS);
+  serverStateSyncTimers.set(hash, timer);
 };
 
 const captureReadingSettings = () => ({
@@ -1492,7 +1570,8 @@ const captureReadingSettings = () => ({
   speaker: speechSpeakerPreference,
   speechMaximum: speechMaximumLength,
   speechCenterOffset: speechCenterOffsetPercent,
-  speechSpeed: speechSpeedPercent
+  speechSpeed: speechSpeedPercent,
+  speechPocket: speechPocketMode
 });
 
 const saveCurrentReadingSettings = (fallbackKey = "", fallbackValue = "") => {
@@ -1526,7 +1605,10 @@ const applyStoredBookSettings = (hash) => {
     } finally {
       suppressSettingsPersistence = false;
     }
-    saveCurrentReadingSettings();
+    localStorage.setItem(
+      bookSettingsKey(hash),
+      JSON.stringify({ ...captureReadingSettings(), savedAt: 0 })
+    );
     return;
   }
 
@@ -1580,10 +1662,10 @@ const applyStoredBookSettings = (hash) => {
         Number.isFinite(Number(storedSpeechSpeed))) {
       applySpeechSpeed(Number(storedSpeechSpeed));
     }
+    applySpeechPocketMode(Boolean(stored.speechPocket));
   } finally {
     suppressSettingsPersistence = false;
   }
-  saveCurrentReadingSettings();
 };
 
 const syncSettingsControls = () => {
@@ -1752,6 +1834,7 @@ function applyDefaultReadingSettings() {
     Boolean(speechActiveJob)
   );
   applySpeechSpeed(DEFAULT_SPEECH_SPEED_PERCENT);
+  applySpeechPocketMode(false);
 }
 
 const resetCurrentBookSettings = () => {
@@ -1835,7 +1918,7 @@ const mergeBookCollections = (existingRecords, importedRecords) => {
     .slice(0, MAX_RECENT_BOOKS);
 };
 
-const positionSavedAt = (value) => {
+const storedValueSavedAt = (value) => {
   try {
     const savedAt = Number(JSON.parse(value)?.savedAt);
     return Number.isFinite(savedAt) ? savedAt : 0;
@@ -1854,9 +1937,9 @@ const mergeImportedStorage = (importedValues) => {
       key === LAST_BOOK_KEY
     ) continue;
 
-    if (key.startsWith(POSITION_PREFIX)) {
+    if (key.startsWith(POSITION_PREFIX) || key.startsWith(BOOK_SETTINGS_PREFIX)) {
       const existing = localStorage.getItem(key);
-      if (existing && positionSavedAt(existing) > positionSavedAt(value)) continue;
+      if (existing && storedValueSavedAt(existing) > storedValueSavedAt(value)) continue;
     }
     localStorage.setItem(key, value);
   }
@@ -2183,7 +2266,7 @@ const updateReadingProgress = (position = null) => {
   if (reader.hidden) return;
   const scrollRange = Math.max(
     0,
-    document.documentElement.scrollHeight - window.innerHeight
+    document.documentElement.scrollHeight - visibleViewportBounds().height
   );
   const ratio = scrollRange > 0 ? window.scrollY / scrollRange : 0;
   const percentage = Math.round(ratio * 100);
@@ -2274,40 +2357,88 @@ const restoreTextPositionAnchor = (anchor) => {
   }
 };
 
+const cheapVisiblePositionSnapshot = () => {
+  if (
+    positionPersistenceSuspended ||
+    !activeBookKey ||
+    reader.hidden ||
+    !pageIsVisible()
+  ) return null;
+  const viewport = visibleViewportBounds();
+  const scrollRange = Math.max(
+    0,
+    document.documentElement.scrollHeight - viewport.height
+  );
+  const ratio = scrollRange > 0 ? window.scrollY / scrollRange : 0;
+  const characterCount = activeBookCharacterCount || 0;
+  return {
+    bookKey: activeBookKey,
+    position: {
+      scrollY: window.scrollY,
+      ratio,
+      anchor: null,
+      characterOffset: Math.round(ratio * characterCount),
+      characterCount,
+      savedAt: Date.now()
+    }
+  };
+};
+
+const rememberVisibleScrollPosition = () => {
+  const snapshot = cheapVisiblePositionSnapshot();
+  if (snapshot) lastVisibleScrollSnapshot = snapshot;
+};
+
+const savePositionRecord = (bookKey, position) => {
+  if (!bookKey || !position) return;
+  localStorage.setItem(positionKey(bookKey), JSON.stringify(position));
+  if (bookKey === activeBookKey) updateReadingProgress(position);
+  scheduleServerStateSync(bookKey);
+};
+
 const savePositionNow = () => {
   if (positionPersistenceSuspended || !activeBookKey || reader.hidden) return;
 
+  const previousPosition = loadPosition(activeBookKey) || {};
+  if (!pageIsVisible()) {
+    const candidates = [lastVisiblePositionSnapshot, lastVisibleScrollSnapshot]
+      .filter((snapshot) => snapshot?.bookKey === activeBookKey && snapshot.position);
+    const latest = candidates.sort((first, second) => (
+      Number(second.position.savedAt || 0) - Number(first.position.savedAt || 0)
+    ))[0];
+    if (!latest) return;
+    // Do not recalculate DOM geometry after the browser has hidden/frozen the page.
+    savePositionRecord(activeBookKey, {
+      ...latest.position,
+      savedAt: Date.now()
+    });
+    return;
+  }
+
+  const viewport = visibleViewportBounds();
   const scrollRange = Math.max(
     0,
-    document.documentElement.scrollHeight - window.innerHeight
+    document.documentElement.scrollHeight - viewport.height
   );
-
   const ratio = scrollRange > 0 ? window.scrollY / scrollRange : 0;
-  const previousPosition = loadPosition(activeBookKey) || {};
   const capturedAnchor = captureTextPositionAnchor();
-  const previousAnchor = document.visibilityState === "hidden"
-    ? previousPosition.anchor || null
-    : null;
   const characterCount = activeBookCharacterCount ||
     Math.max(0, Number(previousPosition.characterCount) || 0);
   const capturedCharacterOffset = Number(capturedAnchor?.characterOffset);
-  const previousCharacterOffset = Number(previousPosition.characterOffset);
   const characterOffset = Number.isFinite(capturedCharacterOffset)
     ? capturedCharacterOffset
-    : document.visibilityState === "hidden" && Number.isFinite(previousCharacterOffset)
-      ? previousCharacterOffset
-      : Math.round(ratio * characterCount);
+    : Math.round(ratio * characterCount);
   const position = {
     scrollY: window.scrollY,
     ratio,
-    anchor: capturedAnchor || previousAnchor,
+    anchor: capturedAnchor,
     characterOffset,
     characterCount,
     savedAt: Date.now()
   };
-  localStorage.setItem(positionKey(activeBookKey), JSON.stringify(position));
-  updateReadingProgress(position);
-  scheduleServerStateSync(activeBookKey);
+  lastVisiblePositionSnapshot = { bookKey: activeBookKey, position };
+  lastVisibleScrollSnapshot = { bookKey: activeBookKey, position };
+  savePositionRecord(activeBookKey, position);
 };
 
 const schedulePositionSave = () => {
@@ -2391,7 +2522,11 @@ const syncServerBookState = (bookHash = activeBookKey, keepalive = false) => {
 };
 
 const flushServerBookState = (bookHash = activeBookKey) => {
-  window.clearTimeout(serverStateSyncTimer);
+  const pendingTimer = serverStateSyncTimers.get(bookHash);
+  if (pendingTimer !== undefined) {
+    window.clearTimeout(pendingTimer);
+    serverStateSyncTimers.delete(bookHash);
+  }
   if (
     !bookHash ||
     !serverLibraryAvailable ||
@@ -2544,6 +2679,8 @@ const destroyCurrentBook = () => {
 
   viewer.replaceChildren();
   activeBookCharacterCount = 0;
+  lastVisiblePositionSnapshot = null;
+  lastVisibleScrollSnapshot = null;
   speechTextMaps = new WeakMap();
   chapterLookup.clear();
   window.scrollTo(0, 0);
@@ -2748,27 +2885,46 @@ const handleRightDragMove = (event) => {
   queueRightDragScroll(deltaY * RIGHT_DRAG_SPEED);
 };
 
-const waitForImages = async () => {
-  const pending = [...viewer.querySelectorAll("img")]
-    .filter((image) => !image.complete)
-    .map((image) => new Promise((resolve) => {
-      image.addEventListener("load", resolve, { once: true });
-      image.addEventListener("error", resolve, { once: true });
-    }));
+const waitForImages = async (savedPosition = null) => {
+  let images = [...viewer.querySelectorAll("img")];
+  const targetSpine = Number(savedPosition?.anchor?.spineIndex);
+  if (Number.isInteger(targetSpine)) {
+    images = images.filter((image) => {
+      const chapter = image.closest?.(".book-section");
+      const spineIndex = Number(chapter?.dataset?.spineIndex);
+      return !Number.isInteger(spineIndex) || spineIndex <= targetSpine;
+    });
+  }
 
-  await Promise.all(pending);
+  const pending = images
+    .filter((image) => !image.complete)
+    .map((image) => {
+      // A full-DOM reader cannot wait for an off-screen lazy image forever.
+      // Images that can affect the restored position are made eager explicitly.
+      try { image.loading = "eager"; } catch {}
+      return new Promise((resolve) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", resolve, { once: true });
+      });
+    });
+
+  if (pending.length === 0) return;
+  await Promise.race([
+    Promise.all(pending),
+    new Promise((resolve) => window.setTimeout(resolve, IMAGE_LAYOUT_WAIT_MS))
+  ]);
 };
 
 const restorePosition = async (savedPosition) => {
   await document.fonts?.ready;
-  await waitForImages();
+  await waitForImages(savedPosition);
   await new Promise((resolve) => {
     window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
   });
 
   const scrollRange = Math.max(
     0,
-    document.documentElement.scrollHeight - window.innerHeight
+    document.documentElement.scrollHeight - visibleViewportBounds().height
   );
   const legacyRatio = Number(savedPosition?.percentage);
   const storedRatio = Number(savedPosition?.ratio);
@@ -2780,12 +2936,16 @@ const restorePosition = async (savedPosition) => {
   }
 
   let target = 0;
-  if (Number.isFinite(storedY)) {
-    target = storedY;
+  const characterOffset = Number(savedPosition?.characterOffset);
+  const characterCount = Number(savedPosition?.characterCount);
+  if (Number.isFinite(characterOffset) && characterCount > 0 && activeBookCharacterCount > 0) {
+    target = Math.max(0, Math.min(1, characterOffset / characterCount)) * scrollRange;
   } else if (Number.isFinite(storedRatio)) {
     target = storedRatio * scrollRange;
   } else if (Number.isFinite(legacyRatio)) {
     target = legacyRatio * scrollRange;
+  } else if (Number.isFinite(storedY)) {
+    target = storedY;
   }
 
   window.scrollTo(0, Math.max(0, Math.min(scrollRange, target)));
@@ -2864,6 +3024,15 @@ function applySpeechSpeed(nextSpeed, announce = false) {
 }
 
 applySpeechSpeed(speechSpeedPercent);
+
+function applySpeechPocketMode(enabled, announce = false) {
+  speechPocketMode = Boolean(enabled);
+  if (settingsSpeechPocket) settingsSpeechPocket.value = speechPocketMode ? "1" : "0";
+  saveCurrentReadingSettings(SPEECH_POCKET_KEY, speechPocketMode ? "1" : "0");
+  if (announce) {
+    showStatus(speechPocketMode ? "POCKET MODE · LONG BACKGROUND CHUNKS" : "POCKET MODE · OFF", 1400);
+  }
+}
 
 const speechSourceFromEntries = (entries) => {
   let text = "";
@@ -3135,7 +3304,7 @@ const animateSpeechScrollBy = (offset) => {
   const startY = window.scrollY || 0;
   const scrollLimit = Math.max(
     0,
-    document.documentElement.scrollHeight - window.innerHeight
+    document.documentElement.scrollHeight - visibleViewportBounds().height
   );
   const targetY = Math.max(0, Math.min(scrollLimit, startY + offset));
   const distance = targetY - startY;
@@ -3176,15 +3345,17 @@ const animateSpeechScrollBy = (offset) => {
 };
 
 const speechViewportBounds = (rangeHeight = 0) => {
-  const fittingMargin = Math.max(0, (window.innerHeight - rangeHeight) / 2);
+  const viewport = visibleViewportBounds();
+  const fittingMargin = Math.max(0, (viewport.height - rangeHeight) / 2);
   const margin = Math.min(
     SPEECH_VIEWPORT_MARGIN_PX,
-    window.innerHeight / 4,
+    viewport.height / 4,
     fittingMargin
   );
   return {
-    top: margin,
-    bottom: Math.max(margin, window.innerHeight - margin)
+    top: viewport.top + margin,
+    bottom: Math.max(viewport.top + margin, viewport.bottom - margin),
+    height: viewport.height
   };
 };
 
@@ -3199,8 +3370,8 @@ const speechTargetCenterY = (rangeHeight = 0) => {
   const viewport = speechViewportBounds(rangeHeight);
   const availableHeight = viewport.bottom - viewport.top;
   const desiredCenter = (
-    window.innerHeight / 2 +
-    window.innerHeight * (speechCenterOffsetPercent / 100)
+    (visibleViewportBounds().top + visibleViewportBounds().height / 2) +
+    visibleViewportBounds().height * (speechCenterOffsetPercent / 100)
   );
   if (rangeHeight >= availableHeight) {
     return viewport.top + availableHeight / 2;
@@ -3584,8 +3755,8 @@ const speechEntriesInViewport = (viewportTop, viewportBottom, afterCursor = null
 };
 
 const speechEntriesFromViewport = (afterCursor = null) => speechEntriesInViewport(
-  8,
-  Math.max(8, window.innerHeight - 8),
+  visibleViewportBounds().top + 8,
+  Math.max(visibleViewportBounds().top + 8, visibleViewportBounds().bottom - 8),
   afterCursor
 );
 
@@ -3657,14 +3828,14 @@ const ensureSpeechJobVisible = async (job) => {
   const range = speechRectsBounds(rects);
   if (!range) return false;
   const viewport = speechViewportBounds(range.height);
-  if (range.height > window.innerHeight) {
+  if (range.height > visibleViewportBounds().height) {
     return range.top < viewport.bottom && range.bottom > viewport.top;
   }
   const fitsPreferredBounds = (
     range.top >= viewport.top - 1 && range.bottom <= viewport.bottom + 1
   );
   const fitsPhysicalViewport = (
-    range.top >= -1 && range.bottom <= window.innerHeight + 1
+    range.top >= visibleViewportBounds().top - 1 && range.bottom <= visibleViewportBounds().bottom + 1
   );
   return fitsPreferredBounds || fitsPhysicalViewport;
 };
@@ -3700,8 +3871,8 @@ const nextSpeechViewport = (cursor) => {
     const targetY = speechPlanningTopY();
     const offset = Math.max(0, firstRect.top - targetY);
     const entries = sentenceBoundedViewportEntries(speechEntriesInViewport(
-      8 + offset,
-      Math.max(8 + offset, window.innerHeight - 8 + offset),
+      visibleViewportBounds().top + 8 + offset,
+      Math.max(visibleViewportBounds().top + 8 + offset, visibleViewportBounds().bottom - 8 + offset),
       cursor
     ));
     if (entries.length > 0) return { entries, offset };
@@ -3709,6 +3880,34 @@ const nextSpeechViewport = (cursor) => {
   return null;
 };
 
+
+const speechEntriesAfterCursor = (cursor, characterBudget = POCKET_SPEECH_BATCH_CHARACTERS) => {
+  if (!cursor?.element) return [];
+  const blocks = speechBlockElements();
+  const cursorIndex = blocks.indexOf(cursor.element);
+  if (cursorIndex < 0) return [];
+  const entries = [];
+  let remainingBudget = Math.max(1, characterBudget);
+  for (let index = cursorIndex; index < blocks.length && remainingBudget > 0; index += 1) {
+    const element = blocks[index];
+    const mapped = createSpeechTextMap(element);
+    if (!mapped?.text) continue;
+    let start = index === cursorIndex ? Math.max(0, cursor.offset) : 0;
+    while (start < mapped.text.length && /\s/.test(mapped.text[start])) start += 1;
+    if (start >= mapped.text.length) continue;
+    let end = Math.min(mapped.text.length, start + remainingBudget);
+    if (end < mapped.text.length) {
+      const candidate = mapped.text.slice(start, end);
+      const lastSpace = Math.max(candidate.lastIndexOf(" "), candidate.lastIndexOf("\n"));
+      if (lastSpace > Math.max(0, candidate.length - 240)) end = start + lastSpace;
+    }
+    const text = mapped.text.slice(start, end);
+    if (!text.trim()) continue;
+    entries.push({ element, text, mapBaseOffset: start });
+    remainingBudget -= text.length;
+  }
+  return entries;
+};
 const clearSpeechIndicators = () => {
   speechVoice.hidden = true;
   speechVoice.textContent = "";
@@ -3864,6 +4063,47 @@ const playPreparedAudio = async (prepared) => {
   }
 };
 
+const currentBookMediaMetadata = () => {
+  const record = recentBookInfo.find((candidate) => candidate.hash === activeBookKey) || {};
+  return {
+    title: record.title || activeBookTitle?.replace(/ — Smooth Reader$/, "") || "Smooth Reader",
+    artist: record.author || "Smooth Reader"
+  };
+};
+
+const setPlaybackAudioSession = (playing) => {
+  try {
+    if ("audioSession" in navigator) navigator.audioSession.type = playing ? "playback" : "auto";
+  } catch {}
+};
+
+const updateMediaSession = (active) => {
+  if (!("mediaSession" in navigator)) return;
+  try {
+    if (active && typeof MediaMetadata === "function") {
+      navigator.mediaSession.metadata = new MediaMetadata(currentBookMediaMetadata());
+    } else if (!active) {
+      navigator.mediaSession.metadata = null;
+    }
+    navigator.mediaSession.playbackState = active
+      ? (speechIsPaused ? "paused" : "playing")
+      : "none";
+  } catch {}
+};
+
+try {
+  if ("mediaSession" in navigator) {
+    navigator.mediaSession.setActionHandler("play", () => {
+      if (speechIsActive && speechIsPaused) void toggleSpeechPause();
+      else if (!speechIsActive) void startSpeech();
+    });
+    navigator.mediaSession.setActionHandler("pause", () => {
+      if (speechIsActive && !speechIsPaused) void toggleSpeechPause();
+    });
+    navigator.mediaSession.setActionHandler("stop", () => stopSpeech());
+  }
+} catch {}
+
 const stopSpeech = () => {
   const wasActive = speechIsActive;
   speechGeneration += 1;
@@ -3874,6 +4114,8 @@ const stopSpeech = () => {
   cancelSpeechPreloads();
   clearSpeechSelection();
   syncSpeechControls();
+  setPlaybackAudioSession(false);
+  updateMediaSession(false);
 
   if (wasActive && typeof window.fetch === "function") {
     window.fetch("/api/piper/stop", {
@@ -3894,6 +4136,7 @@ const toggleSpeechPause = async () => {
     else await speechAudio.play();
     speechIsPaused = nextPaused;
     syncSpeechControls();
+    updateMediaSession(true);
     settingsSpeechStatus.textContent = speechIsPaused
       ? "Playback paused; background generation may continue."
       : "Playback continuing…";
@@ -3911,6 +4154,8 @@ const startSpeech = async () => {
   const generation = ++speechGeneration;
   speechIsActive = true;
   speechIsPaused = false;
+  setPlaybackAudioSession(true);
+  updateMediaSession(true);
   syncSpeechControls();
   settingsSpeechStatus.textContent = "Connecting to local Piper…";
 
@@ -3969,75 +4214,140 @@ const startSpeech = async () => {
     const viewportReading = !selectedText;
     let viewportCursor = null;
     let firstBatch = true;
-    let queuedBatch = null;
+    let queuedLogicalPreparation = null;
+
+    const jobStartsAtSameLogicalText = (left, right) => {
+      if (!left || !right || left.text !== right.text) return false;
+      const leftSegment = left.segments?.find((segment) => (
+        segment.element && segment.end > left.sourceStart && segment.start < left.sourceEnd
+      ));
+      const rightSegment = right.segments?.find((segment) => (
+        segment.element && segment.end > right.sourceStart && segment.start < right.sourceEnd
+      ));
+      if (!leftSegment || !rightSegment || leftSegment.element !== rightSegment.element) return false;
+      const leftOffset = leftSegment.mapBaseOffset
+        + Math.max(leftSegment.start, left.sourceStart) - leftSegment.start;
+      const rightOffset = rightSegment.mapBaseOffset
+        + Math.max(rightSegment.start, right.sourceStart) - rightSegment.start;
+      return leftOffset === rightOffset;
+    };
+
+    const firstLogicalJobAfter = (cursor, maximumLength, pocketMode) => {
+      if (!cursor?.element) return null;
+
+      // In normal mode, pre-plan the next visible text only to choose the audio
+      // content. No pixel offset or geometry is retained. At handoff the live DOM
+      // is planned again, and this audio is reused only if the logical job matches.
+      if (!pocketMode) {
+        const plan = nextSpeechViewport(cursor);
+        if (!plan) return null;
+        const job = buildViewportSpeechJobs(
+          plan.entries,
+          speechMinimumLength,
+          maximumLength
+        )[0] || null;
+        if (job) job.followText = false;
+        return job;
+      }
+
+      const budget = Math.max(maximumLength * 3, maximumLength + speechMinimumLength);
+      const logicalEntries = speechEntriesAfterCursor(cursor, budget);
+      if (logicalEntries.length === 0) return null;
+      const job = buildSpeechJobs(
+        logicalEntries,
+        speechMinimumLength,
+        maximumLength,
+        false
+      )[0] || null;
+      if (job) job.followText = false;
+      return job;
+    };
+
     while (entries.length > 0) {
-      const jobs = queuedBatch?.jobs || (viewportReading
-        ? buildViewportSpeechJobs(entries)
-        : buildSpeechJobs(entries));
+      const maximumLength = speechPocketMode && viewportReading
+        ? POCKET_SPEECH_MAX_LENGTH
+        : speechMaximumLength;
+      const jobs = viewportReading
+        ? speechPocketMode
+          ? buildSpeechJobs(entries, speechMinimumLength, maximumLength, false)
+          : buildViewportSpeechJobs(entries, speechMinimumLength, maximumLength)
+        : buildSpeechJobs(entries);
       if (jobs.length === 0) break;
       if (viewportReading) jobs.forEach((job) => { job.followText = false; });
-      settingsSpeechStatus.textContent = queuedBatch
-        ? "Next visible text is ready."
+
+      const canReuseQueued = queuedLogicalPreparation
+        && jobStartsAtSameLogicalText(queuedLogicalPreparation.job, jobs[0]);
+      settingsSpeechStatus.textContent = canReuseQueued
+        ? "Next text is ready."
         : firstBatch
           ? "Generating first chunk…"
-          : "Generating newly visible text…";
+          : speechPocketMode
+            ? "Generating next pocket chunk…"
+            : "Generating newly visible text…";
       firstBatch = false;
+
       let prepared;
-      if (queuedBatch) {
-        const settled = await queuedBatch.firstPreparation;
+      if (canReuseQueued) {
+        const settled = await queuedLogicalPreparation.preparation;
+        queuedLogicalPreparation = null;
         if (settled.error) throw settled.error;
         prepared = settled.value;
-        queuedBatch = null;
       } else {
+        queuedLogicalPreparation = null;
         prepared = await prepareJob(jobs[0]);
       }
-      let futureBatch = null;
 
       for (let index = 0; index < jobs.length; index += 1) {
         if (generation !== speechGeneration) return;
         const currentJob = jobs[index];
-        let nextPreparation = index + 1 < jobs.length
+        const nextPreparation = index + 1 < jobs.length
           ? settlePreparation(jobs[index + 1])
           : null;
+
+        // Prefetch only the next logical chunk. Never retain future pixel offsets
+        // or viewport geometry across playback/reflow.
+        let futureLogicalPreparation = null;
         if (viewportReading && !nextPreparation) {
           const futureCursor = speechCursorFromJob(currentJob) || viewportCursor;
-          const plan = nextSpeechViewport(futureCursor);
-          if (plan) {
-            const futureJobs = buildViewportSpeechJobs(plan.entries);
-            futureJobs.forEach((job) => { job.followText = false; });
-            if (futureJobs.length > 0) {
-              futureBatch = {
-                entries: plan.entries,
-                jobs: futureJobs,
-                offset: plan.offset,
-                cursor: futureCursor,
-                firstPreparation: settlePreparation(futureJobs[0])
-              };
-            }
+          const futureJob = firstLogicalJobAfter(
+            futureCursor,
+            maximumLength,
+            speechPocketMode
+          );
+          if (futureJob) {
+            futureLogicalPreparation = {
+              job: futureJob,
+              preparation: settlePreparation(futureJob)
+            };
           }
         }
+
         const voiceName = prepared.voice?.replace(/\.onnx$/i, "") || "Piper";
         speechVoice.textContent = formatSpeechVoice(prepared);
         speechVoice.hidden = false;
         setSpeechActiveJob(currentJob);
-        const backgroundGeneration = nextPreparation || futureBatch?.firstPreparation;
+        const backgroundGeneration = nextPreparation || futureLogicalPreparation?.preparation;
         settingsSpeechStatus.textContent = backgroundGeneration
           ? `Playing with ${voiceName}; generating next…`
           : `Playing with ${voiceName}…`;
         syncSpeechControls();
+        updateMediaSession(true);
 
-        const visible = await ensureSpeechJobVisible(currentJob);
-        if (!visible) throw new Error("The next spoken text could not be brought into view.");
+        if (!speechPocketMode || pageIsVisible()) {
+          const visible = await ensureSpeechJobVisible(currentJob);
+          if (!visible && pageIsVisible()) {
+            throw new Error("The next spoken text could not be brought into view.");
+          }
+        }
         await playPreparedAudio(prepared);
         speechIsPaused = false;
         syncSpeechControls();
+        updateMediaSession(true);
         if (generation !== speechGeneration) return;
 
         if (viewportReading) {
           viewportCursor = speechCursorFromJob(currentJob) || viewportCursor;
-          if (futureBatch && index === jobs.length - 1) {
-            await scrollBySpeechOffset(futureBatch.offset);
-          } else {
+          if (!speechPocketMode && index < jobs.length - 1) {
             await scrollDownAfterSpeechJob(currentJob);
           }
           if (generation !== speechGeneration) return;
@@ -4047,13 +4357,30 @@ const startSpeech = async () => {
           const settled = await nextPreparation;
           if (settled.error) throw settled.error;
           prepared = settled.value;
+        } else if (futureLogicalPreparation) {
+          queuedLogicalPreparation = futureLogicalPreparation;
         }
       }
 
       if (!viewportReading || !viewportCursor) break;
-      if (!futureBatch) break;
-      entries = futureBatch.entries;
-      queuedBatch = futureBatch;
+      if (speechPocketMode) {
+        entries = speechEntriesAfterCursor(viewportCursor);
+      } else {
+        // Recompute the next viewport from the current DOM after playback.
+        const plan = nextSpeechViewport(viewportCursor);
+        if (!plan) break;
+        await scrollBySpeechOffset(plan.offset);
+        entries = plan.entries;
+      }
+    }
+
+    if (viewportReading && viewportCursor && speechPocketMode && pageIsVisible()) {
+      const cursorRangeEntries = speechEntriesAfterCursor(viewportCursor, 80);
+      const cursorJob = buildSpeechJobs(cursorRangeEntries, 1, 80, false)[0];
+      if (cursorJob) {
+        setSpeechActiveJob(cursorJob);
+        await ensureSpeechJobVisible(cursorJob);
+      }
     }
 
     if (generation !== speechGeneration) return;
@@ -4064,6 +4391,8 @@ const startSpeech = async () => {
     cancelSpeechPreloads();
     clearSpeechSelection();
     syncSpeechControls();
+    setPlaybackAudioSession(false);
+    updateMediaSession(false);
     settingsSpeechStatus.textContent = "Finished.";
   } catch (error) {
     if (generation !== speechGeneration) return;
@@ -4074,6 +4403,8 @@ const startSpeech = async () => {
     cancelSpeechPreloads();
     clearSpeechSelection();
     syncSpeechControls();
+    setPlaybackAudioSession(false);
+    updateMediaSession(false);
     const message = error?.message || "Local Piper could not read this text.";
     settingsSpeechStatus.textContent = message;
     showStatus(`PIPER ERROR · ${message}`, 3200);
@@ -4614,6 +4945,9 @@ settingsSpeechSpeedDown.addEventListener("click", () => {
 settingsSpeechSpeedUp.addEventListener("click", () => {
   applySpeechSpeed(speechSpeedPercent + 1, true);
 });
+settingsSpeechPocket?.addEventListener("change", () => {
+  applySpeechPocketMode(settingsSpeechPocket.value === "1", true);
+});
 
 settingsPaletteSelect.addEventListener("change", (event) => {
   applyPalette(PALETTES.findIndex((palette) => palette.id === event.target.value));
@@ -4753,11 +5087,13 @@ window.addEventListener("contextmenu", (event) => {
 });
 window.addEventListener("keydown", handleReaderKeyDown, true);
 window.addEventListener("scroll", () => {
+  rememberVisibleScrollPosition();
   schedulePositionSave();
   updateReadingProgress();
   scheduleStableResizeAnchorCapture();
 }, { passive: true });
 window.addEventListener("resize", handleViewportResize, { passive: true });
+window.visualViewport?.addEventListener?.("resize", handleViewportResize, { passive: true });
 window.addEventListener("popstate", (event) => {
   if (event.state?.app !== HISTORY_APP) return;
   if (event.state.view === "reader") showReaderView();
@@ -4765,10 +5101,15 @@ window.addEventListener("popstate", (event) => {
 });
 document.addEventListener?.("fullscreenchange", syncFullscreenToggle);
 document.addEventListener?.("webkitfullscreenchange", syncFullscreenToggle);
+const flushAllPendingServerState = () => {
+  const hashes = new Set([...serverStateSyncTimers.keys(), activeBookKey].filter(Boolean));
+  hashes.forEach((hash) => flushServerBookState(hash));
+};
+
 document.addEventListener?.("visibilitychange", () => {
   if (!pageIsVisible()) {
     savePositionNow();
-    flushServerBookState();
+    flushAllPendingServerState();
     if (speechScrollTargetY !== null) {
       const targetY = speechScrollTargetY;
       cancelSpeechScroll();
@@ -4784,9 +5125,13 @@ if (typeof window.ResizeObserver === "function") {
   speechLayoutObserver.observe(viewer);
 }
 window.addEventListener("blur", () => stopRightDrag());
+window.addEventListener("pagehide", () => {
+  savePositionNow();
+  flushAllPendingServerState();
+});
 window.addEventListener("beforeunload", () => {
   savePositionNow();
-  flushServerBookState();
+  flushAllPendingServerState();
 });
 syncSpeechControls();
 void probePiperBridge();
