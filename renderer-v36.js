@@ -66,7 +66,6 @@ const settingsSpeechSpeed = document.querySelector("#settings-speech-speed");
 const settingsSpeechSpeedValue = document.querySelector("#settings-speech-speed-value");
 const settingsSpeechSpeedDown = document.querySelector("#settings-speech-speed-down");
 const settingsSpeechSpeedUp = document.querySelector("#settings-speech-speed-up");
-const settingsSpeechPocket = document.querySelector("#settings-speech-pocket");
 const settingsSpeechStart = document.querySelector("#settings-speech-start");
 const settingsSpeechPause = document.querySelector("#settings-speech-pause");
 const settingsSpeechStop = document.querySelector("#settings-speech-stop");
@@ -98,7 +97,6 @@ const SPEECH_MAX_KEY = "smooth-reader:speech-maximum";
 const LEGACY_SPEECH_POSITION_KEY = "smooth-reader:speech-position";
 const SPEECH_CENTER_OFFSET_KEY = "smooth-reader:speech-center-offset";
 const SPEECH_SPEED_KEY = "smooth-reader:speech-speed";
-const SPEECH_POCKET_KEY = "smooth-reader:speech-pocket";
 const SPEECH_SESSION_KEY = "smooth-reader:speech-session";
 const SILENT_WAV_DATA_URL = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 const LAST_BOOK_KEY = "smooth-reader:last-book";
@@ -150,8 +148,6 @@ const DEFAULT_SPEECH_MIN_LENGTH = 150;
 const DEFAULT_SPEECH_MAX_LENGTH = 550;
 const MIN_SPEECH_MAX_LENGTH = 300;
 const MAX_SPEECH_MAX_LENGTH = 1200;
-const POCKET_SPEECH_MAX_LENGTH = 5000;
-const POCKET_SPEECH_BATCH_CHARACTERS = 24000;
 const LEGACY_DEFAULT_SPEECH_POSITION_PERCENT = 22;
 const DEFAULT_SPEECH_CENTER_OFFSET_PERCENT = 0;
 const MIN_SPEECH_CENTER_OFFSET_PERCENT = -25;
@@ -287,7 +283,6 @@ const savedSpeechCenterOffset = Number.parseInt(
   10
 );
 const savedSpeechSpeed = Number.parseInt(localStorage.getItem(SPEECH_SPEED_KEY), 10);
-const savedSpeechPocket = localStorage.getItem(SPEECH_POCKET_KEY) === "1";
 const savedLegacySpeechPosition = Number.parseInt(
   localStorage.getItem(LEGACY_SPEECH_POSITION_KEY),
   10
@@ -305,7 +300,6 @@ let speechCenterOffsetPercent = Math.max(
   MIN_SPEECH_CENTER_OFFSET_PERCENT,
   Math.min(MAX_SPEECH_CENTER_OFFSET_PERCENT, initialSpeechCenterOffset)
 );
-let speechPocketMode = savedSpeechPocket;
 let speechSpeedPercent = Number.isFinite(savedSpeechSpeed)
   ? Math.max(MIN_SPEECH_SPEED_PERCENT, Math.min(MAX_SPEECH_SPEED_PERCENT, savedSpeechSpeed))
   : DEFAULT_SPEECH_SPEED_PERCENT;
@@ -1570,8 +1564,7 @@ const captureReadingSettings = () => ({
   speaker: speechSpeakerPreference,
   speechMaximum: speechMaximumLength,
   speechCenterOffset: speechCenterOffsetPercent,
-  speechSpeed: speechSpeedPercent,
-  speechPocket: speechPocketMode
+  speechSpeed: speechSpeedPercent
 });
 
 const saveCurrentReadingSettings = (fallbackKey = "", fallbackValue = "") => {
@@ -1662,7 +1655,6 @@ const applyStoredBookSettings = (hash) => {
         Number.isFinite(Number(storedSpeechSpeed))) {
       applySpeechSpeed(Number(storedSpeechSpeed));
     }
-    applySpeechPocketMode(Boolean(stored.speechPocket));
   } finally {
     suppressSettingsPersistence = false;
   }
@@ -1834,7 +1826,6 @@ function applyDefaultReadingSettings() {
     Boolean(speechActiveJob)
   );
   applySpeechSpeed(DEFAULT_SPEECH_SPEED_PERCENT);
-  applySpeechPocketMode(false);
 }
 
 const resetCurrentBookSettings = () => {
@@ -3025,15 +3016,6 @@ function applySpeechSpeed(nextSpeed, announce = false) {
 
 applySpeechSpeed(speechSpeedPercent);
 
-function applySpeechPocketMode(enabled, announce = false) {
-  speechPocketMode = Boolean(enabled);
-  if (settingsSpeechPocket) settingsSpeechPocket.value = speechPocketMode ? "1" : "0";
-  saveCurrentReadingSettings(SPEECH_POCKET_KEY, speechPocketMode ? "1" : "0");
-  if (announce) {
-    showStatus(speechPocketMode ? "POCKET MODE · LONG BACKGROUND CHUNKS" : "POCKET MODE · OFF", 1400);
-  }
-}
-
 const speechSourceFromEntries = (entries) => {
   let text = "";
   const segments = [];
@@ -3881,33 +3863,6 @@ const nextSpeechViewport = (cursor) => {
 };
 
 
-const speechEntriesAfterCursor = (cursor, characterBudget = POCKET_SPEECH_BATCH_CHARACTERS) => {
-  if (!cursor?.element) return [];
-  const blocks = speechBlockElements();
-  const cursorIndex = blocks.indexOf(cursor.element);
-  if (cursorIndex < 0) return [];
-  const entries = [];
-  let remainingBudget = Math.max(1, characterBudget);
-  for (let index = cursorIndex; index < blocks.length && remainingBudget > 0; index += 1) {
-    const element = blocks[index];
-    const mapped = createSpeechTextMap(element);
-    if (!mapped?.text) continue;
-    let start = index === cursorIndex ? Math.max(0, cursor.offset) : 0;
-    while (start < mapped.text.length && /\s/.test(mapped.text[start])) start += 1;
-    if (start >= mapped.text.length) continue;
-    let end = Math.min(mapped.text.length, start + remainingBudget);
-    if (end < mapped.text.length) {
-      const candidate = mapped.text.slice(start, end);
-      const lastSpace = Math.max(candidate.lastIndexOf(" "), candidate.lastIndexOf("\n"));
-      if (lastSpace > Math.max(0, candidate.length - 240)) end = start + lastSpace;
-    }
-    const text = mapped.text.slice(start, end);
-    if (!text.trim()) continue;
-    entries.push({ element, text, mapBaseOffset: start });
-    remainingBudget -= text.length;
-  }
-  return entries;
-};
 const clearSpeechIndicators = () => {
   speechVoice.hidden = true;
   speechVoice.textContent = "";
@@ -4232,45 +4187,27 @@ const startSpeech = async () => {
       return leftOffset === rightOffset;
     };
 
-    const firstLogicalJobAfter = (cursor, maximumLength, pocketMode) => {
+    const firstLogicalJobAfter = (cursor, maximumLength) => {
       if (!cursor?.element) return null;
 
-      // In normal mode, pre-plan the next visible text only to choose the audio
-      // content. No pixel offset or geometry is retained. At handoff the live DOM
-      // is planned again, and this audio is reused only if the logical job matches.
-      if (!pocketMode) {
-        const plan = nextSpeechViewport(cursor);
-        if (!plan) return null;
-        const job = buildViewportSpeechJobs(
-          plan.entries,
-          speechMinimumLength,
-          maximumLength
-        )[0] || null;
-        if (job) job.followText = false;
-        return job;
-      }
-
-      const budget = Math.max(maximumLength * 3, maximumLength + speechMinimumLength);
-      const logicalEntries = speechEntriesAfterCursor(cursor, budget);
-      if (logicalEntries.length === 0) return null;
-      const job = buildSpeechJobs(
-        logicalEntries,
+      // Pre-plan the next visible text only to choose the audio content.
+      // No pixel offset or geometry is retained. At handoff the live DOM is
+      // planned again, and this audio is reused only if the logical job matches.
+      const plan = nextSpeechViewport(cursor);
+      if (!plan) return null;
+      const job = buildViewportSpeechJobs(
+        plan.entries,
         speechMinimumLength,
-        maximumLength,
-        false
+        maximumLength
       )[0] || null;
       if (job) job.followText = false;
       return job;
     };
 
     while (entries.length > 0) {
-      const maximumLength = speechPocketMode && viewportReading
-        ? POCKET_SPEECH_MAX_LENGTH
-        : speechMaximumLength;
+      const maximumLength = speechMaximumLength;
       const jobs = viewportReading
-        ? speechPocketMode
-          ? buildSpeechJobs(entries, speechMinimumLength, maximumLength, false)
-          : buildViewportSpeechJobs(entries, speechMinimumLength, maximumLength)
+        ? buildViewportSpeechJobs(entries, speechMinimumLength, maximumLength)
         : buildSpeechJobs(entries);
       if (jobs.length === 0) break;
       if (viewportReading) jobs.forEach((job) => { job.followText = false; });
@@ -4281,9 +4218,7 @@ const startSpeech = async () => {
         ? "Next text is ready."
         : firstBatch
           ? "Generating first chunk…"
-          : speechPocketMode
-            ? "Generating next pocket chunk…"
-            : "Generating newly visible text…";
+          : "Generating newly visible text…";
       firstBatch = false;
 
       let prepared;
@@ -4311,8 +4246,7 @@ const startSpeech = async () => {
           const futureCursor = speechCursorFromJob(currentJob) || viewportCursor;
           const futureJob = firstLogicalJobAfter(
             futureCursor,
-            maximumLength,
-            speechPocketMode
+            maximumLength
           );
           if (futureJob) {
             futureLogicalPreparation = {
@@ -4333,11 +4267,9 @@ const startSpeech = async () => {
         syncSpeechControls();
         updateMediaSession(true);
 
-        if (!speechPocketMode || pageIsVisible()) {
-          const visible = await ensureSpeechJobVisible(currentJob);
-          if (!visible && pageIsVisible()) {
-            throw new Error("The next spoken text could not be brought into view.");
-          }
+        const visible = await ensureSpeechJobVisible(currentJob);
+        if (!visible && pageIsVisible()) {
+          throw new Error("The next spoken text could not be brought into view.");
         }
         await playPreparedAudio(prepared);
         speechIsPaused = false;
@@ -4347,7 +4279,7 @@ const startSpeech = async () => {
 
         if (viewportReading) {
           viewportCursor = speechCursorFromJob(currentJob) || viewportCursor;
-          if (!speechPocketMode && index < jobs.length - 1) {
+          if (index < jobs.length - 1) {
             await scrollDownAfterSpeechJob(currentJob);
           }
           if (generation !== speechGeneration) return;
@@ -4363,24 +4295,11 @@ const startSpeech = async () => {
       }
 
       if (!viewportReading || !viewportCursor) break;
-      if (speechPocketMode) {
-        entries = speechEntriesAfterCursor(viewportCursor);
-      } else {
-        // Recompute the next viewport from the current DOM after playback.
-        const plan = nextSpeechViewport(viewportCursor);
-        if (!plan) break;
-        await scrollBySpeechOffset(plan.offset);
-        entries = plan.entries;
-      }
-    }
-
-    if (viewportReading && viewportCursor && speechPocketMode && pageIsVisible()) {
-      const cursorRangeEntries = speechEntriesAfterCursor(viewportCursor, 80);
-      const cursorJob = buildSpeechJobs(cursorRangeEntries, 1, 80, false)[0];
-      if (cursorJob) {
-        setSpeechActiveJob(cursorJob);
-        await ensureSpeechJobVisible(cursorJob);
-      }
+      // Recompute the next viewport from the current DOM after playback.
+      const plan = nextSpeechViewport(viewportCursor);
+      if (!plan) break;
+      await scrollBySpeechOffset(plan.offset);
+      entries = plan.entries;
     }
 
     if (generation !== speechGeneration) return;
@@ -4945,10 +4864,6 @@ settingsSpeechSpeedDown.addEventListener("click", () => {
 settingsSpeechSpeedUp.addEventListener("click", () => {
   applySpeechSpeed(speechSpeedPercent + 1, true);
 });
-settingsSpeechPocket?.addEventListener("change", () => {
-  applySpeechPocketMode(settingsSpeechPocket.value === "1", true);
-});
-
 settingsPaletteSelect.addEventListener("change", (event) => {
   applyPalette(PALETTES.findIndex((palette) => palette.id === event.target.value));
 });
