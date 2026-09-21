@@ -46,6 +46,31 @@ class LibraryUserRequired(PermissionError):
     """Raised when an authenticated Nginx username is required but missing."""
 
 
+def verify_writable_directory(path: Path, label: str) -> None:
+    """Create, write, fsync, and remove a probe file to verify runtime writability."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe = path / (
+            f".smooth-reader-write-test.{os.getpid()}."
+            f"{threading.get_ident()}.{random.randrange(1 << 30)}"
+        )
+        try:
+            with probe.open("xb") as output:
+                output.write(b"smooth-reader-write-test\n")
+                output.flush()
+                os.fsync(output.fileno())
+            probe.unlink()
+        finally:
+            try:
+                probe.unlink(missing_ok=True)
+            except OSError:
+                pass
+    except OSError as error:
+        raise RuntimeError(
+            f"{label} is not writable: {path}: {error}"
+        ) from error
+
+
 class LibraryController:
     """Small per-user, file-backed EPUB and reading-state store."""
 
@@ -56,7 +81,7 @@ class LibraryController:
         require_user: bool,
     ) -> None:
         self.library_dir = library_dir.expanduser().resolve()
-        self.library_dir.mkdir(parents=True, exist_ok=True)
+        verify_writable_directory(self.library_dir, "Server library directory")
         self.max_book_bytes = max(1, max_book_mb) * 1024 * 1024
         self.require_user = require_user
         self._lock = threading.RLock()
@@ -367,7 +392,7 @@ class PiperController:
     def __init__(self, voice_dir: Path, cache_dir: Path, cache_max_mb: int) -> None:
         self.voice_dir = voice_dir.expanduser().resolve()
         self.cache_dir = cache_dir.expanduser().resolve()
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        verify_writable_directory(self.cache_dir, "Piper audio cache directory")
         self.cache_max_bytes = max(1, cache_max_mb) * 1024 * 1024
         configured_piper = os.environ.get("PIPER_BIN")
         local_piper = self.voice_dir / "piper"
