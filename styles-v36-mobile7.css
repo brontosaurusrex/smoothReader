@@ -1072,6 +1072,42 @@ body.is-right-dragging * {
   color: var(--display-link);
 }
 
+/* During read-aloud, dim the book while keeping the exact spoken range full strength. */
+#viewer.speech-focus {
+  color: color-mix(in srgb, var(--display-text) 50%, transparent);
+}
+
+#viewer.speech-focus h1,
+#viewer.speech-focus h2,
+#viewer.speech-focus h3,
+#viewer.speech-focus h4,
+#viewer.speech-focus h5,
+#viewer.speech-focus h6 {
+  color: color-mix(in srgb, var(--display-heading) 50%, transparent);
+}
+
+#viewer.speech-focus a {
+  color: color-mix(in srgb, var(--display-link) 50%, transparent);
+}
+
+#viewer.speech-focus::highlight(smooth-reader-speech-focus),
+#viewer.speech-focus *::highlight(smooth-reader-speech-focus) {
+  color: var(--display-text);
+}
+
+#viewer.speech-focus h1::highlight(smooth-reader-speech-focus),
+#viewer.speech-focus h2::highlight(smooth-reader-speech-focus),
+#viewer.speech-focus h3::highlight(smooth-reader-speech-focus),
+#viewer.speech-focus h4::highlight(smooth-reader-speech-focus),
+#viewer.speech-focus h5::highlight(smooth-reader-speech-focus),
+#viewer.speech-focus h6::highlight(smooth-reader-speech-focus) {
+  color: var(--display-heading);
+}
+
+#viewer.speech-focus a::highlight(smooth-reader-speech-focus) {
+  color: var(--display-link);
+}
+
 #viewer .speech-active {
   box-shadow: inset 2px 0 var(--display-link);
 }

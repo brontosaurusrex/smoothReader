@@ -3263,9 +3263,41 @@ const createSpeechRange = (job) => {
   }
 };
 
+const SPEECH_FOCUS_HIGHLIGHT_NAME = "smooth-reader-speech-focus";
+
+const clearSpeechFocusHighlight = () => {
+  viewer.classList.remove("speech-focus");
+  try {
+    globalThis.CSS?.highlights?.delete?.(SPEECH_FOCUS_HIGHLIGHT_NAME);
+  } catch {
+    // Custom Highlight API is optional; the speech marker still works without it.
+  }
+};
+
+const applySpeechFocusHighlight = (range) => {
+  if (
+    !range ||
+    typeof globalThis.Highlight !== "function" ||
+    !globalThis.CSS?.highlights?.set
+  ) return false;
+
+  try {
+    globalThis.CSS.highlights.set(
+      SPEECH_FOCUS_HIGHLIGHT_NAME,
+      new globalThis.Highlight(range)
+    );
+    viewer.classList.add("speech-focus");
+    return true;
+  } catch {
+    clearSpeechFocusHighlight();
+    return false;
+  }
+};
+
 const clearSpeechVisuals = () => {
   speechActiveElements.forEach((element) => element.classList?.remove("speech-active"));
   speechActiveElements = [];
+  clearSpeechFocusHighlight();
   speechMarker.hidden = true;
 };
 
@@ -3385,6 +3417,7 @@ const positionSpeechMarker = (followText = false) => {
   if (!speechActiveJob) return;
 
   const range = createSpeechRange(speechActiveJob);
+  applySpeechFocusHighlight(range);
   const rects = [...(range?.getClientRects?.() || [])]
     .filter((rect) => rect.height > 0 && rect.width > 0);
   const firstElement = speechActiveJob.segments?.find(
