@@ -38,3 +38,12 @@
 
 /* Original, unmodified Nerd Fonts v3.5.1 TTF. See EnvyCodeR-LICENCE.md. */
 @font-face { font-family: "EnvyCodeR Nerd Font"; font-style: normal; font-weight: 400; font-display: swap; src: url("EnvyCodeRNerdFont-Regular-v3.5.1.ttf") format("truetype"); }
+
+/* Additional Smooth Reader sans faces, self-hosted full variable TTFs. */
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 200 800; font-display: swap; src: url("atkinson-hyperlegible-next-variable.ttf") format("truetype"); }
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: italic; font-weight: 200 800; font-display: swap; src: url("atkinson-hyperlegible-next-italic-variable.ttf") format("truetype"); }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 200 900; font-display: swap; src: url("source-sans-3-variable.ttf") format("truetype"); }
+@font-face { font-family: "Source Sans 3"; font-style: italic; font-weight: 200 900; font-display: swap; src: url("source-sans-3-italic-variable.ttf") format("truetype"); }
+@font-face { font-family: "Manrope"; font-style: normal; font-weight: 200 800; font-display: swap; src: url("manrope-variable.ttf") format("truetype"); }
+@font-face { font-family: "Noto Sans"; font-style: normal; font-weight: 100 900; font-stretch: 62.5% 100%; font-display: swap; src: url("noto-sans-variable.ttf") format("truetype"); }
+@font-face { font-family: "Noto Sans"; font-style: italic; font-weight: 100 900; font-stretch: 62.5% 100%; font-display: swap; src: url("noto-sans-italic-variable.ttf") format("truetype"); }

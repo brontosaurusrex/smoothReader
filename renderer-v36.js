@@ -145,7 +145,7 @@ const MIN_LINE_HEIGHT = 1.2;
 const MAX_LINE_HEIGHT = 2.2;
 const LINE_HEIGHT_STEP = 0.04;
 const DEFAULT_SPEECH_MIN_LENGTH = 150;
-const DEFAULT_SPEECH_MAX_LENGTH = 550;
+const DEFAULT_SPEECH_MAX_LENGTH = 1200;
 const MIN_SPEECH_MAX_LENGTH = 300;
 const MAX_SPEECH_MAX_LENGTH = 1200;
 const LEGACY_DEFAULT_SPEECH_POSITION_PERCENT = 22;
@@ -178,6 +178,10 @@ const PALETTES = [
 ];
 const FONTS = [
   { id: "system-sans", name: "SYSTEM SANS" },
+  { id: "atkinson-next", name: "ATKINSON HYPERLEGIBLE NEXT" },
+  { id: "source-sans-3", name: "SOURCE SANS 3" },
+  { id: "manrope", name: "MANROPE" },
+  { id: "noto-sans", name: "NOTO SANS" },
   { id: "noto-serif", name: "NOTO SERIF" },
   { id: "literata", name: "LITERATA" },
   { id: "source-serif", name: "SOURCE SERIF 4" },

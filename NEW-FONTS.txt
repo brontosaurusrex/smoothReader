@@ -1,0 +1,24 @@
+Smooth Reader — four new sans fonts
+
+Added:
+  - Atkinson Hyperlegible Next
+  - Source Sans 3
+  - Manrope
+  - Noto Sans
+
+The reader is configured to use full, self-hosted variable TTFs only.
+After copying this patch over your existing Smooth Reader app, run once:
+
+  cd /opt/smooth-reader/app
+  ./fetch-new-fonts.sh
+
+The script downloads the complete TTF files from the official Google Fonts
+repository into vendor/fonts/. It also downloads each family's SIL OFL license.
+
+Other changes retained in this build:
+  - spoken TTS chunk stays at 100% opacity while surrounding text is dimmed
+  - existing left speech marker is unchanged
+  - Maximum chunk first-run/reset default is 1200
+  - the Alegreya variable-weight experiment is not present
+
+Existing books with a previously saved Maximum chunk value keep that saved value.

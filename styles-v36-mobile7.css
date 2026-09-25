@@ -37,6 +37,22 @@
   --reader-font: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+:root[data-font="atkinson-next"] {
+  --reader-font: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+}
+
+:root[data-font="source-sans-3"] {
+  --reader-font: "Source Sans 3", system-ui, sans-serif;
+}
+
+:root[data-font="manrope"] {
+  --reader-font: "Manrope", system-ui, sans-serif;
+}
+
+:root[data-font="noto-sans"] {
+  --reader-font: "Noto Sans", system-ui, sans-serif;
+}
+
 :root[data-font="noto-serif"] {
   --reader-font: "Noto Serif", Georgia, serif;
 }
