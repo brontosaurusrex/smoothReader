@@ -103,14 +103,24 @@ All selectable fonts are self-hosted in `vendor/fonts`; the app makes no Google 
 
 `EXPORT LIBRARY` and `IMPORT LIBRARY` are available only on the home screen. Export creates one ZIP containing:
 
-- up to 12 cached EPUB files and their cover thumbnails
+- every browser-cached and server-stored EPUB, deduplicated by content hash
+- cover thumbnails and book metadata
 - the recent-books list
 - the current and saved reading position for every remembered book
 - every per-book reader setting, including typography, appearance, and Piper controls
 
 Import merges the backup into the current browser rather than clearing it. Duplicate books are matched by their content hash, existing cached data is preserved, and the newer timestamp wins when both sides contain a reading position. If the combined browser cache exceeds 12 books, the 12 most recently opened remain cached locally; server books remain listed separately.
 
-This backs up browser-side Smooth Reader data. It does not export generated audio from the server-side Piper cache.
+If the server is unreachable or a download fails, export offers a browser-only
+backup with `-browser-only` in its filename. Cancelling produces no download.
+
+When connected, import restores every book to the server sequentially while
+keeping only the 12 most recently opened books in the browser cache. Server
+upload size limits apply per book. Offline import keeps its 12-book and 512 MiB
+limits and reports how many books were restored. Interrupted imports can be
+retried; newer reading positions and settings are preserved.
+
+Backups do not contain Piper voices or generated speech audio.
 
 ## Server library and cross-device reading
 
@@ -127,9 +137,8 @@ line becomes the saved bookmark. Newer timestamps win when two devices have
 saved the same book. Simultaneously reading the same book on two devices is
 therefore last-update-wins.
 
-The existing ZIP export remains a backup of the current browser's local data.
-Back up the server library directory separately as part of normal server
-backups.
+The ZIP export includes this signed-in user's server library. System-level
+server backups remain useful for other users, configuration, and Piper voices.
 
 ## Piper text-to-speech
 

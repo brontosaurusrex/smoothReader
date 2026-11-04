@@ -300,11 +300,17 @@ books/02-<hash-prefix>.epub
 
 The manifest currently has format name `smooth-reader-library` and version `1`.
 It contains the export timestamp, every string-valued localStorage item in the
-`smooth-reader:` namespace, and metadata for each cached book, including title,
+`smooth-reader:` namespace, and metadata for every cached or server-stored book, including title,
 author, and publication year when supplied by the EPUB. Cover thumbnails
 are carried in that metadata; EPUB bytes are separate ZIP entries. EPUB entries
 use ZIP `STORE` because EPUB files are already ZIP archives. The manifest uses
 normal deflate compression.
+
+The optional manifest `scope` is `complete` or `browser-only`; version 1
+backups without this field remain importable. Full export refreshes the signed-in
+server catalogue, downloads missing EPUBs and covers, and merges full server
+state into the storage snapshot by `savedAt`. Failed full exports offer a clearly
+labelled local-only fallback, never a silent partial archive.
 
 Calling export first saves the current readable position when a book is active.
 In normal use the button is on home, and the transition to home has already
@@ -318,13 +324,18 @@ Import does not clear the current browser library.
 - Existing cached EPUB bytes and thumbnails win for duplicate books.
 - The newer `openedAt` timestamp is retained.
 - Position conflicts use the newer `savedAt` timestamp.
-- Imported settings replace same-named local settings.
-- The current browser's last-book record is preserved if it already exists.
+- Settings conflicts also use the newer `savedAt` timestamp.
+- The last-book record points to the most recently opened retained book.
 - The combined collection is sorted by `openedAt` and limited to the newest 12.
-- Imported EPUB data is limited to 512 MiB after decompression.
+- Connected import restores all entries sequentially, subject to server per-book
+  size limits, without an aggregate 512 MiB limit.
+- Offline import processes the newest 12 entries with a 512 MiB decompressed
+  budget and reports when additional books require a connected restore.
 
-The import is browser-side. It does not import or change Piper voices and does
-not include the server audio cache.
+Connected import uses the existing EPUB, cover, and state APIs. Server state
+merging preserves newer saved positions and settings. Errors report the completed
+book count; retrying skips duplicate EPUB uploads and retries missing covers/state.
+Import does not change Piper voices or include the server audio cache.
 
 ## Per-user server library
 
@@ -557,8 +568,8 @@ own; access control belongs in Nginx.
 
 | Data | Location | Sent to server? | Included in export? |
 | --- | --- | --- | --- |
-| EPUB bytes | Browser IndexedDB; optional per-user server library | Automatically when the server is available | Yes, when locally cached |
-| Cover thumbnails | Browser IndexedDB; optional per-user server library | With an automatically stored book | Yes, when locally cached |
+| EPUB bytes | Browser IndexedDB; optional per-user server library | Automatically when the server is available | Yes, including server-only books |
+| Cover thumbnails | Browser IndexedDB; optional per-user server library | With an automatically stored book | Yes, including server-only books |
 | Reading positions | Browser localStorage; optional server `state.json` | After its book is server-stored | Yes |
 | Per-book settings and legacy fallbacks | Browser localStorage; optional server `state.json` | After its book is server-stored | Yes |
 | Speech session ID | Browser sessionStorage | With speech requests | No |

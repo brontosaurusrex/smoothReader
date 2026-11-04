@@ -886,6 +886,8 @@ const syncLibraryManageControls = () => {
     selectedLibraryBooks.has(libraryBookKey(record))
   );
   const busy = isBookLoading || serverLibraryBusy;
+  startExportLibrary.disabled = busy;
+  startImportLibrary.disabled = busy;
   startManageLibrary.disabled = busy || displayed.length === 0;
   libraryManageActions.hidden = !libraryManageMode;
   startRemove.disabled = busy || selected.length === 0;
@@ -1978,59 +1980,106 @@ const applyImportedSettings = () => {
   }
 };
 
+const buildLibraryBackup = async (includeServer) => {
+  if (includeServer && !await refreshServerLibrary(true)) {
+    throw new Error("Server unavailable");
+  }
+  const values = storageSnapshot();
+  const records = new Map();
+  for (const record of cachedRecentBooks) {
+    if (!record.bytes) continue;
+    const hash = record.hash || await hashBook(record.bytes);
+    records.set(hash, { ...record, hash });
+  }
+  if (includeServer) {
+    for (const record of serverBookInfo) {
+      records.set(record.hash, { ...record, ...records.get(record.hash) });
+    }
+  }
+  const archive = new window.JSZip();
+  const manifest = {
+    format: LIBRARY_BACKUP_FORMAT, version: LIBRARY_BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    scope: includeServer ? "complete" : "browser-only",
+    localStorage: values, books: []
+  };
+  for (const [index, record] of [...records.values()].entries()) {
+    showStatus(`EXPORTING ${index + 1} / ${records.size} · ${record.title || record.fileName}`);
+    const metadata = bookMetadataOnly(record);
+    delete metadata.coverUrl;
+    delete metadata.serverStored;
+    delete metadata.position;
+    if (includeServer && serverBookHashes.has(record.hash)) {
+      const payload = await serverRequest(`/api/library/books/${record.hash}/state`);
+      if (!payload?.state || payload.state.hash !== record.hash) throw new Error("Invalid server book state");
+      for (const [key, value] of [
+        [positionKey(record.hash), payload.state.position],
+        [bookSettingsKey(record.hash), payload.state.settings]
+      ]) {
+        if (!value || typeof value !== "object") continue;
+        const serialized = JSON.stringify(value);
+        if (!values[key] || storedValueSavedAt(serialized) > storedValueSavedAt(values[key])) values[key] = serialized;
+      }
+      if (!metadata.thumbnail && record.coverUrl) {
+        const bytes = await serverRequest(record.coverUrl, { expectBinary: true }, SERVER_LIBRARY_UPLOAD_TIMEOUT_MS);
+        metadata.thumbnail = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(new Blob([bytes], { type: "image/jpeg" }));
+        });
+        metadata.thumbnailVersion = COVER_THUMBNAIL_VERSION;
+      }
+    }
+    const bytes = record.bytes || await serverRequest(
+      `/api/library/books/${record.hash}/epub`, { expectBinary: true }, SERVER_LIBRARY_UPLOAD_TIMEOUT_MS
+    );
+    metadata.epubPath = `books/${String(index + 1).padStart(2, "0")}-${record.hash.slice(0, 16)}.epub`;
+    archive.file(metadata.epubPath, bytes, { binary: true, compression: "STORE" });
+    manifest.books.push(metadata);
+  }
+  archive.file("manifest.json", JSON.stringify(manifest, null, 2));
+  return { archive, manifest };
+};
+
 const exportLibrary = async () => {
-  if (isBookLoading) return;
+  if (isBookLoading || serverLibraryBusy) return;
+  serverLibraryBusy = true;
+  renderRecentBooks();
   try {
     showStatus("CREATING LIBRARY BACKUP…");
     await recentBooksReady;
     savePositionNow();
-    if (typeof window.JSZip !== "function") {
-      throw new Error("ZIP support is unavailable");
-    }
-
-    const archive = new window.JSZip();
-    const manifest = {
-      format: LIBRARY_BACKUP_FORMAT,
-      version: LIBRARY_BACKUP_VERSION,
-      exportedAt: new Date().toISOString(),
-      localStorage: storageSnapshot(),
-      books: []
-    };
-
-    cachedRecentBooks.forEach((record, index) => {
-      const metadata = bookMetadataOnly(record);
-      if (record.bytes) {
-        metadata.epubPath = `books/${String(index + 1).padStart(2, "0")}-${
-          String(record.hash || "book").slice(0, 16)
-        }.epub`;
-        archive.file(metadata.epubPath, record.bytes, {
-          binary: true,
-          compression: "STORE"
-        });
+    if (typeof window.JSZip !== "function") throw new Error("ZIP support is unavailable");
+    let backup;
+    try {
+      backup = await buildLibraryBackup(true);
+    } catch (error) {
+      if (!window.confirm(`Full library export failed: ${error.message}. Export only books cached in this browser instead? Server-only books will not be included.`)) {
+        showStatus("EXPORT CANCELLED", 2200);
+        return;
       }
-      manifest.books.push(metadata);
-    });
-
-    archive.file("manifest.json", JSON.stringify(manifest, null, 2));
-    const blob = await archive.generateAsync({
-      type: "blob",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 }
+      backup = await buildLibraryBackup(false);
+    }
+    const blob = await backup.archive.generateAsync({
+      type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 }
     });
     const createObjectURL = window.URL?.createObjectURL;
-    if (typeof createObjectURL !== "function") {
-      throw new Error("Browser downloads are unavailable");
-    }
+    if (typeof createObjectURL !== "function") throw new Error("Browser downloads are unavailable");
     const downloadUrl = createObjectURL.call(window.URL, blob);
     const link = document.createElement("a");
     link.href = downloadUrl;
-    link.download = `smooth-reader-library-${new Date().toISOString().slice(0, 10)}.zip`;
+    const localOnly = backup.manifest.scope === "browser-only";
+    link.download = `smooth-reader-library-${new Date().toISOString().slice(0, 10)}${localOnly ? "-browser-only" : ""}.zip`;
     link.click();
     window.setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 0);
-    showStatus(`LIBRARY EXPORTED · ${cachedRecentBooks.length} BOOKS`, 2200);
+    showStatus(`${localOnly ? "BROWSER-ONLY BACKUP" : "LIBRARY EXPORTED"} · ${backup.manifest.books.length} BOOKS`, 4000);
   } catch (error) {
     console.error(error);
-    showStatus(`EXPORT ERROR · ${error?.message || "Backup could not be created"}`, 3200);
+    showStatus(`EXPORT ERROR · ${error?.message || "Backup could not be created"}`, 5000);
+  } finally {
+    serverLibraryBusy = false;
+    renderRecentBooks();
   }
 };
 
@@ -2038,76 +2087,58 @@ const importLibrary = async (file) => {
   if (!file || isBookLoading || serverLibraryBusy) return;
   serverLibraryBusy = true;
   renderRecentBooks();
+  let importedCount = 0;
+  let totalCount = 0;
   try {
     showStatus("IMPORTING LIBRARY…");
     await recentBooksReady;
-    if (typeof window.JSZip !== "function") {
-      throw new Error("ZIP support is unavailable");
-    }
-
+    if (typeof window.JSZip !== "function") throw new Error("ZIP support is unavailable");
     const archive = await window.JSZip.loadAsync(await file.arrayBuffer());
     const manifestEntry = archive.file("manifest.json");
     if (!manifestEntry) throw new Error("Not a Smooth Reader backup");
     const manifest = JSON.parse(await manifestEntry.async("string"));
-    if (
-      manifest?.format !== LIBRARY_BACKUP_FORMAT ||
-      manifest.version !== LIBRARY_BACKUP_VERSION ||
-      !Array.isArray(manifest.books)
-    ) throw new Error("Unsupported Smooth Reader backup");
-
-    const importedBooks = [];
+    if (manifest?.format !== LIBRARY_BACKUP_FORMAT || manifest.version !== LIBRARY_BACKUP_VERSION || !Array.isArray(manifest.books)) {
+      throw new Error("Unsupported Smooth Reader backup");
+    }
+    const connected = await refreshServerLibrary(true);
+    const limits = connected ? await serverRequest("/api/library/status") : null;
     let importedBytes = 0;
-    const candidates = [...manifest.books]
-      .sort((first, second) => recordOpenedAt(second) - recordOpenedAt(first))
-      .slice(0, MAX_RECENT_BOOKS);
-    for (const [index, source] of candidates.entries()) {
-      const metadata = bookMetadataOnly(source);
-      const epubEntry = typeof source.epubPath === "string"
-        ? archive.file(source.epubPath)
-        : null;
-      if (epubEntry) {
-        metadata.bytes = await epubEntry.async("arraybuffer");
-        importedBytes += metadata.bytes.byteLength;
-        if (importedBytes > MAX_LIBRARY_IMPORT_BYTES) {
-          throw new Error("Backup contains more than 512 MiB of EPUB data");
-        }
-      }
-      metadata.fileName = metadata.fileName || `Imported book ${index + 1}.epub`;
-      importedBooks.push(metadata);
-    }
-
+    const allBooks = [...manifest.books].sort((a, b) => recordOpenedAt(b) - recordOpenedAt(a));
+    totalCount = allBooks.length;
+    const candidates = connected ? allBooks : allBooks.slice(0, MAX_RECENT_BOOKS);
     mergeImportedStorage(manifest.localStorage);
-    cachedRecentBooks = mergeBookCollections(cachedRecentBooks, importedBooks);
-    recentBookInfo = mergeBookCollections(
-      recentBookInfo,
-      [
-        ...importedRecentMetadata(manifest),
-        ...importedBooks.map(recentMetadataOnly)
-      ]
-    ).map(recentMetadataOnly);
-    localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
-    if (!localStorage.getItem(LAST_BOOK_KEY) && recentBookInfo[0]) {
-      localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(recentBookInfo[0]));
-    }
-    await writeCachedBooks(cachedRecentBooks);
-    lastBookCanReopen = Boolean(
-      cachedRecentBooks.find((cached) => booksMatch(recentBookInfo[0], cached))?.bytes
-    );
-    setReopenAvailability(lastBookCanReopen);
-    renderRecentBooks();
-    applyImportedSettings();
-
-    if (activeBookKey) {
-      const position = loadPosition(activeBookKey);
-      if (Number.isFinite(Number(position?.scrollY))) {
-        readerScrollBeforeHome = Number(position.scrollY);
+    for (const [index, source] of candidates.entries()) {
+      showStatus(`IMPORTING ${index + 1} / ${candidates.length} · ${source.title || source.fileName || "Book"}`);
+      const record = bookMetadataOnly(source);
+      const entry = typeof source.epubPath === "string" ? archive.file(source.epubPath) : null;
+      if (source.epubPath && !entry) throw new Error("Backup EPUB is missing");
+      if (entry) {
+        // JSZip's bundled entry metadata allows rejecting oversized entries before decompression.
+        if (connected && entry._data?.uncompressedSize > limits.maxBookBytes) throw new Error("Backup EPUB exceeds the server size limit");
+        record.bytes = await entry.async("arraybuffer");
+        importedBytes += record.bytes.byteLength;
+        if (!connected && importedBytes > MAX_LIBRARY_IMPORT_BYTES) throw new Error("Backup contains more than 512 MiB of EPUB data");
+        const hash = await hashBook(record.bytes);
+        if (record.hash && record.hash !== hash) throw new Error("Backup EPUB hash mismatch");
+        record.hash = hash;
       }
+      record.fileName ||= `Imported book ${index + 1}.epub`;
+      if (connected && record.bytes) await storeBookOnServer(record, { strictCover: true });
+      cachedRecentBooks = mergeBookCollections(cachedRecentBooks, [record]);
+      recentBookInfo = mergeBookCollections(recentBookInfo, [recentMetadataOnly(record)]).map(recentMetadataOnly);
+      localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
+      if (!await writeCachedBooks(cachedRecentBooks)) throw new Error("Browser cache could not be saved");
+      importedCount += 1;
     }
-    showStatus(`LIBRARY IMPORTED · ${importedBooks.length} BOOKS MERGED`, 2600);
-    await autoStoreBooksOnServer(importedBooks);
+    if (recentBookInfo[0]) localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(recentBookInfo[0]));
+    applyImportedSettings();
+    if (connected) await refreshServerLibrary(true);
+    showStatus(!connected && totalCount > candidates.length
+      ? `BROWSER ONLY · ${importedCount} / ${totalCount} BOOKS IMPORTED · CONNECT TO RESTORE ALL BOOKS`
+      : `LIBRARY IMPORTED · ${importedCount} BOOKS${connected ? " RESTORED TO SERVER" : " IN THIS BROWSER"}`, 6000);
   } catch (error) {
     console.error(error);
-    showStatus(`IMPORT ERROR · ${error?.message || "Backup could not be read"}`, 3600);
+    showStatus(`IMPORT STOPPED · ${importedCount} / ${totalCount} BOOKS · ${error.message} · RETRY TO CONTINUE`, 7000);
   } finally {
     serverLibraryBusy = false;
     renderRecentBooks();
@@ -2547,32 +2578,7 @@ const autoStoreBooksOnServer = async (records) => {
     await recentBooksReady;
     if (!await refreshServerLibrary(true)) return;
     for (const record of records) {
-      if (!record.hash || !record.bytes) continue;
-      if (!serverBookHashes.has(record.hash)) {
-        showStatus(`STORING ON SERVER · ${record.title || record.fileName}`);
-        await serverRequest(`/api/library/books/${record.hash}/epub`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/epub+zip" },
-          body: record.bytes
-        }, SERVER_LIBRARY_UPLOAD_TIMEOUT_MS);
-        serverBookHashes.add(record.hash);
-        serverBookInfo.push({ ...bookMetadataOnly(record), serverStored: true });
-        const cover = jpegBytesFromDataUrl(record.thumbnail);
-        if (cover?.byteLength) {
-          try {
-            await serverRequest(`/api/library/books/${record.hash}/cover`, {
-              method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: cover
-            }, SERVER_LIBRARY_UPLOAD_TIMEOUT_MS);
-          } catch (error) {
-            console.warn("The book was stored without its cover.", error);
-          }
-        }
-      }
-      await serverRequest(`/api/library/books/${record.hash}/state`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(serverStateForBook(record.hash))
-      });
+      if (record.hash && record.bytes) await storeBookOnServer(record);
     }
     await refreshServerLibrary(true);
     showStatus("BOOKS SAVED ON SERVER", 2200);
@@ -2583,6 +2589,35 @@ const autoStoreBooksOnServer = async (records) => {
     serverLibraryBusy = false;
     renderRecentBooks();
   }
+};
+
+const storeBookOnServer = async (record, { strictCover = false } = {}) => {
+  if (!serverBookHashes.has(record.hash)) {
+    showStatus(`STORING ON SERVER · ${record.title || record.fileName}`);
+    await serverRequest(`/api/library/books/${record.hash}/epub`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/epub+zip" },
+      body: record.bytes
+    }, SERVER_LIBRARY_UPLOAD_TIMEOUT_MS);
+    serverBookHashes.add(record.hash);
+    serverBookInfo.push({ ...bookMetadataOnly(record), serverStored: true });
+  }
+  const cover = jpegBytesFromDataUrl(record.thumbnail);
+  if (cover?.byteLength && !serverBookInfo.find((item) => item.hash === record.hash)?.coverUrl) {
+    try {
+      await serverRequest(`/api/library/books/${record.hash}/cover`, {
+        method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: cover
+      }, SERVER_LIBRARY_UPLOAD_TIMEOUT_MS);
+    } catch (error) {
+      if (strictCover) throw error;
+      console.warn("The book was stored without its cover.", error);
+    }
+  }
+  await serverRequest(`/api/library/books/${record.hash}/state`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...serverStateForBook(record.hash), ...recentMetadataOnly(record), hash: record.hash })
+  });
 };
 
 const hashBook = async (arrayBuffer) => {

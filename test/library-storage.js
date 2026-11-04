@@ -31,6 +31,7 @@ function fixture() {
     showStatus: value => messages.push(value),
     jpegBytesFromDataUrl: () => null,
     bookMetadataOnly: ({ bytes, ...record }) => record,
+    recentMetadataOnly: ({ bytes, thumbnail, thumbnailVersion, ...record }) => record,
     serverStateForBook: hash => ({ hash }),
     refreshServerLibrary: async () => {
       if (!c.serverLibraryAvailable) return false;
