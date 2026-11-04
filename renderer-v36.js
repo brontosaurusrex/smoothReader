@@ -611,7 +611,7 @@ const publicationYearFromArchive = async (archive, packagePath, packageXml) => {
   const manifestItems = opfManifestItems(packageXml);
   const guideReferences = opfGuideReferences(packageXml);
   const likelyNames = /(?:copyright|copyrt|colophon|publication|title[-_. ]?page)/i;
-  const candidates = uniqueResourceCandidates([
+  const namedCandidates = uniqueResourceCandidates([
     ...manifestItems
       .filter((item) =>
         /(?:xhtml|html)/i.test(item["media-type"] || "") &&
@@ -626,7 +626,20 @@ const publicationYearFromArchive = async (archive, packagePath, packageXml) => {
       .map((reference) => ({ href: reference.href, type: "application/xhtml+xml" }))
   ]);
 
-  for (const candidate of candidates.slice(0, 8)) {
+  // Some publishers number every page, including the copyright page.
+  // Check a bounded amount of front matter in reading order as a fallback.
+  const spineSource = String(packageXml || "").match(
+    /<(?:[\w.-]+:)?spine\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?spine\s*>/i
+  )?.[1] || "";
+  const manifestById = new Map(manifestItems.map((item) => [item.id, item]));
+  const frontMatter = Array.from(spineSource.matchAll(/<(?:[\w.-]+:)?itemref\b[^>]*\/?>/gi))
+    .slice(0, 8)
+    .map((match) => manifestById.get(xmlTagAttributes(match[0]).idref))
+    .filter((item) => item && /(?:xhtml|html)/i.test(item["media-type"] || ""))
+    .map((item) => ({ href: item.href, type: item["media-type"] }));
+  const candidates = uniqueResourceCandidates([...namedCandidates.slice(0, 8), ...frontMatter]);
+
+  for (const candidate of candidates) {
     const path = archivePathFrom(packagePath, candidate.href);
     const resource = archiveEntryForPath(archive, path);
     if (!resource) continue;
@@ -740,10 +753,9 @@ const formatBookMetadataTitle = (record) => {
   const title = normalizedMetadataText(record?.title);
   const author = normalizedMetadataText(record?.author);
   const publicationYear = publicationYearFrom(record?.publicationYear);
-  if (title && author && publicationYear) {
-    return `${title} (${author} - ${publicationYear})`;
-  }
-  return normalizedMetadataText(record?.fileName) || "Untitled EPUB";
+  const name = title || normalizedMetadataText(record?.fileName) || "Untitled EPUB";
+  const details = [author, publicationYear].filter(Boolean).join(" - ");
+  return details ? `${name} (${details})` : name;
 };
 
 const readingPositionForRecord = (record) => {
@@ -4523,8 +4535,8 @@ const openBook = async (file) => {
     }
     renderRecentBooks();
 
-    activeBookTitle = metadata?.title
-      ? `${metadata.title} — Smooth Reader`
+    activeBookTitle = epubMetadata.title
+      ? `${epubMetadata.title} — Smooth Reader`
       : "Smooth Reader";
     document.title = activeBookTitle;
     readerScrollBeforeHome = window.scrollY;
