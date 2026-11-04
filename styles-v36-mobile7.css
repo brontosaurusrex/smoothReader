@@ -658,9 +658,7 @@ body.is-dragging #drop-zone::before {
   opacity: 0.45;
 }
 
-#start-store-server:not(:disabled),
-#start-remove-local:not(:disabled),
-#start-remove-server:not(:disabled) {
+#start-remove:not(:disabled) {
   border-color: var(--display-link);
   color: var(--display-text);
 }

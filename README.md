@@ -55,17 +55,22 @@ shown above the bottom-right percentage.
 One simulated page equals 2,000 normalized text characters, including ordinary
 single spaces; images do not add pages.
 
-`MANAGE LIBRARY` on the opening screen lets you select one or more books.
-`REMOVE FROM THIS DEVICE` deletes their local EPUBs, thumbnails, positions, and
-per-book settings. When the server library is available, it also provides
-`STORE ON SERVER` and `REMOVE FROM SERVER`. Cover outlines identify whether a
-book is server-backed or client-only.
+Books opened or imported while the server is available are stored there
+automatically, as well as cached in this browser. When the server is unavailable, browser storage
+continues to work. If an upload fails, the browser copy is kept; reopening the book
+retries server storage.
+
+`MANAGE LIBRARY` lets you select books and choose `REMOVE`. After confirmation,
+this deletes the server copy and this browser's EPUB, thumbnail, reading position,
+and settings. If a known server copy cannot be deleted, its browser copy is kept
+and removal can be retried after reconnecting. Copies cached on other devices
+are unaffected.
 
 The browser keeps at most 12 EPUB files locally. Opening another book evicts the
 least-recently opened local cache entry. A server-backed book remains visible
 with its server cover and downloads into the browser cache again when clicked.
 A white cover outline denotes server storage; a same-width black outline denotes
-a client-only book. Only `REMOVE FROM SERVER` deletes the server copy.
+a client-only book. Only `REMOVE` deletes the server copy.
 
 ## Settings
 
@@ -109,9 +114,9 @@ This backs up browser-side Smooth Reader data. It does not export generated audi
 
 ## Server library and cross-device reading
 
-When Smooth Reader is served by `piper_bridge.py`, selected books can be stored
-in a private server library. Each authenticated Nginx username gets an isolated
-library. Sign in with the same username on another device and its server books
+When Smooth Reader is served by `piper_bridge.py`, books are automatically stored
+in a private server library when opened or imported. Each authenticated Nginx
+username gets an isolated library. Sign in with the same username on another device and its server books
 appear on the home screen; clicking one downloads, caches, and opens it.
 
 After the initial EPUB upload, Smooth Reader synchronizes only the small
@@ -167,7 +172,7 @@ For an internet-facing Debian installation using systemd, Nginx, HTTPS, and pass
   opening, section, and metadata operations have bounded timeouts.
 - Clearing browser site data removes cached books, positions, and settings.
 - EPUB.js, JSZip, and fonts are bundled. Ebook contents remain in the browser
-  unless the user explicitly chooses `STORE ON SERVER`. With Piper enabled,
+  when the server is unavailable. With Piper enabled,
   current text chunks are also sent to the configured bridge.
 
 ## Verify

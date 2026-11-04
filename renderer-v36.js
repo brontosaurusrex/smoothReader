@@ -15,9 +15,7 @@ const startExportLibrary = document.querySelector("#start-export-library");
 const startImportLibrary = document.querySelector("#start-import-library");
 const startManageLibrary = document.querySelector("#start-manage-library");
 const libraryManageActions = document.querySelector("#library-manage-actions");
-const startStoreServer = document.querySelector("#start-store-server");
-const startRemoveLocal = document.querySelector("#start-remove-local");
-const startRemoveServer = document.querySelector("#start-remove-server");
+const startRemove = document.querySelector("#start-remove");
 const startCancelManage = document.querySelector("#start-cancel-manage");
 const libraryImportInput = document.querySelector("#library-import-input");
 const settingsMenu = document.querySelector("#settings-menu");
@@ -218,6 +216,7 @@ let libraryManageMode = false;
 const selectedLibraryBooks = new Set();
 let serverLibraryAvailable = false;
 let serverLibraryBusy = false;
+const removingBookHashes = new Set();
 let serverBookInfo = [];
 const serverBookHashes = new Set();
 let activeBookCharacterCount = 0;
@@ -835,8 +834,6 @@ const displayedLibraryBooks = () => {
 
 const setServerLibraryAvailable = (available) => {
   serverLibraryAvailable = Boolean(available);
-  startStoreServer.hidden = !serverLibraryAvailable;
-  startRemoveServer.hidden = !serverLibraryAvailable;
 };
 
 const refreshServerLibrary = async (silent = false) => {
@@ -852,8 +849,6 @@ const refreshServerLibrary = async (silent = false) => {
     return true;
   } catch (error) {
     setServerLibraryAvailable(false);
-    serverBookInfo = [];
-    serverBookHashes.clear();
     renderRecentBooks();
     if (!silent) showStatus(`SERVER LIBRARY ERROR · ${error.message}`, 3200);
     return false;
@@ -890,25 +885,10 @@ const syncLibraryManageControls = () => {
   const selected = displayed.filter((record) =>
     selectedLibraryBooks.has(libraryBookKey(record))
   );
-  const hasLocalSelection = selected.some((record) =>
-    recentBookInfo.some((candidate) => booksMatch(candidate, record)) ||
-    Boolean(cachedRecordFor(record)?.bytes)
-  );
-  const hasUploadSelection = selected.some((record) =>
-    Boolean(cachedRecordFor(record)?.bytes) && !serverBookHashes.has(record.hash)
-  );
-  const hasServerSelection = selected.some((record) =>
-    serverBookHashes.has(record.hash)
-  );
   const busy = isBookLoading || serverLibraryBusy;
   startManageLibrary.disabled = busy || displayed.length === 0;
   libraryManageActions.hidden = !libraryManageMode;
-  startStoreServer.disabled = busy || !hasUploadSelection;
-  startRemoveLocal.disabled = busy || !hasLocalSelection;
-  startRemoveServer.disabled = busy || !hasServerSelection;
-  startStoreServer.textContent = selectedLibraryBooks.size > 0
-    ? `STORE ON SERVER (${selectedLibraryBooks.size})`
-    : "STORE ON SERVER";
+  startRemove.disabled = busy || selected.length === 0;
   if (libraryManageMode) recentBookList.classList.add("is-managing");
   else recentBookList.classList.remove("is-managing");
 };
@@ -1170,75 +1150,67 @@ const recentBooksReady = Promise.all([
   refreshServerLibrary(true)
 ]);
 
-const removeSelectedClientBooks = async () => {
-  if (isBookLoading || selectedLibraryBooks.size === 0) return;
-  const selectedRecords = displayedLibraryBooks().filter((record) =>
-    selectedLibraryBooks.has(libraryBookKey(record)) && (
-      recentBookInfo.some((candidate) => booksMatch(candidate, record)) ||
-      Boolean(cachedRecordFor(record)?.bytes)
-    )
+const removeSelectedBooks = async () => {
+  if (isBookLoading || serverLibraryBusy || selectedLibraryBooks.size === 0) return;
+  const selected = displayedLibraryBooks().filter((record) =>
+    selectedLibraryBooks.has(libraryBookKey(record))
   );
-  if (selectedRecords.length === 0) return;
-
-  const count = selectedRecords.length;
-  const prompt = count === 1
-    ? "Remove this book, its reading position, and its settings from this device? Any server copy will be kept."
-    : `Remove these ${count} books, their reading positions, and their settings from this device? Any server copies will be kept.`;
+  if (selected.length === 0) return;
+  const prompt = selected.length === 1
+    ? "Remove this book, its reading position, and its settings from the server and this browser?"
+    : `Remove these ${selected.length} books, their reading positions, and their settings from the server and this browser?`;
   if (!window.confirm(prompt)) return;
 
-  const removedHashes = new Set();
-  selectedRecords.forEach((record) => {
-    if (record.hash) removedHashes.add(record.hash);
-    const cached = cachedRecentBooks.find((candidate) => booksMatch(record, candidate));
-    if (cached?.hash) removedHashes.add(cached.hash);
-  });
-  const activeBookWasRemoved = Boolean(
-    activeBookKey && removedHashes.has(activeBookKey)
-  );
-  const retainedCachedBooks = cachedRecentBooks.filter((cached) =>
-    !selectedRecords.some((record) => booksMatch(record, cached))
-  );
-
+  serverLibraryBusy = true;
+  renderRecentBooks();
+  let removed = 0;
   try {
-    if (activeBookWasRemoved && serverBookHashes.has(activeBookKey)) {
-      await syncServerBookState(activeBookKey);
-    }
-    await writeCachedBooks(retainedCachedBooks);
-    if (activeBookWasRemoved) {
-      destroyCurrentBook();
-      activeBookKey = null;
-      activeBookTitle = "";
-      readerScrollBeforeHome = 0;
-      replaceHomeHistory();
-    }
-
-    removedHashes.forEach((hash) => {
+    for (const record of selected) {
+      const hash = record.hash;
+      removingBookHashes.add(hash);
+      const timer = serverStateSyncTimers.get(hash);
+      if (timer !== undefined) window.clearTimeout(timer);
+      serverStateSyncTimers.delete(hash);
+      await serverStateSyncing.get(hash);
+      if (serverBookHashes.has(hash)) {
+        if (!serverLibraryAvailable) throw new Error("Server unavailable; reconnect to remove both copies");
+        await serverRequest(`/api/library/books/${hash}`, { method: "DELETE" });
+        serverBookHashes.delete(hash);
+        serverBookInfo = serverBookInfo.filter((candidate) => !booksMatch(record, candidate));
+      }
+      const retained = cachedRecentBooks.filter((candidate) => !booksMatch(record, candidate));
+      if (!await writeCachedBooks(retained)) throw new Error("Browser storage could not be updated");
+      if (activeBookKey && activeBookKey === hash) {
+        destroyCurrentBook();
+        activeBookKey = null;
+        activeBookTitle = "";
+        readerScrollBeforeHome = 0;
+        replaceHomeHistory();
+      }
       localStorage.removeItem(positionKey(hash));
       localStorage.removeItem(bookSettingsKey(hash));
-    });
-    recentBookInfo = recentBookInfo.filter((record) =>
-      !selectedLibraryBooks.has(libraryBookKey(record))
-    );
-    cachedRecentBooks = retainedCachedBooks;
-    if (recentBookInfo.length > 0) {
-      localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
-      localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(recentBookInfo[0]));
-    } else {
-      localStorage.removeItem(RECENT_BOOKS_KEY);
-      localStorage.removeItem(LAST_BOOK_KEY);
+      cachedRecentBooks = retained;
+      recentBookInfo = recentBookInfo.filter((candidate) => !booksMatch(record, candidate));
+      if (recentBookInfo.length > 0) {
+        localStorage.setItem(RECENT_BOOKS_KEY, JSON.stringify(recentBookInfo));
+        localStorage.setItem(LAST_BOOK_KEY, JSON.stringify(recentBookInfo[0]));
+      } else {
+        localStorage.removeItem(RECENT_BOOKS_KEY);
+        localStorage.removeItem(LAST_BOOK_KEY);
+      }
+      selectedLibraryBooks.delete(libraryBookKey(record));
+      removed += 1;
     }
-    lastBookCanReopen = Boolean(
-      cachedRecentBooks.find((cached) => booksMatch(recentBookInfo[0], cached))?.bytes
-    );
     setLibraryManageMode(false);
-    setReopenAvailability(lastBookCanReopen);
-    showStatus(
-      `${count} ${count === 1 ? "BOOK" : "BOOKS"} REMOVED FROM THIS DEVICE`,
-      2200
-    );
+    showStatus(`${removed} ${removed === 1 ? "BOOK" : "BOOKS"} REMOVED`, 2400);
   } catch (error) {
     console.error(error);
-    showStatus("BOOKS COULD NOT BE REMOVED", 2400);
+    showStatus(`REMOVED ${removed} / ${selected.length} · ${error.message}`, 6000);
+  } finally {
+    selected.forEach((record) => removingBookHashes.delete(record.hash));
+    serverLibraryBusy = false;
+    renderRecentBooks();
+    setReopenAvailability(lastBookCanReopen);
   }
 };
 
@@ -1558,7 +1530,7 @@ const handleViewportResize = () => {
 const bookSettingsKey = (hash) => `${BOOK_SETTINGS_PREFIX}${hash}`;
 
 const scheduleServerStateSync = (hash = activeBookKey, immediate = false) => {
-  if (!hash || !serverLibraryAvailable || !serverBookHashes.has(hash)) return;
+  if (!hash || removingBookHashes.has(hash) || !serverLibraryAvailable || !serverBookHashes.has(hash)) return;
   const existingTimer = serverStateSyncTimers.get(hash);
   if (existingTimer !== undefined) window.clearTimeout(existingTimer);
   const timer = window.setTimeout(() => {
@@ -2063,7 +2035,9 @@ const exportLibrary = async () => {
 };
 
 const importLibrary = async (file) => {
-  if (!file || isBookLoading) return;
+  if (!file || isBookLoading || serverLibraryBusy) return;
+  serverLibraryBusy = true;
+  renderRecentBooks();
   try {
     showStatus("IMPORTING LIBRARY…");
     await recentBooksReady;
@@ -2130,9 +2104,13 @@ const importLibrary = async (file) => {
       }
     }
     showStatus(`LIBRARY IMPORTED · ${importedBooks.length} BOOKS MERGED`, 2600);
+    await autoStoreBooksOnServer(importedBooks);
   } catch (error) {
     console.error(error);
     showStatus(`IMPORT ERROR · ${error?.message || "Backup could not be read"}`, 3600);
+  } finally {
+    serverLibraryBusy = false;
+    renderRecentBooks();
   }
 };
 
@@ -2501,7 +2479,7 @@ const serverStateForBook = (bookHash) => {
 };
 
 const syncServerBookState = (bookHash = activeBookKey, keepalive = false) => {
-  if (!bookHash || !serverLibraryAvailable || !serverBookHashes.has(bookHash)) {
+  if (!bookHash || removingBookHashes.has(bookHash) || !serverLibraryAvailable || !serverBookHashes.has(bookHash)) {
     return Promise.resolve(false);
   }
   const previous = serverStateSyncing.get(bookHash) || Promise.resolve();
@@ -2536,6 +2514,7 @@ const flushServerBookState = (bookHash = activeBookKey) => {
   }
   if (
     !bookHash ||
+    removingBookHashes.has(bookHash) ||
     !serverLibraryAvailable ||
     !serverBookHashes.has(bookHash) ||
     typeof window.fetch !== "function"
@@ -2560,44 +2539,33 @@ const jpegBytesFromDataUrl = (dataUrl) => {
   return bytes;
 };
 
-const storeSelectedBooksOnServer = async () => {
-  if (!serverLibraryAvailable || serverLibraryBusy || isBookLoading) return;
-  const selected = displayedLibraryBooks().filter((record) =>
-    selectedLibraryBooks.has(libraryBookKey(record)) &&
-    Boolean(cachedRecordFor(record)?.bytes) &&
-    !serverBookHashes.has(record.hash)
-  );
-  if (selected.length === 0) return;
-
+const autoStoreBooksOnServer = async (records) => {
+  // A static/offline reader remains fully usable with browser storage alone.
   serverLibraryBusy = true;
-  syncLibraryManageControls();
+  renderRecentBooks();
   try {
-    for (const [index, record] of selected.entries()) {
-      const cached = cachedRecordFor(record);
-      showStatus(`UPLOADING ${index + 1} / ${selected.length} · ${record.title || record.fileName}`);
-      await serverRequest(
-        `/api/library/books/${record.hash}/epub`,
-        {
+    await recentBooksReady;
+    if (!await refreshServerLibrary(true)) return;
+    for (const record of records) {
+      if (!record.hash || !record.bytes) continue;
+      if (!serverBookHashes.has(record.hash)) {
+        showStatus(`STORING ON SERVER · ${record.title || record.fileName}`);
+        await serverRequest(`/api/library/books/${record.hash}/epub`, {
           method: "PUT",
           headers: { "Content-Type": "application/epub+zip" },
-          body: cached.bytes
-        },
-        SERVER_LIBRARY_UPLOAD_TIMEOUT_MS
-      );
-      const cover = jpegBytesFromDataUrl(cached.thumbnail);
-      if (cover?.byteLength) {
-        try {
-          await serverRequest(
-            `/api/library/books/${record.hash}/cover`,
-            {
-              method: "PUT",
-              headers: { "Content-Type": "image/jpeg" },
-              body: cover
-            },
-            SERVER_LIBRARY_UPLOAD_TIMEOUT_MS
-          );
-        } catch (error) {
-          console.warn("The book was stored without its cover.", error);
+          body: record.bytes
+        }, SERVER_LIBRARY_UPLOAD_TIMEOUT_MS);
+        serverBookHashes.add(record.hash);
+        serverBookInfo.push({ ...bookMetadataOnly(record), serverStored: true });
+        const cover = jpegBytesFromDataUrl(record.thumbnail);
+        if (cover?.byteLength) {
+          try {
+            await serverRequest(`/api/library/books/${record.hash}/cover`, {
+              method: "PUT", headers: { "Content-Type": "image/jpeg" }, body: cover
+            }, SERVER_LIBRARY_UPLOAD_TIMEOUT_MS);
+          } catch (error) {
+            console.warn("The book was stored without its cover.", error);
+          }
         }
       }
       await serverRequest(`/api/library/books/${record.hash}/state`, {
@@ -2605,56 +2573,15 @@ const storeSelectedBooksOnServer = async () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(serverStateForBook(record.hash))
       });
-      serverBookHashes.add(record.hash);
     }
     await refreshServerLibrary(true);
-    setLibraryManageMode(false);
-    showStatus(
-      `${selected.length} ${selected.length === 1 ? "BOOK" : "BOOKS"} STORED ON SERVER`,
-      2400
-    );
+    showStatus("BOOKS SAVED ON SERVER", 2200);
   } catch (error) {
-    console.error(error);
-    showStatus(`SERVER UPLOAD ERROR · ${error.message}`, 5200);
+    console.warn("Automatic server storage failed; browser copies were kept.", error);
+    showStatus(`BROWSER COPY KEPT · SERVER SAVE FAILED · ${error.message}`, 6000);
   } finally {
     serverLibraryBusy = false;
     renderRecentBooks();
-    syncLibraryManageControls();
-  }
-};
-
-const removeSelectedServerBooks = async () => {
-  if (!serverLibraryAvailable || serverLibraryBusy || isBookLoading) return;
-  const selected = displayedLibraryBooks().filter((record) =>
-    selectedLibraryBooks.has(libraryBookKey(record)) && serverBookHashes.has(record.hash)
-  );
-  if (selected.length === 0) return;
-  const prompt = selected.length === 1
-    ? "Remove this book and its synchronized state from the server? The copy on this device will be kept."
-    : `Remove these ${selected.length} books and their synchronized state from the server? Copies on this device will be kept.`;
-  if (!window.confirm(prompt)) return;
-
-  serverLibraryBusy = true;
-  syncLibraryManageControls();
-  try {
-    for (const [index, record] of selected.entries()) {
-      showStatus(`REMOVING FROM SERVER ${index + 1} / ${selected.length}`);
-      await serverRequest(`/api/library/books/${record.hash}`, { method: "DELETE" });
-      serverBookHashes.delete(record.hash);
-    }
-    await refreshServerLibrary(true);
-    setLibraryManageMode(false);
-    showStatus(
-      `${selected.length} ${selected.length === 1 ? "BOOK" : "BOOKS"} REMOVED FROM SERVER`,
-      2400
-    );
-  } catch (error) {
-    console.error(error);
-    showStatus(`SERVER REMOVE ERROR · ${error.message}`, 4200);
-  } finally {
-    serverLibraryBusy = false;
-    renderRecentBooks();
-    syncLibraryManageControls();
   }
 };
 
@@ -4430,7 +4357,7 @@ const openBook = async (file) => {
     showStatus("Please drop an EPUB file.");
     return;
   }
-  if (isBookLoading) return;
+  if (isBookLoading || serverLibraryBusy) return;
 
   const generation = ++loadGeneration;
   let replacedCurrentBook = false;
@@ -4444,6 +4371,7 @@ const openBook = async (file) => {
   showStatus("OPENING…");
 
   try {
+    await recentBooksReady;
     const bytes = await file.arrayBuffer();
     const hash = await hashBook(bytes);
     if (generation !== loadGeneration) return;
@@ -4541,6 +4469,7 @@ const openBook = async (file) => {
     document.title = activeBookTitle;
     readerScrollBeforeHome = window.scrollY;
     commitReaderHistory();
+    await autoStoreBooksOnServer([{ ...lastBookInfo, bytes, thumbnail }]);
     scheduleServerStateSync(hash);
     return true;
   } catch (error) {
@@ -4847,9 +4776,7 @@ startExportLibrary.addEventListener("click", () => void exportLibrary());
 startImportLibrary.addEventListener("click", () => libraryImportInput.click());
 startManageLibrary.addEventListener("click", () => setLibraryManageMode(true));
 startCancelManage.addEventListener("click", () => setLibraryManageMode(false));
-startStoreServer.addEventListener("click", () => void storeSelectedBooksOnServer());
-startRemoveLocal.addEventListener("click", () => void removeSelectedClientBooks());
-startRemoveServer.addEventListener("click", () => void removeSelectedServerBooks());
+startRemove.addEventListener("click", () => void removeSelectedBooks());
 settingsSpeechStart.addEventListener("click", startSpeech);
 settingsSpeechPause.addEventListener("click", toggleSpeechPause);
 settingsSpeechStop.addEventListener("click", stopSpeech);

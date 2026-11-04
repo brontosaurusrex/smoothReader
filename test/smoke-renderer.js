@@ -108,9 +108,7 @@ const elements = {
   "#start-import-library": makeElement(),
   "#start-manage-library": makeElement(),
   "#library-manage-actions": makeElement(),
-  "#start-store-server": makeElement(),
-  "#start-remove-local": makeElement(),
-  "#start-remove-server": makeElement(),
+  "#start-remove": makeElement(),
   "#start-cancel-manage": makeElement(),
   "#library-import-input": makeElement(),
   "#settings-menu": makeElement(),
@@ -186,8 +184,6 @@ elements["#settings-palette-options"].hidden = true;
 elements["#fullscreen-toggle"].hidden = true;
 elements["#settings-speech-speaker-row"].hidden = true;
 elements["#library-manage-actions"].hidden = true;
-elements["#start-store-server"].hidden = true;
-elements["#start-remove-server"].hidden = true;
 elements["#reading-progress"].hidden = true;
 elements["#speech-voice"].hidden = true;
 elements["#speech-controls"].hidden = true;
@@ -586,9 +582,7 @@ assert.match(indexSource, /id="start-export-library"[^>]*>EXPORT LIBRARY</);
 assert.match(indexSource, /id="start-import-library"[^>]*>IMPORT LIBRARY</);
 assert.match(indexSource, /id="start-manage-library"[^>]*>MANAGE LIBRARY</);
 assert.match(indexSource, /id="library-manage-actions"[^>]*hidden/);
-assert.match(indexSource, /id="start-store-server"[^>]*>STORE ON SERVER</);
-assert.match(indexSource, /id="start-remove-local"[^>]*>REMOVE FROM THIS DEVICE</);
-assert.match(indexSource, /id="start-remove-server"[^>]*>REMOVE FROM SERVER</);
+assert.match(indexSource, /id="start-remove"[^>]*>REMOVE</);
 assert.match(indexSource, /id="start-cancel-manage"[^>]*>CANCEL</);
 assert.match(indexSource, /id="library-import-input"[^>]*accept="\.zip,application\/zip"/);
 assert.match(indexSource, /id="library-actions"/);
@@ -647,8 +641,8 @@ assert.doesNotMatch(indexSource, /id="start-settings-scope"/);
 assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260912-palette-swatches1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20261104-book-metadata/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20261104-auto-storage/);
+assert.match(indexSource, /renderer-v36\.js\?v=20261104-auto-storage/);
 assert.match(indexSource, /id="settings-palette-toggle"[^>]*aria-haspopup="listbox"/);
 assert.match(indexSource, /id="settings-palette-options"[^>]*role="listbox"/);
 assert.match(stylesSource, /\.palette-swatches i\s*\{[^}]*border-radius:\s*50%[^}]*background:\s*var\(--swatch-color\)/s);
@@ -670,9 +664,8 @@ assert.match(rendererSource, /LIBRARY_BACKUP_FORMAT = "smooth-reader-library"/);
 assert.match(rendererSource, /const exportLibrary = async/);
 assert.match(rendererSource, /const importLibrary = async/);
 assert.match(rendererSource, /\/api\/library\/books/);
-assert.match(rendererSource, /const storeSelectedBooksOnServer = async/);
-assert.match(rendererSource, /const removeSelectedServerBooks = async/);
-assert.match(rendererSource, /const removeSelectedClientBooks = async/);
+assert.match(rendererSource, /const autoStoreBooksOnServer = async/);
+assert.match(rendererSource, /const removeSelectedBooks = async/);
 assert.match(rendererSource, /const EPUB_OPEN_TIMEOUT_MS = 30_000/);
 assert.match(rendererSource, /const validateEpubBytes = async/);
 assert.match(rendererSource, /captureTextPositionAnchor/);
@@ -1209,8 +1202,6 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#start-reopen"].disabled, false);
   assert.equal(elements["#start-manage-library"].disabled, false);
   assert.equal(elements["#library-manage-actions"].hidden, true);
-  assert.equal(elements["#start-store-server"].hidden, true);
-  assert.equal(elements["#start-remove-server"].hidden, true);
 
   const serverHashFixture = "a".repeat(64);
   context.serverBookFixture = {
@@ -1227,8 +1218,6 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
     setServerLibraryAvailable(true);
     renderRecentBooks();
   `, context);
-  assert.equal(elements["#start-store-server"].hidden, false);
-  assert.equal(elements["#start-remove-server"].hidden, false);
   assert.equal(elements["#recent-book-list"].children.length, 2);
   assert.equal(
     elements["#recent-book-list"].children[0].classList.contains("is-server-stored"),
@@ -1663,9 +1652,7 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#start-export-library"].listeners.has("click"), true);
   assert.equal(elements["#start-import-library"].listeners.has("click"), true);
   assert.equal(elements["#start-manage-library"].listeners.has("click"), true);
-  assert.equal(elements["#start-store-server"].listeners.has("click"), true);
-  assert.equal(elements["#start-remove-local"].listeners.has("click"), true);
-  assert.equal(elements["#start-remove-server"].listeners.has("click"), true);
+  assert.equal(elements["#start-remove"].listeners.has("click"), true);
   assert.equal(elements["#start-cancel-manage"].listeners.has("click"), true);
   assert.equal(elements["#library-import-input"].listeners.has("change"), true);
   assert.equal(elements["#settings-speech-start"].listeners.has("click"), true);
@@ -1935,10 +1922,10 @@ const drop = (droppedFile = file) => windowListeners.get("drop")({
   assert.equal(elements["#recent-book-list"].classList.contains("is-managing"), true);
   elements["#recent-book-list"].children[0].listeners.get("click")();
   elements["#recent-book-list"].children[1].listeners.get("click")();
-  assert.equal(elements["#start-remove-local"].disabled, false);
+  assert.equal(elements["#start-remove"].disabled, false);
   assert.equal(elements["#recent-book-list"].children[0].getAttribute("aria-pressed"), "true");
   assert.equal(elements["#recent-book-list"].children[1].getAttribute("aria-pressed"), "true");
-  elements["#start-remove-local"].listeners.get("click")();
+  elements["#start-remove"].listeners.get("click")();
   await wait(30);
   assert.match(confirmPrompts.at(-1), /Remove these 2 books/);
   assert.equal(elements["#recent-book-list"].children.length, 3);

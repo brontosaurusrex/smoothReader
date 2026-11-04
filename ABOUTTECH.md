@@ -265,12 +265,13 @@ books remain in the home catalogue and are downloaded and recached when clicked.
 If IndexedDB is unavailable or a write fails, local metadata and positions can
 still exist, but a client-only book must be dropped again.
 
-Home-screen library management uses a temporary selection set. `REMOVE FROM
-THIS DEVICE` rewrites the IndexedDB recent-books array, removes the selected
-hashes' position and settings keys from localStorage, and updates the last-book
-pointer while retaining any server copy. If the currently loaded book is
-removed locally, its hidden DOM and active identity are also discarded so
-Browser Forward cannot silently restore it.
+Home-screen library management uses a temporary selection set. `REMOVE` deletes
+selected server copies before clearing their IndexedDB records, localStorage
+positions/settings, and last-book pointer. Known server deletion failures retain
+the browser copy and selection for retry. Pending state writes finish before a
+delete; further writes are blocked while that book is being removed. If the
+currently loaded book is removed, its hidden DOM and active identity are also
+discarded so Browser Forward cannot silently restore it.
 
 ### sessionStorage
 
@@ -337,8 +338,9 @@ remain unchanged. Server summaries include only the small numeric position
 fields needed for the home-screen percentage and simulated-page label; full
 state remains available through the per-book state endpoint.
 
-`STORE ON SERVER` sends a selected cached EPUB once, followed by its JPEG cover
-and JSON state. Upload requests have a three-minute client bound. The bridge
+Opening or importing a book automatically sends its EPUB once when the server
+is available, followed by its JPEG cover and JSON state. Upload requests have a
+three-minute client bound. The bridge
 streams EPUB bytes to a temporary file, checks the declared size and SHA-256,
 validates the ZIP and EPUB container, then atomically renames it. A partial,
 damaged, mismatched, or oversized upload never replaces the stored book.
@@ -555,8 +557,8 @@ own; access control belongs in Nginx.
 
 | Data | Location | Sent to server? | Included in export? |
 | --- | --- | --- | --- |
-| EPUB bytes | Browser IndexedDB; optional per-user server library | Only after `STORE ON SERVER` | Yes, when locally cached |
-| Cover thumbnails | Browser IndexedDB; optional per-user server library | With an explicitly stored book | Yes, when locally cached |
+| EPUB bytes | Browser IndexedDB; optional per-user server library | Automatically when the server is available | Yes, when locally cached |
+| Cover thumbnails | Browser IndexedDB; optional per-user server library | With an automatically stored book | Yes, when locally cached |
 | Reading positions | Browser localStorage; optional server `state.json` | After its book is server-stored | Yes |
 | Per-book settings and legacy fallbacks | Browser localStorage; optional server `state.json` | After its book is server-stored | Yes |
 | Speech session ID | Browser sessionStorage | With speech requests | No |
