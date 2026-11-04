@@ -641,7 +641,7 @@ assert.doesNotMatch(indexSource, /id="start-settings-scope"/);
 assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
-assert.match(indexSource, /styles-v36-mobile7\.css\?v=20261104-auto-storage/);
+assert.match(indexSource, /styles-v36-mobile7\.css\?v=20261104-manage-width/);
 assert.match(indexSource, /renderer-v36\.js\?v=20261104-auto-storage/);
 assert.match(indexSource, /id="settings-palette-toggle"[^>]*aria-haspopup="listbox"/);
 assert.match(indexSource, /id="settings-palette-options"[^>]*role="listbox"/);

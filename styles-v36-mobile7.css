@@ -631,7 +631,7 @@ body.is-dragging #drop-zone::before {
 }
 
 #library-manage-actions {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 #library-actions button,
@@ -805,9 +805,14 @@ body.is-dragging #drop-zone::before {
   #start-hotkeys,
   #library-actions,
   #library-manage-actions {
-    grid-template-columns: 1fr;
     gap: 0.62rem;
     width: min(24rem, calc(100vw - 5rem));
+  }
+
+  #recent-books,
+  #start-hotkeys,
+  #library-actions {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1392,8 +1397,7 @@ body.is-right-dragging * {
     line-height: 1.65;
   }
 
-  #library-actions,
-  #library-manage-actions {
+  #library-actions {
     grid-template-columns: 1fr;
   }
 
