@@ -226,6 +226,7 @@ const revokedObjectUrls = [];
 let speechRectLeft = 120;
 let speechBlockLeft = 80;
 let speechBlockLeftTwo = 80;
+let readingFontSize = 36;
 const anchorTextNode = {
   nodeType: 3,
   textContent: "A stable reading anchor",
@@ -437,6 +438,9 @@ const context = vm.createContext({
     }
   },
   window: {
+    getComputedStyle() {
+      return { fontSize: `${readingFontSize}px` };
+    },
     indexedDB,
     innerWidth: 1200,
     innerHeight: 800,
@@ -644,7 +648,7 @@ assert.doesNotMatch(indexSource, /<strong>GLOBAL<\/strong>/);
 assert.match(indexSource, /<html lang="en" data-view="home">/);
 assert.match(indexSource, /styles-v36-mobile7\.css/);
 assert.match(indexSource, /styles-v36-mobile7\.css\?v=20260912-palette-swatches1/);
-assert.match(indexSource, /renderer-v36\.js\?v=20260912-palette-swatches1/);
+assert.match(indexSource, /renderer-v36\.js\?v=20261104-marker-spacing/);
 assert.match(indexSource, /id="settings-palette-toggle"[^>]*aria-haspopup="listbox"/);
 assert.match(indexSource, /id="settings-palette-options"[^>]*role="listbox"/);
 assert.match(stylesSource, /\.palette-swatches i\s*\{[^}]*border-radius:\s*50%[^}]*background:\s*var\(--swatch-color\)/s);
@@ -1086,13 +1090,13 @@ assert.equal(createdRanges.at(-1).startNode, speechNodeOne);
 assert.equal(createdRanges.at(-1).startOffset, 0);
 assert.equal(createdRanges.at(-1).endNode, speechNodeTwo);
 assert.equal(elements["#speech-marker"].hidden, false);
-assert.equal(elements["#speech-marker"].style.left, "62px");
+assert.equal(elements["#speech-marker"].style.left, "53px");
 assert.equal(vm.runInContext("speechScrollFrame !== null", context), true);
 speechRectLeft = 140;
 speechBlockLeft = 120;
 speechBlockLeftTwo = 80;
 vm.runInContext("positionSpeechMarker(false)", context);
-assert.equal(elements["#speech-marker"].style.left, "62px");
+assert.equal(elements["#speech-marker"].style.left, "53px");
 vm.runInContext("setSpeechActiveJob(testSpeechJobs[1])", context);
 assert.equal(selectionRanges.length, 0);
 assert.equal(createdRanges.at(-1).startNode, speechNodeTwo);
@@ -1101,7 +1105,18 @@ speechRectLeft = 160;
 speechBlockLeft = 100;
 speechBlockLeftTwo = 100;
 vm.runInContext("positionSpeechMarker(false)", context);
-assert.equal(elements["#speech-marker"].style.left, "82px");
+assert.equal(elements["#speech-marker"].style.left, "73px");
+readingFontSize = 60;
+vm.runInContext("positionSpeechMarker(false)", context);
+assert.equal(elements["#speech-marker"].style.left, "55px");
+readingFontSize = 24;
+vm.runInContext("positionSpeechMarker(false)", context);
+assert.equal(elements["#speech-marker"].style.left, "73px");
+speechBlockLeftTwo = 20;
+vm.runInContext("positionSpeechMarker(false)", context);
+assert.equal(elements["#speech-marker"].style.left, "8px");
+readingFontSize = 36;
+speechBlockLeftTwo = 100;
 vm.runInContext("clearSpeechSelection()", context);
 assert.equal(selectionRanges.length, 0);
 assert.equal(elements["#speech-marker"].hidden, true);

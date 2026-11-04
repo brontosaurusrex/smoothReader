@@ -3438,7 +3438,9 @@ const positionSpeechMarker = (followText = false) => {
       ...selectedElements.map((element) => element.getBoundingClientRect?.()?.left)
     ].filter(Number.isFinite);
     const selectionLeft = leftEdges.length > 0 ? Math.min(...leftEdges) : firstRect.left;
-    speechMarker.style.left = `${(window.scrollX || 0) + Math.max(8, selectionLeft - 18)}px`;
+    const readingFontSize = Number.parseFloat(window.getComputedStyle(viewer).fontSize);
+    const markerGap = Math.max(27, readingFontSize * 0.75);
+    speechMarker.style.left = `${(window.scrollX || 0) + Math.max(8, selectionLeft - markerGap)}px`;
     speechMarker.style.top = `${window.scrollY + firstRect.top}px`;
     speechMarker.style.height = `${Math.max(18, lastRect.bottom - firstRect.top)}px`;
     speechMarker.hidden = false;
