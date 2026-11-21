@@ -32,6 +32,10 @@ const settingsContrast = document.querySelector("#settings-contrast");
 const settingsContrastValue = document.querySelector("#settings-contrast-value");
 const settingsContrastDown = document.querySelector("#settings-contrast-down");
 const settingsContrastUp = document.querySelector("#settings-contrast-up");
+const settingsMaxBrightness = document.querySelector("#settings-max-brightness");
+const settingsMaxBrightnessValue = document.querySelector("#settings-max-brightness-value");
+const settingsMaxBrightnessDown = document.querySelector("#settings-max-brightness-down");
+const settingsMaxBrightnessUp = document.querySelector("#settings-max-brightness-up");
 const settingsFontSelect = document.querySelector("#settings-font");
 const settingsFontSize = document.querySelector("#settings-font-size");
 const settingsFontSizeValue = document.querySelector("#settings-font-size-value");
@@ -85,6 +89,7 @@ const speechOverlayHome = document.querySelector("#speech-overlay-home");
 const POSITION_PREFIX = "smooth-reader:position:";
 const BOOK_SETTINGS_PREFIX = "smooth-reader:book-settings:";
 const PALETTE_KEY = "smooth-reader:palette";
+const MAX_BRIGHTNESS_KEY = "smooth-reader:max-brightness";
 const CONTRAST_KEY = "smooth-reader:contrast";
 const FONT_KEY = "smooth-reader:font";
 const FONT_SIZE_KEY = "smooth-reader:font-size";
@@ -125,6 +130,9 @@ const FIRST_VISIBLE_LINE_TOP_PADDING_PX = 12;
 const FIRST_VISIBLE_LINE_SCAN_STEP_PX = 4;
 const DEFAULT_TRACKING_EM = 0.02;
 const DEFAULT_CONTRAST = 0;
+const DEFAULT_MAX_BRIGHTNESS = 100;
+const MIN_MAX_BRIGHTNESS = 20;
+const MAX_MAX_BRIGHTNESS = 100;
 const MIN_CONTRAST = -30;
 const MAX_CONTRAST = 30;
 const TRACKING_STEP_EM = 0.01;
@@ -258,6 +266,10 @@ const savedContrast = Number.parseInt(localStorage.getItem(CONTRAST_KEY), 10);
 let contrast = Number.isFinite(savedContrast)
   ? Math.max(MIN_CONTRAST, Math.min(MAX_CONTRAST, savedContrast))
   : DEFAULT_CONTRAST;
+const savedMaxBrightness = Number.parseInt(localStorage.getItem(MAX_BRIGHTNESS_KEY), 10);
+let maxBrightness = Number.isFinite(savedMaxBrightness)
+  ? Math.max(MIN_MAX_BRIGHTNESS, Math.min(MAX_MAX_BRIGHTNESS, savedMaxBrightness))
+  : DEFAULT_MAX_BRIGHTNESS;
 const savedFontIndex = FONTS.findIndex(
   (font) => font.id === localStorage.getItem(FONT_KEY)
 );
@@ -1545,6 +1557,7 @@ const scheduleServerStateSync = (hash = activeBookKey, immediate = false) => {
 const captureReadingSettings = () => ({
   palette: PALETTES[paletteIndex].id,
   contrast,
+  maxBrightness,
   font: FONTS[fontIndex].id,
   fontSize: fontSizePx,
   lineHeight,
@@ -1607,6 +1620,7 @@ const applyStoredBookSettings = (hash) => {
         Number.isFinite(Number(storedContrast))) {
       applyContrast(Number(storedContrast), false);
     }
+    applyMaxBrightness(stored.maxBrightness ?? DEFAULT_MAX_BRIGHTNESS, false);
     const storedFont = FONTS.findIndex((font) => font.id === stored.font);
     if (storedFont >= 0) applyFont(storedFont, false);
     if (Number.isFinite(Number(stored.fontSize))) {
@@ -1661,6 +1675,10 @@ const syncSettingsControls = () => {
 
   settingsPaletteSelect.value = paletteId;
   syncPalettePicker();
+  settingsMaxBrightness.value = String(maxBrightness);
+  settingsMaxBrightnessValue.textContent = `${maxBrightness}%`;
+  settingsMaxBrightnessDown.disabled = maxBrightness <= MIN_MAX_BRIGHTNESS;
+  settingsMaxBrightnessUp.disabled = maxBrightness >= MAX_MAX_BRIGHTNESS;
   settingsContrast.value = String(contrast);
   settingsContrastValue.textContent = contrastText;
   settingsContrastDown.disabled = contrast <= MIN_CONTRAST;
@@ -1714,6 +1732,17 @@ const applyContrast = (nextContrast, announce = true) => {
   if (announce) {
     showStatus(`CONTRAST · ${contrast > 0 ? "+" : ""}${contrast}%`, 900);
   }
+};
+
+const applyMaxBrightness = (nextBrightness, announce = true) => {
+  const value = Number(nextBrightness);
+  maxBrightness = Number.isFinite(value)
+    ? Math.round(Math.max(MIN_MAX_BRIGHTNESS, Math.min(MAX_MAX_BRIGHTNESS, value)))
+    : DEFAULT_MAX_BRIGHTNESS;
+  document.documentElement.style.setProperty("--brightness-ceiling", String(maxBrightness * 2.55));
+  saveCurrentReadingSettings(MAX_BRIGHTNESS_KEY, maxBrightness);
+  syncSettingsControls();
+  if (announce) showStatus(`MAX BRIGHTNESS · ${maxBrightness}%`, 900);
 };
 
 const applyFont = (nextIndex, announce = true) => {
@@ -1801,6 +1830,7 @@ function applyDefaultReadingSettings() {
   const defaultPaletteIndex = PALETTES.findIndex((palette) => palette.id === "nord");
   applyPalette(defaultPaletteIndex, false);
   applyContrast(DEFAULT_CONTRAST, false);
+  applyMaxBrightness(DEFAULT_MAX_BRIGHTNESS, false);
   applyFont(defaultFontIndex, false);
   applyFontSize(DEFAULT_FONT_SIZE_PX, false);
   applyLineHeight(DEFAULT_LINE_HEIGHT, false);
@@ -1833,6 +1863,7 @@ const resetCurrentBookSettings = () => {
 
 applyPalette(paletteIndex, false);
 applyContrast(contrast, false);
+applyMaxBrightness(maxBrightness, false);
 applyFont(fontIndex, false);
 applyTracking(trackingEm, false);
 applyWidth(widthCh, false);
@@ -1956,6 +1987,7 @@ const applyImportedSettings = () => {
     try {
       if (importedPaletteIndex >= 0) applyPalette(importedPaletteIndex, false);
       if (Number.isFinite(importedContrast)) applyContrast(importedContrast, false);
+      applyMaxBrightness(localStorage.getItem(MAX_BRIGHTNESS_KEY) ?? DEFAULT_MAX_BRIGHTNESS, false);
       applySpeechBounds(
         DEFAULT_SPEECH_MIN_LENGTH,
         Number.isFinite(importedSpeechMaximum)
@@ -4887,6 +4919,10 @@ settingsContrast.addEventListener("input", (event) => handleContrastInput(event)
 settingsContrast.addEventListener("change", (event) => handleContrastInput(event, true));
 settingsContrastDown.addEventListener("click", () => applyContrast(contrast - 1));
 settingsContrastUp.addEventListener("click", () => applyContrast(contrast + 1));
+settingsMaxBrightness.addEventListener("input", (event) => applyMaxBrightness(event.target.value, false));
+settingsMaxBrightness.addEventListener("change", (event) => applyMaxBrightness(event.target.value));
+settingsMaxBrightnessDown.addEventListener("click", () => applyMaxBrightness(maxBrightness - 1));
+settingsMaxBrightnessUp.addEventListener("click", () => applyMaxBrightness(maxBrightness + 1));
 settingsFontSelect.addEventListener("change", (event) => {
   applyFont(FONTS.findIndex((font) => font.id === event.target.value));
 });
@@ -4930,6 +4966,26 @@ settingsWidth.addEventListener("input", (event) => handleWidthInput(event));
 settingsWidth.addEventListener("change", (event) => handleWidthInput(event, true));
 settingsWidthDown.addEventListener("click", () => applyWidth(widthCh - 2));
 settingsWidthUp.addEventListener("click", () => applyWidth(widthCh + 2));
+
+// Reset just the slider under the pointer, using the same setters as normal input.
+const sliderResets = [
+  [settingsContrast, () => applyContrast(DEFAULT_CONTRAST)],
+  [settingsMaxBrightness, () => applyMaxBrightness(DEFAULT_MAX_BRIGHTNESS)],
+  [settingsFontSize, () => applyFontSize(DEFAULT_FONT_SIZE_PX)],
+  [settingsLineHeight, () => applyLineHeight(DEFAULT_LINE_HEIGHT)],
+  [settingsWidth, () => applyWidth(DEFAULT_WIDTH_CH)],
+  [settingsSpeechMax, () => applySpeechBounds(DEFAULT_SPEECH_MIN_LENGTH, DEFAULT_SPEECH_MAX_LENGTH, "maximum", true)],
+  [settingsSpeechPosition, () => applySpeechCenterOffset(DEFAULT_SPEECH_CENTER_OFFSET_PERCENT, true)],
+  [settingsSpeechSpeed, () => applySpeechSpeed(DEFAULT_SPEECH_SPEED_PERCENT, true)]
+];
+for (const [slider, reset] of sliderResets) {
+  slider.title = "Right-click to reset to default";
+  slider.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    reset();
+  });
+}
 
 settingsToggle.addEventListener("click", () => {
   setSettingsOpen(settingsPanel.hidden);

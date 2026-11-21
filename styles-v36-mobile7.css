@@ -14,16 +14,16 @@
   --contrast-soften: 0%;
   --contrast-foreground: #fff;
   --contrast-background: #000;
-  --display-background: var(--background);
-  --display-text: var(--text);
-  --display-muted: var(--muted);
-  --display-line: var(--line);
-  --display-heading: var(--heading);
-  --display-link: var(--link);
-  --display-panel: var(--panel);
-  --display-hover: var(--hover);
-  --display-cover: var(--cover);
-  --display-scrollbar: var(--scrollbar);
+  --uncapped-background: var(--background);
+  --uncapped-text: var(--text);
+  --uncapped-muted: var(--muted);
+  --uncapped-line: var(--line);
+  --uncapped-heading: var(--heading);
+  --uncapped-link: var(--link);
+  --uncapped-panel: var(--panel);
+  --uncapped-hover: var(--hover);
+  --uncapped-cover: var(--cover);
+  --uncapped-scrollbar: var(--scrollbar);
   --ui-font: "EnvyCodeR Nerd Font", ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
   --reader-font: "Alegreya", Georgia, serif;
   --reader-tracking: 0.02em;
@@ -320,62 +320,92 @@
   --hover: #353c4a;
   --cover: rgb(46 52 64 / 94%);
   --scrollbar: #607089;
+  --brightness-ceiling: 255 !important;
   --contrast-strength: 0% !important;
   --contrast-soften: 0% !important;
 }
 
 @supports (color: color-mix(in srgb, white, black)) {
   :root {
-    --display-background: color-mix(
+    --uncapped-background: color-mix(
       in srgb,
       var(--background),
       var(--contrast-background) var(--contrast-strength)
     );
-    --display-text: color-mix(
+    --uncapped-text: color-mix(
       in srgb,
       color-mix(in srgb, var(--text), var(--background) var(--contrast-soften)),
       var(--contrast-foreground) var(--contrast-strength)
     );
-    --display-muted: color-mix(
+    --uncapped-muted: color-mix(
       in srgb,
       color-mix(in srgb, var(--muted), var(--background) var(--contrast-soften)),
       var(--contrast-foreground) var(--contrast-strength)
     );
-    --display-line: color-mix(
+    --uncapped-line: color-mix(
       in srgb,
       color-mix(in srgb, var(--line), var(--background) var(--contrast-soften)),
       var(--contrast-foreground) var(--contrast-strength)
     );
-    --display-heading: color-mix(
+    --uncapped-heading: color-mix(
       in srgb,
       color-mix(in srgb, var(--heading), var(--background) var(--contrast-soften)),
       var(--contrast-foreground) var(--contrast-strength)
     );
-    --display-link: color-mix(
+    --uncapped-link: color-mix(
       in srgb,
       color-mix(in srgb, var(--link), var(--background) var(--contrast-soften)),
       var(--contrast-foreground) var(--contrast-strength)
     );
-    --display-panel: color-mix(
+    --uncapped-panel: color-mix(
       in srgb,
       color-mix(in srgb, var(--panel), var(--background) var(--contrast-soften)),
       var(--contrast-background) var(--contrast-strength)
     );
-    --display-hover: color-mix(
+    --uncapped-hover: color-mix(
       in srgb,
       color-mix(in srgb, var(--hover), var(--background) var(--contrast-soften)),
       var(--contrast-background) var(--contrast-strength)
     );
-    --display-cover: color-mix(
+    --uncapped-cover: color-mix(
       in srgb,
       color-mix(in srgb, var(--cover), var(--background) var(--contrast-soften)),
       var(--contrast-background) var(--contrast-strength)
     );
-    --display-scrollbar: color-mix(
+    --uncapped-scrollbar: color-mix(
       in srgb,
       color-mix(in srgb, var(--scrollbar), var(--background) var(--contrast-soften)),
       var(--contrast-foreground) var(--contrast-strength)
     );
+  }
+}
+
+:root {
+  --brightness-ceiling: 255;
+  --display-background: var(--uncapped-background);
+  --display-text: var(--uncapped-text);
+  --display-muted: var(--uncapped-muted);
+  --display-line: var(--uncapped-line);
+  --display-heading: var(--uncapped-heading);
+  --display-link: var(--uncapped-link);
+  --display-panel: var(--uncapped-panel);
+  --display-hover: var(--uncapped-hover);
+  --display-cover: var(--uncapped-cover);
+  --display-scrollbar: var(--uncapped-scrollbar);
+}
+
+@supports (color: rgb(from white calc(r * min(1, 128 / max(1, r, g, b))) g b)) {
+  :root {
+    --display-background: rgb(from var(--uncapped-background) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
+    --display-text: rgb(from var(--uncapped-text) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
+    --display-muted: rgb(from var(--uncapped-muted) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
+    --display-line: rgb(from var(--uncapped-line) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
+    --display-heading: rgb(from var(--uncapped-heading) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
+    --display-link: rgb(from var(--uncapped-link) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
+    --display-panel: rgb(from var(--uncapped-panel) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
+    --display-hover: rgb(from var(--uncapped-hover) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
+    --display-cover: rgb(from var(--uncapped-cover) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
+    --display-scrollbar: rgb(from var(--uncapped-scrollbar) calc(r * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(g * min(1, var(--brightness-ceiling) / max(1, r, g, b))) calc(b * min(1, var(--brightness-ceiling) / max(1, r, g, b))) / alpha);
   }
 }
 

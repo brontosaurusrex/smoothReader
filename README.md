@@ -97,6 +97,13 @@ always uses Nord with neutral contrast.
 
 First-run defaults: Nord, Alegreya 36 px, 1.28 line height, +0.02 em letter spacing, about 44 characters per line, 0% contrast, random voice and speaker ID, a fixed 150-character minimum and adjustable 550-character maximum speech chunk, centered spoken text, and normal speech speed.
 
+`Max brightness`, below Contrast, caps theme colors from 20–100% (default 100%).
+It reduces colors above the cap while preserving their hue; darker colors and
+book images are unchanged. The cap is saved per book and included in sync and
+backups. The home screen keeps its normal brightness.
+
+Right-click any settings slider to reset only that slider to its default value.
+
 All selectable fonts are self-hosted in `vendor/fonts`; the app makes no Google Fonts requests.
 
 ## Export and import

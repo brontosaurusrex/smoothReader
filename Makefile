@@ -8,6 +8,7 @@ serve:
 check:
 	node --check renderer-v36.js
 	node test/book-metadata.js
+	node test/reader-settings.js
 	node test/library-storage.js
 	node test/library-backup.js
 	node test/smoke-renderer.js
